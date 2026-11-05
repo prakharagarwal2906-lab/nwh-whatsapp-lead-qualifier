@@ -4,7 +4,7 @@ System design (product and engineering) for qualifying L2R leads that arrive out
 
 When a lead lands in L2R outside the dealer's working hours, a templated WhatsApp message (sent through Gupshup) asks the customer when they plan to buy. If they pick a timeline of two months or less, we dispose the first call and move the lead to **Qualification** through the L2R API, so the sales executive starts the next morning with the hottest leads already sorted.
 
-The full styled version, with all sections, is in [`docs/index.html`](docs/index.html). Open it in a browser; the diagrams there use Mermaid.
+The full styled version, with all sections, is in [`docs/design.html`](docs/design.html). Open it in a browser; the diagrams there use Mermaid.
 
 ## Code
 

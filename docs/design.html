@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>After-Hours WhatsApp Qualifier</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{color-scheme:light}
+body{margin:0}
+
+/* Layout: a single reading column (~70ch) with a sticky contents rail on wide screens; diagrams and tables break out to a wider measure. */
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --ink:#1b2230; --muted:#5a6476; --line:#dde1e8;
+  --accent:#c8102e; --accent-soft:#fbe9ec; --ok:#147a4a; --ok-soft:#e5f4ec; --warn:#9a6200; --warn-soft:#fbf1dc; --info:#1f5fae; --info-soft:#e7eff9;
+  --code-bg:#eef1f5;
+  --f-display:"Fraunces",Georgia,"Times New Roman",serif;
+  --f-body:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12161d; --surface:#1a2029; --ink:#e6e9ef; --muted:#9aa4b5; --line:#2c3442;
+  --accent:#ff5a6e; --accent-soft:#3a1d24; --ok:#4cc98a; --ok-soft:#163126; --warn:#e0a640; --warn-soft:#352a14; --info:#7fb0f0; --info-soft:#18273b;
+  --code-bg:#222a35; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161d; --surface:#1a2029; --ink:#e6e9ef; --muted:#9aa4b5; --line:#2c3442;
+  --accent:#ff5a6e; --accent-soft:#3a1d24; --ok:#4cc98a; --ok-soft:#163126; --warn:#e0a640; --warn-soft:#352a14; --info:#7fb0f0; --info-soft:#18273b;
+  --code-bg:#222a35; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:40px 80px}
+.wrap{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}
+@media (max-width:900px){.wrap{grid-template-columns:minmax(0,1fr)}.toc{display:none}}
+.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;font-size:13.5px}
+.toc p{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;font-weight:600}
+.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:6px;counter-reset:t}
+.toc a{color:var(--muted);text-decoration:none;display:flex;gap:8px}
+.toc a::before{counter-increment:t;content:counter(t,decimal-leading-zero);font-family:var(--f-mono);font-size:11px;color:var(--line);padding-top:2px}
+.toc a:hover,.toc a:focus-visible{color:var(--ink)}
+main{min-width:0}
+header.hero{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:12px}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:0 0 10px}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(30px,4.6vw,46px);line-height:1.1;margin:0 0 14px;text-wrap:balance;letter-spacing:-.01em}
+.lede{font-size:18px;color:var(--muted);max-width:66ch;margin:0}
+.lenses{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.pill{font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:var(--surface)}
+.pill.pm{color:var(--info);background:var(--info-soft);border-color:transparent}
+.pill.eng{color:var(--warn);background:var(--warn-soft);border-color:transparent}
+section{padding-top:44px;scroll-margin-top:20px}
+h2{font-family:var(--f-display);font-weight:600;font-size:28px;line-height:1.2;margin:0 0 6px;text-wrap:balance;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+h2 .pill{font-family:var(--f-body);position:relative;top:-4px}
+h3{font-size:17px;margin:28px 0 8px;font-weight:700}
+p,li{max-width:70ch}
+p{margin:0 0 14px}
+ul,ol{padding-left:22px;margin:0 0 14px}
+li{margin-bottom:6px}
+code,.mono{font-family:var(--f-mono);font-size:.86em;background:var(--code-bg);padding:1px 5px;border-radius:4px}
+pre.code{font-family:var(--f-mono);font-size:13px;line-height:1.55;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:16px;overflow-x:auto;margin:0 0 18px}
+pre.code code{background:none;padding:0;font-size:inherit}
+.sub{color:var(--muted);margin-bottom:18px}
+.table-wrap{overflow-x:auto;margin:0 0 20px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--bg)}
+tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:4px;white-space:nowrap}
+.tag.q{background:var(--ok-soft);color:var(--ok)}
+.tag.n{background:var(--warn-soft);color:var(--warn)}
+.tag.h{background:var(--info-soft);color:var(--info)}
+.tag.x{background:var(--accent-soft);color:var(--accent)}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px;overflow-x:auto;margin:0 0 20px}
+.diagram pre.mermaid{margin:0;background:none;font-family:var(--f-body)}
+.callout{border-left:3px solid var(--accent);background:var(--surface);padding:14px 18px;border-radius:0 8px 8px 0;margin:0 0 18px;max-width:72ch}
+.callout p:last-child{margin-bottom:0}
+.callout.quote{font-family:var(--f-display);font-size:19px;line-height:1.45;border-left-color:var(--ok)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 18px;min-width:0}
+.card h4{margin:0 0 6px;font-size:15px}
+.card p,.card ul{font-size:14.5px;margin-bottom:0}
+.card ul{padding-left:18px}
+.metric{font-variant-numeric:tabular-nums}
+a{color:var(--info)}
+a:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:13.5px}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <p>Contents</p>
+  <ol>
+    <li><a href="#problem">Problem and goals</a></li>
+    <li><a href="#journey">Customer journey</a></li>
+    <li><a href="#rules">Qualification rules</a></li>
+    <li><a href="#metrics">Success metrics</a></li>
+    <li><a href="#arch">Architecture</a></li>
+    <li><a href="#sequence">End-to-end sequence</a></li>
+    <li><a href="#data">Data model</a></li>
+    <li><a href="#states">Conversation states</a></li>
+    <li><a href="#apis">API contracts</a></li>
+    <li><a href="#processing">Webhook processing</a></li>
+    <li><a href="#security">Webhook security</a></li>
+    <li><a href="#reliability">Reliability</a></li>
+    <li><a href="#edges">Edge cases</a></li>
+    <li><a href="#compliance">Compliance and cost</a></li>
+    <li><a href="#rollout">Rollout and roadmap</a></li>
+    <li><a href="#open">Open questions</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero">
+  <p class="eyebrow">System design · L2R × Gupshup × WhatsApp</p>
+  <h1>Qualifying after-hours leads on WhatsApp</h1>
+  <p class="lede">When a lead lands in L2R outside the dealer's working hours, a templated WhatsApp message asks the customer when they plan to buy. If they pick a timeline of two months or less, we dispose the first call and move the lead to <strong>Qualification</strong> through the L2R API, so the sales executive starts the next morning with the hottest leads already sorted.</p>
+  <div class="lenses"><span class="pill pm">Product lens</span><span class="pill eng">Engineering lens</span></div>
+</header>
+
+<!-- ============ PRODUCT ============ -->
+<section id="problem">
+  <h2>Problem and goals <span class="pill pm">Product</span></h2>
+  <p>A lead created at 12:26 AM (like the Tata Harrier EV inquiry assigned to Akshay) sits in <em>First Call</em> until the showroom opens. By then the customer has often enquired with two other dealers. Every lead also gets the same callback priority, whether the buyer is ready this fortnight or just browsing.</p>
+  <div class="grid2">
+    <div class="card"><h4>Customer problem</h4><p>Gets no response at night, so they don't know if anyone saw the inquiry. Their intent goes cold.</p></div>
+    <div class="card"><h4>Dealer problem</h4><p>Sales executives start the day with an unsorted pile of overnight leads and spend the first calls on people who won't buy for months.</p></div>
+  </div>
+  <h3>Goals</h3>
+  <ul>
+    <li>Respond to every non-working-hours (NWH) lead within a minute, with the dealer's name and the callback window.</li>
+    <li>Capture purchase timeline as structured data and auto-qualify leads with a timeline of two months or less.</li>
+    <li>Give sales executives a prioritised morning queue, without changing how they work in L2R.</li>
+  </ul>
+  <h3>Non-goals for v1</h3>
+  <ul>
+    <li>Free-text chatbot or LLM conversation. v1 uses buttons only.</li>
+    <li>Bot replies during working hours. Those leads go to a human caller as today.</li>
+    <li>Booking or test-drive scheduling inside WhatsApp (see the roadmap).</li>
+  </ul>
+  <h3>Users</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Who</th><th>What they need from this</th></tr></thead>
+    <tbody>
+      <tr><td>Customer</td><td>A quick acknowledgement, a clear callback time, and one-tap answers</td></tr>
+      <tr><td>Sales executive (lead owner)</td><td>Hot leads flagged first, with the bot's answer visible in the L2R Activity Feed</td></tr>
+      <tr><td>Dealer manager</td><td>A per-dealer switch, working-hours setup, and reports on bot-qualified leads to visit and booking</td></tr>
+      <tr><td>CarWale ops</td><td>Template approval status, delivery failures, and an audit trail per lead</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="journey">
+  <h2>Customer journey <span class="pill pm">Product</span></h2>
+  <p class="sub">This is the live template as seen in the Vishnu Cars chat. The dealer name, model, representative and number are variables.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  A["Lead created in L2R<br/>outside dealer hours"] --> B{"Eligible?<br/>NWH, bot on, valid mobile,<br/>not contacted in last 24h"}
+  B -- No --> Z["Normal flow:<br/>callback in working hours"]
+  B -- Yes --> C["Send template:<br/>'We are closed, Sathya will call tomorrow<br/>9:30–5:30. How soon are you planning to buy?'"]
+  C --> D{"Customer taps"}
+  D -- "15 Days / 1 Month / 1–2 Months" --> Q["Dispose first call: Connected, WhatsApp Bot<br/>Move lead to Qualification<br/>Flag HOT for morning queue"]
+  D -- "More than 2 Months" --> N["Stay in First Call, tag Nurture<br/>Follow-up task at the chosen timeline<br/>Reply: 'We'll check in closer to your timeline'"]
+  D -- "Still Researching" --> R["Stay in First Call, tag Researching<br/>Brochure or price list + follow-up task"]
+  D -- "Chat-Sales Executive" --> H["Handoff: priority callback task<br/>for lead owner at shift start"]
+  D -- "No reply in 24h" --> E["Mark No Response<br/>Normal callback, no extra template"]
+  </pre></div>
+</section>
+
+<section id="rules">
+  <h2>Qualification rules <span class="pill pm">Product</span></h2>
+  <p>Each button carries a stable <code>postbackText</code> code. Rules key on the code, never the display label, so we can translate or reword buttons without breaking logic.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Button</th><th>Postback code</th><th>Outcome</th><th>L2R action</th></tr></thead>
+    <tbody>
+      <tr><td>15 Days</td><td><code>TIMELINE_15D</code></td><td><span class="tag q">Qualified · Hot</span></td><td>Call status Connected, disposition "WhatsApp Bot", stage → Qualification, priority P1</td></tr>
+      <tr><td>1 Month</td><td><code>TIMELINE_1M</code></td><td><span class="tag q">Qualified · Hot</span></td><td>Same as above, priority P1</td></tr>
+      <tr><td>1 – 2 Months</td><td><code>TIMELINE_1_2M</code></td><td><span class="tag q">Qualified · Warm</span></td><td>Stage → Qualification, priority P2</td></tr>
+      <tr><td>More than 2 Months</td><td><code>TIMELINE_GT2M</code></td><td><span class="tag n">Nurture</span></td><td>Comment added, follow-up task at +60 days, stays in First Call</td></tr>
+      <tr><td>Still Researching</td><td><code>RESEARCHING</code></td><td><span class="tag n">Nurture</span></td><td>Comment added, follow-up task at +7 days</td></tr>
+      <tr><td>Chat-Sales Executive</td><td><code>HANDOFF_SE</code></td><td><span class="tag h">Handoff</span></td><td>Callback task for lead owner at next shift start</td></tr>
+      <tr><td>Free text, "STOP"</td><td>none</td><td><span class="tag x">Opt-out</span></td><td>Suppress all future bot messages for that mobile and dealer</td></tr>
+    </tbody>
+  </table></div>
+  <p>The two-month threshold and the priority mapping live in dealer config, not code. A luxury dealer with longer buying cycles can set three months.</p>
+  <h3>Which leads count as non-working hours</h3>
+  <ul>
+    <li>Each dealer has working hours per weekday, a timezone (default <code>Asia/Kolkata</code>), weekly offs and a holiday calendar (Diwali, local festivals).</li>
+    <li>A lead is NWH if <code>lead.created_at</code> falls outside those windows. We also treat the last 15 minutes before close as NWH, because nobody will call that lead before close.</li>
+    <li>The callback day in the template is computed from the same calendar. A lead at 9 PM Saturday before a Sunday off says "Monday", not "tomorrow".</li>
+  </ul>
+</section>
+
+<section id="metrics">
+  <h2>Success metrics <span class="pill pm">Product</span></h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Type</th><th>Metric</th><th>Why it matters</th></tr></thead>
+    <tbody>
+      <tr><td>North star</td><td>Visit and booking rate of NWH leads, bot vs holdout</td><td>Proves the bot creates sales, not just tags</td></tr>
+      <tr><td>Funnel</td><td class="metric">Sent → Delivered → Read → Replied → Qualified %</td><td>Shows where the drop-off is (template copy, number quality, timing)</td></tr>
+      <tr><td>Speed</td><td>Time from lead creation to first touch; time from shift start to first call on hot leads</td><td>Speed to lead is the core promise</td></tr>
+      <tr><td>Quality</td><td>% of bot-qualified leads later marked junk or lost within 7 days</td><td>Catches false qualification. Keep it below the human-qualified rate</td></tr>
+      <tr><td>Guardrail</td><td>Opt-out rate, block or report rate, WhatsApp quality rating</td><td>A low rating throttles the dealer's number for everyone</td></tr>
+      <tr><td>Cost</td><td>Cost per qualified lead (template charges / qualified leads)</td><td>Justifies the per-message spend to dealers</td></tr>
+    </tbody>
+  </table></div>
+  <p>To measure lift, hold out about 10% of eligible NWH leads per dealer (no template sent) for the first 4–6 weeks.</p>
+</section>
+
+<!-- ============ ENGINEERING ============ -->
+<section id="arch">
+  <h2>Architecture <span class="pill eng">Engineering</span></h2>
+  <p>Meta never calls CarWale directly. Inbound events go Customer → Meta → Gupshup → our webhook (the callback URL set in the Gupshup dashboard). The design splits into a send path and a receive path, joined by one mapping table.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  subgraph L2R["L2R (LMS)"]
+    LS["Lead Service"] -->|LeadCreated event| BUS[("Event bus / queue")]
+    L2RAPI["L2R Lead API<br/>dispose · stage · task · comment"]
+  end
+  subgraph BOT["WhatsApp Qualifier Service"]
+    EL["Eligibility worker<br/>NWH calendar, opt-out,<br/>dedupe, holdout"]
+    SND["Sender<br/>outbox + retry"]
+    WH["Webhook API<br/>auth, validate, ack 200"]
+    Q[("Inbound queue")]
+    PR["Reply processor<br/>dedupe → map → rules"]
+    SYNC["L2R sync worker<br/>retry + DLQ"]
+    DB[("Postgres<br/>dealer_config · wa_message<br/>wa_event · opt_out")]
+    CFG["Dealer config<br/>admin UI"]
+  end
+  GS["Gupshup"] <--> META["Meta WhatsApp<br/>Cloud API"] <--> CUST(("Customer"))
+  BUS --> EL --> SND -->|template API| GS
+  SND --> DB
+  GS -->|callback URL| WH --> Q --> PR --> SYNC --> L2RAPI
+  PR --> DB
+  CFG --> DB
+  </pre></div>
+  <div class="grid2">
+    <div class="card"><h4>Why event-driven</h4><p>L2R lead creation never waits on Gupshup. If Gupshup is down, leads still get created and sends retry from the outbox.</p></div>
+    <div class="card"><h4>Why ack-then-process</h4><p>The webhook only authenticates, stores the raw event and returns 200 in well under a second. Slow L2R calls happen in workers, so Gupshup never times out and retries.</p></div>
+  </div>
+</section>
+
+<section id="sequence">
+  <h2>End-to-end sequence <span class="pill eng">Engineering</span></h2>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant L as L2R
+  participant B as Qualifier Service
+  participant G as Gupshup
+  participant M as Meta
+  participant C as Customer
+  L->>B: LeadCreated (leadId, dealerId, mobile, model, createdAt)
+  B->>B: Eligibility check (NWH, opt-out, dedupe, holdout)
+  B->>B: Insert wa_message (status PENDING) in outbox
+  B->>G: POST template msg (templateId, params, postbacks with leadId)
+  G-->>B: 202 {messageId: gsId}
+  B->>B: Save gsId → leadId (synchronously)
+  G->>M: Send template
+  M->>C: Template with quick-reply buttons
+  M-->>G: sent / delivered / read
+  G-->>B: message-event callbacks (update status)
+  C->>M: Taps "1 Month"
+  M->>G: Inbound reply
+  G->>B: type=message, quick_reply, postbackText=TIMELINE_1M, context.gsId
+  B-->>G: 200 OK (after auth + store)
+  B->>B: Dedupe, map gsId → lead, check mobile, apply rule
+  B->>L: Dispose call (Connected, "WhatsApp Bot") + stage → Qualification
+  L-->>B: 200
+  B->>G: Session message: "Thanks! Sathya will call you first thing tomorrow."
+  </pre></div>
+  <p>Gupshup delays inbound events by about 5 seconds so the sender can save the outbound ID first. We still write the <code>gsId → lead_id</code> mapping synchronously when the send API responds, and the processor retries a lookup miss after a short delay instead of dropping it.</p>
+</section>
+
+<section id="data">
+  <h2>Data model <span class="pill eng">Engineering</span></h2>
+<pre class="code"><code>dealer_config
+  dealer_id PK, enabled, gupshup_app_id, template_id, template_lang,
+  timezone, working_hours JSONB  -- {"mon":[["09:30","17:30"]], ...}
+  holidays DATE[], pre_close_buffer_min, qualify_max_days (60),
+  rep_name, rep_phone, holdout_pct, updated_by, updated_at
+
+wa_message                          -- one row per template sent
+  id PK, lead_id, dealer_id, mobile_e164,
+  template_id, gs_message_id UNIQUE, wamid UNIQUE NULL,
+  status  -- PENDING|SENT|DELIVERED|READ|REPLIED|FAILED|EXPIRED
+  fail_reason, sent_at, delivered_at, read_at,
+  reply_code, replied_at, outcome  -- QUALIFIED|NURTURE|HANDOFF|NO_RESPONSE|OPT_OUT
+  l2r_sync_status  -- PENDING|DONE|FAILED, l2r_attempts, l2r_last_error
+  INDEX (lead_id), INDEX (mobile_e164, dealer_id, sent_at)
+
+wa_event                            -- raw inbound log, used for dedupe
+  event_id PK  -- inbound WhatsApp msg id or gsId+status
+  type, payload JSONB, received_at, processed_at, result
+
+opt_out
+  mobile_e164, dealer_id, created_at, source  -- PK (mobile_e164, dealer_id)</code></pre>
+  <p>Mapping by <code>context.gsId</code> rather than mobile number matters because one customer can have several open leads, sometimes with different dealers. We also put the lead ID in the postback (<code>TIMELINE_1M|L12345</code>) as a fallback key.</p>
+</section>
+
+<section id="states">
+  <h2>Conversation states <span class="pill eng">Engineering</span></h2>
+  <div class="diagram"><pre class="mermaid">
+stateDiagram-v2
+  [*] --> PENDING: eligible lead
+  PENDING --> SENT: Gupshup 202
+  PENDING --> FAILED: 4xx / retries exhausted
+  SENT --> DELIVERED
+  SENT --> FAILED: not on WhatsApp, blocked
+  DELIVERED --> READ
+  SENT --> REPLIED
+  DELIVERED --> REPLIED
+  READ --> REPLIED
+  READ --> EXPIRED: 24h, no reply
+  DELIVERED --> EXPIRED: 24h, no reply
+  REPLIED --> [*]: outcome synced to L2R
+  FAILED --> [*]: comment in L2R
+  EXPIRED --> [*]: NO_RESPONSE
+  </pre></div>
+  <p>Status events can arrive out of order (read before delivered). Transitions only move forward by rank, so a late <code>delivered</code> never overwrites <code>read</code>. A reply is accepted from any non-terminal state.</p>
+</section>
+
+<section id="apis">
+  <h2>API contracts <span class="pill eng">Engineering</span></h2>
+  <h3>1. Send template (Gupshup partner API)</h3>
+<pre class="code"><code>POST https://partner.gupshup.io/partner/app/{appId}/template/msg
+Authorization: {partner app token}
+Content-Type: application/x-www-form-urlencoded
+
+source=91XXXXXXXXXX               # dealer's WhatsApp number
+destination=91YYYYYYYYYY          # lead mobile
+template={"id":"&lt;templateId&gt;","params":["Prakhar","Maruti Suzuki Brezza",
+          "Vishnu Cars TN","Sathya","tomorrow","9:30 AM","5:30 PM","9403897047"]}
+postbackTexts=[{"index":0,"text":"TIMELINE_15D|L12345"},
+               {"index":1,"text":"TIMELINE_1M|L12345"}, ...]
+
+→ 202 {"status":"submitted","messageId":"&lt;gsId&gt;"}</code></pre>
+  <h3>2. Inbound webhook (our endpoint)</h3>
+<pre class="code"><code>POST /v1/webhooks/gupshup
+X-Webhook-Token: &lt;secret&gt;
+
+{
+  "app": "VishnuCarsTN", "timestamp": 1793904000000, "version": 2,
+  "type": "message",
+  "payload": {
+    "id": "&lt;inbound WhatsApp msg id&gt;",
+    "source": "91YYYYYYYYYY",
+    "type": "quick_reply",
+    "payload": { "text": "1 Month", "postbackText": "TIMELINE_1M|L12345" },
+    "context": { "id": "&lt;wamid of template&gt;", "gsId": "&lt;gsId of template&gt;" }
+  }
+}
+→ 200 {}      # always fast; 401 on bad token</code></pre>
+  <p>Delivery and read updates arrive separately as <code>type: "message-event"</code>. This is the self-serve/partner format. Gupshup's Enterprise API uses a different callback shape, so confirm against a real webhook log.</p>
+  <h3>3. Qualify lead (L2R API, assumed shape)</h3>
+<pre class="code"><code>POST /api/v1/leads/{leadId}/dispositions
+Idempotency-Key: wa-&lt;inbound msg id&gt;
+{
+  "callStatus": "CONNECTED",
+  "disposition": "WHATSAPP_BOT",
+  "targetStage": "QUALIFICATION",
+  "purchaseTimeline": "1_MONTH",
+  "priority": "P1",
+  "comment": "Customer chose '1 Month' on WhatsApp at 06 Nov 2026, 12:31 AM",
+  "actor": "system:whatsapp-bot"
+}</code></pre>
+  <p>The comment appears in the lead's Activity Feed, so the sales executive sees why the lead moved without opening another tool.</p>
+</section>
+
+<section id="processing">
+  <h2>Webhook processing <span class="pill eng">Engineering</span></h2>
+  <p>The reply processor runs these steps in order. Any failed check stops processing and is logged with a reason.</p>
+  <ol>
+    <li><strong>Authenticate.</strong> Constant-time compare of the header token, plus a source IP check. Return 401 on failure.</li>
+    <li><strong>Persist and ack.</strong> Insert into <code>wa_event</code> with <code>ON CONFLICT DO NOTHING</code>, enqueue, return 200.</li>
+    <li><strong>Deduplicate.</strong> If the event ID was already processed, stop. This handles Gupshup retries and replays.</li>
+    <li><strong>Reject stale events.</strong> Skip if the timestamp is far outside the expected window. A late but genuine reply is logged for review.</li>
+    <li><strong>Map.</strong> Look up <code>wa_message</code> by <code>context.gsId</code>, then fall back to <code>wamid</code>, then to the lead ID in the postback.</li>
+    <li><strong>Cross-check.</strong> <code>payload.source</code> must equal the mapped row's mobile, and the template must be one we sent. A valid token alone can't qualify an unrelated lead.</li>
+    <li><strong>Check lead state in L2R.</strong> Only act if the lead is still in First Call and not closed, lost or reassigned to a stage beyond Qualification. If a human already called, add the answer as a comment only. The bot never downgrades a lead.</li>
+    <li><strong>Apply the rule</strong> from dealer config for the postback code.</li>
+    <li><strong>Sync to L2R</strong> with an idempotency key, then send the follow-up session message.</li>
+  </ol>
+<pre class="code"><code>def handle_reply(evt):
+    if not wa_event.mark_processing(evt.id): return           # dedupe
+    msg = wa_message.find(gs_id=evt.context.gsId) \
+          or wa_message.find(wamid=evt.context.id) \
+          or wa_message.find_by_postback(evt.postback)
+    if msg is None:      return retry_later(evt, delay=10)     # race with send
+    if msg.mobile != evt.source: return reject(evt, "MOBILE_MISMATCH")
+    code = parse_code(evt.postback)                            # "TIMELINE_1M"
+    lead = l2r.get_lead(msg.lead_id)
+    if lead.stage != "FIRST_CALL" or lead.closed:
+        return l2r.add_comment(lead.id, f"WhatsApp reply: {evt.text}")
+    action = rules.for_dealer(msg.dealer_id).resolve(code)     # QUALIFY / NURTURE / ...
+    wa_message.record_reply(msg.id, code, action.outcome)
+    outbox.enqueue("l2r_sync", msg.id, idempotency_key=f"wa-{evt.id}")</code></pre>
+</section>
+
+<section id="security">
+  <h2>Webhook security <span class="pill eng">Engineering</span></h2>
+  <p>The callback is authenticated with a token. The token proves who sent the request. It does not prove the body wasn't altered or replayed, so we layer business checks on top.</p>
+  <div class="grid2">
+    <div class="card"><h4>Token hygiene</h4><ul>
+      <li>Send it in a header, not <code>?token=</code>, which leaks into logs</li>
+      <li>Store it in a secrets manager</li>
+      <li>Compare in constant time</li>
+      <li>HTTPS only</li>
+      <li>Rotate with two valid tokens during switchover</li>
+      <li>Use one token per Gupshup app or dealer</li>
+    </ul></div>
+    <div class="card"><h4>Closing the gap</h4><ul>
+      <li>Allowlist Gupshup's published IP ranges</li>
+      <li>Deduplicate on message ID to block replays</li>
+      <li>Reject stale timestamps</li>
+      <li>Require the context ID to match a template we sent, and the sender to match the lead's mobile</li>
+      <li>Rate limit and alert on reply spikes</li>
+      <li>Move to HMAC body signing if Gupshup offers it</li>
+    </ul></div>
+  </div>
+  <div class="callout quote"><p>"The webhook is authenticated with a header token stored in a secrets manager and restricted to Gupshup IPs. Every event is validated against the message ID we sent and the lead's mobile number, so a leaked token alone can't qualify leads."</p></div>
+</section>
+
+<section id="reliability">
+  <h2>Reliability <span class="pill eng">Engineering</span></h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Concern</th><th>Approach</th></tr></thead>
+    <tbody>
+      <tr><td>Lead event lost between L2R and the bot</td><td>Transactional outbox in L2R (or CDC). Consumer is idempotent on <code>lead_id</code></td></tr>
+      <tr><td>Gupshup send fails</td><td>Retry 5xx and timeouts with exponential backoff and jitter. Don't retry 4xx (bad number, template paused). Write the failure as an L2R comment</td></tr>
+      <tr><td>Duplicate sends</td><td>Unique key on <code>(lead_id, template_id)</code>. One template per mobile and dealer per 24 hours</td></tr>
+      <tr><td>Gupshup retries the webhook</td><td>Dedupe on event ID. Always return 200 once stored, even if processing later fails</td></tr>
+      <tr><td>L2R API down</td><td>Sync worker retries with backoff, then sends to a DLQ with an alert. Replay from the DLQ is safe because of idempotency keys</td></tr>
+      <tr><td>Throughput spikes (campaign leads at night)</td><td>Queue absorbs bursts. Sender respects Gupshup rate limits and Meta's per-number messaging tier</td></tr>
+      <tr><td>Expiry</td><td>A scheduled job marks rows <code>EXPIRED</code> 24 hours after send (the session window closes) and writes NO_RESPONSE to L2R</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Observability</h3>
+  <ul>
+    <li>Dashboards: funnel per dealer and template, webhook latency (p95 under 300 ms), L2R sync lag, DLQ depth.</li>
+    <li>Alerts: delivery rate drop (template paused or number flagged), 401 spike (token problem or attack), mapping misses, DLQ growth.</li>
+    <li>Trace ID carried from <code>LeadCreated</code> through send, webhook and L2R call, so one lead's whole path can be pulled up.</li>
+  </ul>
+</section>
+
+<section id="edges">
+  <h2>Edge cases <span class="pill pm">Product</span> <span class="pill eng">Engineering</span></h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Scenario</th><th>Handling</th></tr></thead>
+    <tbody>
+      <tr><td>Customer taps two different buttons</td><td>Latest reply wins while the lead is still bot-controlled. Once a human has acted, later replies become comments only</td></tr>
+      <tr><td>Customer types "1 month" or "next week" instead of tapping</td><td>v1: simple keyword match for timeline phrases, otherwise reply with the buttons once more. v2: intent classification</td></tr>
+      <tr><td>Reply arrives after the showroom opens</td><td>Still processed. If the sales executive already disposed the call, the reply is added as a comment</td></tr>
+      <tr><td>Same customer, several leads with one dealer</td><td>Send one template per mobile and dealer per 24 hours. Reply qualifies the lead the template was sent for, and the rest are linked as duplicates</td></tr>
+      <tr><td>Same customer, different dealers</td><td>Separate Gupshup apps and numbers, so separate chats and mappings. No cross-dealer leakage</td></tr>
+      <tr><td>Number not on WhatsApp</td><td>Failed event, status FAILED, normal callback flow</td></tr>
+      <tr><td>Template rejected or paused by Meta</td><td>Send returns an error. Circuit breaker stops sends for that dealer and alerts ops. Leads fall back to the normal flow</td></tr>
+      <tr><td>Lead deleted, merged or reassigned before reply</td><td>State check in L2R before acting. Act on the surviving lead after a merge</td></tr>
+      <tr><td>Lead created 5 minutes before close</td><td>Covered by the pre-close buffer</td></tr>
+      <tr><td>Customer replies STOP</td><td>Add to opt-out and send a confirmation. Never message again from the bot for that dealer</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="compliance">
+  <h2>Compliance and cost <span class="pill pm">Product</span></h2>
+  <ul>
+    <li><strong>Opt-in.</strong> Meta requires consent before business-initiated messages. The lead form on CarWale and dealer sites should carry a WhatsApp consent line, stored with the lead. No consent, no template.</li>
+    <li><strong>DPDP Act (India).</strong> Purpose-limited use of the mobile number, opt-out honoured, and retention limits on raw webhook payloads (for example, 90 days).</li>
+    <li><strong>Template category.</strong> The message responds to the customer's own inquiry, so submit it as Utility. Meta may reclassify a question-style template as Marketing, which costs more and has stricter limits, so budget for both.</li>
+    <li><strong>Cost control.</strong> One template per lead. The follow-up "Thanks" is a free-form session message inside the 24-hour window the customer opened by replying.</li>
+    <li><strong>Number quality.</strong> Clear copy, dealer branding and an easy opt-out keep block rates low and protect the dealer's messaging tier.</li>
+  </ul>
+</section>
+
+<section id="rollout">
+  <h2>Rollout and roadmap <span class="pill pm">Product</span></h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Phase</th><th>Scope</th><th>Exit criteria</th></tr></thead>
+    <tbody>
+      <tr><td>Pilot (2 weeks)</td><td>3–5 dealers, 10% holdout, rules in shadow mode for week 1 (log the decision, no L2R write)</td><td>Mapping accuracy near 100%, no wrong-lead qualifications</td></tr>
+      <tr><td>Beta (4–6 weeks)</td><td>About 50 dealers, live L2R writes, dealer admin UI for hours and holidays</td><td>Reply rate and qualified-to-visit rate beat holdout</td></tr>
+      <tr><td>GA</td><td>All opted-in dealers, holdout reduced to 2–5% for ongoing measurement</td><td>Stable quality rating, cost per qualified lead within target</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Next</h3>
+  <ul>
+    <li>Ask budget, fuel type or exchange-car questions in a second step for qualified leads only.</li>
+    <li>Test-drive slot booking with WhatsApp Flows, written to L2R as a scheduled TD.</li>
+    <li>Morning digest to sales executives: hot overnight leads, ranked, with one-tap call.</li>
+    <li>Use the same pipeline for working-hours leads that go unanswered for 30 minutes.</li>
+  </ul>
+</section>
+
+<section id="open">
+  <h2>Open questions</h2>
+  <ul>
+    <li>Which Gupshup API are we on (partner/self-serve or Enterprise)? The callback shape differs.</li>
+    <li>Does Gupshup support HMAC request signing, and does it publish stable IP ranges?</li>
+    <li>Does the L2R API support idempotency keys and a single call for dispose plus stage change, or two calls that need ordering?</li>
+    <li>Who owns dealer working hours today? Is there an existing calendar in L2R, or does this service hold it?</li>
+    <li>Is WhatsApp consent already captured on every lead source (CarWale, OEM site, walk-in, third-party portals)?</li>
+  </ul>
+</section>
+
+<footer>Sources: Gupshup docs on <a href="https://docs.gupshup.io/docs/inbound-messages">inbound messages</a>, <a href="https://docs.gupshup.io/docs/subscriptions-and-notifications">subscriptions and notifications</a>, <a href="https://docs.gupshup.io/docs/text">quick reply callbacks</a>, and the <a href="https://partner-docs.gupshup.io/reference/post_partner-app-appid-template-msg">partner template message API</a>. The L2R API shapes are assumptions for this design.</footer>
+</main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+  var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({ startOnLoad: true, theme: dark ? 'dark' : 'default', securityLevel: 'strict' });
+</script>
+</body>
+</html>
