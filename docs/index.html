@@ -123,6 +123,22 @@ details.cfg .pad{border-top:1px solid var(--line)}
 .entry.info .src{color:#7fb0f0}
 .entry.step .src{color:#c3a6ff}
 .toggle{display:flex;align-items:center;gap:6px;font-size:12px}
+.tabs{display:flex;gap:4px;text-transform:none;letter-spacing:0}
+.tab{border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.dbview{display:flex;flex-direction:column;height:614px;min-height:0}
+.dbbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
+.tchip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px;font-size:12px;font-family:var(--f-mono)}
+.tchip b{font-family:var(--f-body);color:var(--muted);margin-left:4px}
+.tchip[aria-pressed="true"]{border-color:var(--info);background:var(--info-soft);color:var(--info)}
+.dbbar input{border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:12px;min-width:0;flex:1 1 140px}
+.dbtable{flex:1;overflow:auto;min-height:0}
+.dbtable table{border-collapse:collapse;font-size:11.5px;font-family:var(--f-mono);width:max-content;min-width:100%}
+.dbtable th,.dbtable td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top;max-width:340px;white-space:pre-wrap;word-break:break-word}
+.dbtable th{position:sticky;top:0;background:var(--bg);font-family:var(--f-body);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);z-index:1}
+.dbtable td.null{color:var(--line)}
+.dbtable .lv-bad{color:var(--bad);font-weight:700}.dbtable .lv-warn{color:var(--warn);font-weight:700}.dbtable .lv-ok{color:var(--ok);font-weight:700}
+.dbfoot{padding:8px 14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line)}
 .stats div{background:var(--surface);padding:8px 10px;text-align:center}
 .stats b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
@@ -220,7 +236,10 @@ details.cfg .pad{border-top:1px solid var(--line)}
   <!-- ============ system log ============ -->
   <div class="col logcol">
     <section class="panel">
-      <h2>3 · What the backend does <span class="right"><button class="btn ghost small" id="clearLog" type="button">Clear log</button></span></h2>
+      <h2>3 · Backend <span class="right tabs" role="tablist">
+        <button class="tab" role="tab" id="tabLog" aria-selected="true" type="button">Live log</button>
+        <button class="tab" role="tab" id="tabDb" aria-selected="false" type="button">Database</button>
+      </span></h2>
       <div class="tools">
         <button class="btn ghost small" id="tReplay" type="button" title="Gupshup re-delivers the last inbound event">Replay last webhook</button>
         <button class="btn ghost small" id="tForged" type="button" title="Call webhook with a wrong token">Forged token</button>
@@ -229,7 +248,20 @@ details.cfg .pad{border-top:1px solid var(--line)}
         <button class="btn ghost small" id="tHuman" type="button" title="Sales exec moves the selected lead to Visits">Exec moves lead to Visits</button>
         <label class="toggle"><input type="checkbox" id="tDown"> L2R API down</label>
       </div>
-      <div class="log" id="log" aria-live="polite"></div>
+      <div id="logview">
+        <div class="log" id="log" aria-live="polite"></div>
+        <div class="dbfoot"><button class="btn ghost small" id="clearLog" type="button">Clear screen</button><span>Every line is also kept in the <code>audit_log</code> table (Database tab) and survives a page refresh.</span></div>
+      </div>
+      <div id="dbview" class="dbview" hidden>
+        <div class="dbbar" id="dbChips"></div>
+        <div class="dbbar">
+          <input id="dbFilter" placeholder="Filter rows (lead id, mobile, status, text…)" aria-label="Filter rows">
+          <button class="btn ghost small" id="exportCsv" type="button">Export table CSV</button>
+          <button class="btn ghost small" id="exportJson" type="button">Export full DB JSON</button>
+        </div>
+        <div class="dbtable" id="dbTable"></div>
+        <div class="dbfoot" id="dbFoot"></div>
+      </div>
     </section>
   </div>
 </div>
@@ -266,7 +298,12 @@ const S = {
   lastWebhook: null,
   seq: 1, gsSeq: 100, inSeq: 1,
   clockOffsetH: 0,
+  eventRows: [],        // wa_event table
+  optRows: [],          // opt_out table
+  audit: [],            // audit_log table
+  leadSeq: 12345,
 };
+const STORE_KEY = "nwh-qualifier-v1";
 
 /* ---------------- dealer config ---------------- */
 function cfg(){
@@ -337,9 +374,17 @@ function hashPct(id){ let h=0; for (const ch of id) h=(h*31+ch.charCodeAt(0))>>>
 function now(){ return new Date(Date.now() + S.clockOffsetH*3600e3); }
 function ts(){ return now().toTimeString().slice(0,8); }
 function log(kind, src, text, obj){
+  const row = {id:S.audit.length+1, ts:now().toISOString(), level:{ok:"INFO",info:"INFO",step:"INFO",warn:"WARN",bad:"ERROR"}[kind]||"INFO",
+    kind, source:src, lead_id:(text.match(/\bL\d{4,}\b/)||[S.selected||""])[0]||null, message:text, detail: obj===undefined?null:obj};
+  S.audit.push(row);
+  drawLog(row);
+  save();
+}
+function drawLog(row){
+  const kind=row.kind, src=row.source, text=row.message, obj=row.detail===null?undefined:row.detail;
   const el = document.createElement("div");
   el.className = "entry " + kind;
-  el.innerHTML = `<div class="h"><time>${ts()}</time><span class="src"></span><span class="txt"></span></div>`;
+  el.innerHTML = `<div class="h"><time>${new Date(row.ts).toTimeString().slice(0,8)}</time><span class="src"></span><span class="txt"></span></div>`;
   el.querySelector(".src").textContent = src;
   el.querySelector(".txt").textContent = text;
   if (obj!==undefined){ const pre=document.createElement("pre"); pre.textContent = typeof obj==="string"?obj:JSON.stringify(obj,null,2); el.appendChild(pre); }
@@ -450,6 +495,7 @@ async function webhook(evt, token=WEBHOOK_TOKEN, quiet=false){
   if (now().getTime() - evt.timestamp > 24*3600e3){ log("warn","Webhook","200 OK · ignored: stale event"); return; }
   if (S.events.has(eid)){ log("warn","Webhook",`200 OK · duplicate event ${eid} ignored (dedupe on wa_event)`); return; }
   S.events.add(eid);
+  S.eventRows.push({event_id:eid, type:evt.type, received_at:now().toISOString(), lead_id: isStatus ? (Object.values(S.msgs).find(m=>m.gsId===p.gsId)||{}).leadId||null : ((p.payload||{}).postbackText||"").split("|")[1]||null, payload:evt});
   log("ok","Webhook",`200 OK · stored ${eid}, processing async`);
   await wait(150);
   if (isStatus) handleStatus(p); else await handleMessage(p);
@@ -485,7 +531,7 @@ async function handleMessage(p){
   }
   const d = decide(code, c);
   log("step","Rules",`${code} → ${d.outcome}${d.priority?" · "+d.priority:""}${d.follow?" · follow-up "+d.follow+"d":""}  (threshold ≤ ${c.maxDays} days)`);
-  if (d.outcome==="OPT_OUT"){ S.optOut.add(msg.mobile); log("info","DB","INSERT opt_out"); }
+  if (d.outcome==="OPT_OUT"){ if (!S.optOut.has(msg.mobile)) S.optRows.push({mobile:msg.mobile, dealer_id:"D1", created_at:now().toISOString(), source:"WhatsApp STOP"}); S.optOut.add(msg.mobile); log("info","DB","INSERT opt_out"); }
   if (msg.status==="EXPIRED" || msg.status==="FAILED") return log("warn","Processor","conversation closed, reply logged only");
   if (msg.status==="REPLIED" && msg.sync==="DONE" && !(code==="HANDOFF_SE" && msg.allowHandoff)){
     try { L2R.comment(msg.leadId, `Later WhatsApp reply: ${inner.text||code}`, "wa-"+p.id); } catch(e){ log("bad","L2R API",e.message); }
@@ -575,6 +621,7 @@ function botTag(l){
 }
 function esc(s){ return String(s).replace(/[&<>"]/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch])); }
 function render(){
+  renderDb(); save();
   const c = cfg();
   $("#cfgSummary").textContent = `${c.open}–${c.close}, ${c.off>=0?DAYS[c.off]+" off":"no weekly off"}, qualify ≤ ${c.maxDays}d${c.enabled?"":", bot OFF"}`;
   const box = $("#leads");
@@ -630,12 +677,11 @@ $("#fTime").value = presetDate("fri-0026");
 document.querySelectorAll("[data-preset]").forEach(b=>b.addEventListener("click",()=>{ $("#fTime").value = presetDate(b.dataset.preset); }));
 document.querySelectorAll(".cfg input,.cfg select").forEach(el=>el.addEventListener("change",render));
 
-let leadSeq = 12345;
 $("#leadForm").addEventListener("submit", async e=>{
   e.preventDefault();
   const v = $("#fTime").value; if (!v) return;
   const [d,t] = v.split("T"); const [Y,M,D] = d.split("-").map(Number); const [h,m] = t.split(":").map(Number);
-  const lead = {id:"L"+(leadSeq++), name:$("#fName").value.trim()||"Customer", mobile:$("#fMobile").value.trim(),
+  const lead = {id:"L"+(S.leadSeq++), name:$("#fName").value.trim()||"Customer", mobile:$("#fMobile").value.trim(),
     model:$("#fModel").value, createdAt:new Date(Date.UTC(Y,M-1,D,h,m)), consent:$("#fConsent").checked,
     stage:"FIRST_CALL", feed:[], closed:false};
   feed(lead, "Inquiry created and assigned to Akshay");
@@ -689,15 +735,93 @@ $("#tDown").addEventListener("change", e=>{
 });
 $("#clearLog").addEventListener("click", ()=>{ $("#log").innerHTML=""; });
 $("#clearAll").addEventListener("click", ()=>{
-  Object.assign(S,{leads:[],msgs:{},events:new Set(),optOut:new Set(),selected:null,lastWebhook:null,clockOffsetH:0});
+  Object.assign(S,{leads:[],msgs:{},events:new Set(),optOut:new Set(),selected:null,lastWebhook:null,clockOffsetH:0,
+    eventRows:[],optRows:[],audit:[],seq:1,gsSeq:100,inSeq:1,leadSeq:12345});
+  try{ localStorage.removeItem(STORE_KEY); }catch(e){}
   $("#log").innerHTML=""; boot(); render();
 });
+
+/* ---------------- persistence (browser storage) ---------------- */
+let saveTimer = null;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    try{
+      localStorage.setItem(STORE_KEY, JSON.stringify({...S, events:[...S.events], optOut:[...S.optOut], cfg:cfg()}));
+    }catch(e){}
+  }, 150);
+}
+function load(){
+  let d; try{ d = JSON.parse(localStorage.getItem(STORE_KEY)||"null"); }catch(e){ d=null; }
+  if (!d) return false;
+  Object.assign(S, d, {events:new Set(d.events||[]), optOut:new Set(d.optOut||[])});
+  S.leads.forEach(l=>{ l.createdAt = new Date(l.createdAt); });
+  Object.values(S.msgs).forEach(m=>{ if (m.sentAt) m.sentAt = new Date(m.sentAt); });
+  if (d.cfg){
+    const c=d.cfg; $("#cDealer").value=c.dealer; $("#cRep").value=c.rep; $("#cOpen").value=c.open; $("#cClose").value=c.close;
+    $("#cOff").value=String(c.off); $("#cBuffer").value=c.buffer; $("#cMax").value=String(c.maxDays); $("#cHoldout").value=c.holdout; $("#cEnabled").checked=c.enabled;
+  }
+  S.audit.forEach(drawLog);
+  return true;
+}
+
+/* ---------------- database viewer ---------------- */
+let dbTable = "wa_message";
+function tables(){
+  const c = cfg();
+  const iso = d => d ? new Date(d).toISOString() : null;
+  return {
+    leads_l2r: S.leads.map(l=>({lead_id:l.id, customer_name:l.name, mobile:l.mobile, model:l.model, created_at_ist:fmtWall(l.createdAt), consent:l.consent, stage:l.stage, priority:l.priority||null, call_status:l.callStatus||null, purchase_timeline:l.timeline||null, follow_up:l.followUp||null, bot_state:l.botState||null})),
+    dealer_config: [{dealer_id:"D1", enabled:c.enabled, dealer_name:c.dealer, rep_name:c.rep, rep_phone:c.repPhone, working_hours:`${c.open}-${c.close}`, weekly_off:c.off>=0?DAYS[c.off]:null, pre_close_buffer_min:c.buffer, qualify_max_days:c.maxDays, holdout_pct:c.holdout, template_id:"tpl_nwh_timeline_v1"}],
+    wa_message: Object.values(S.msgs).map(m=>({id:m.id, lead_id:m.leadId, mobile:m.mobile, template_id:"tpl_nwh_timeline_v1", gs_message_id:m.gsId||null, wamid:m.wamid||null, status:m.status, sent_at:iso(m.sentAt), reply_code:m.replyCode||null, outcome:m.outcome||null, l2r_sync_status:m.sync})),
+    wa_event: S.eventRows.map(r=>({...r, payload:JSON.stringify(r.payload)})),
+    opt_out: S.optRows,
+    audit_log: S.audit.map(a=>({id:a.id, ts:a.ts, level:a.level, source:a.source, lead_id:a.lead_id, message:a.message, detail:a.detail===null?null:JSON.stringify(a.detail)})),
+  };
+}
+function renderDb(){
+  if ($("#dbview").hidden) return;
+  const T = tables();
+  $("#dbChips").innerHTML = Object.keys(T).map(k=>`<button type="button" class="tchip" data-t="${k}" aria-pressed="${k===dbTable}">${k}<b>${T[k].length}</b></button>`).join("");
+  const q = $("#dbFilter").value.trim().toLowerCase();
+  let rows = T[dbTable];
+  if (q) rows = rows.filter(r=>JSON.stringify(r).toLowerCase().includes(q));
+  if (dbTable==="audit_log") rows = rows.slice().reverse();
+  const cols = rows.length ? Object.keys(rows[0]) : (Object.keys((T[dbTable][0])||{}));
+  $("#dbTable").innerHTML = !rows.length ? `<div class="empty">No rows in <code>${dbTable}</code>${q?" match the filter":" yet"}.</div>` :
+    `<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>{
+      const v=r[c]; if (v===null||v===undefined) return `<td class="null">NULL</td>`;
+      const cls = c==="level" ? (v==="ERROR"?"lv-bad":v==="WARN"?"lv-warn":"lv-ok") : "";
+      const sv = String(v); return `<td class="${cls}" title="${esc(sv)}">${esc(sv.length>300?sv.slice(0,300)+"…":sv)}</td>`;}).join("")}</tr>`).join("")}</tbody></table>`;
+  $("#dbFoot").textContent = `${rows.length} row(s) in ${dbTable}. Stored in this browser; refresh keeps it, Reset clears it.`;
+}
+function setTab(db){
+  $("#tabLog").setAttribute("aria-selected", String(!db)); $("#tabDb").setAttribute("aria-selected", String(db));
+  $("#logview").hidden = db; $("#dbview").hidden = !db;
+  renderDb();
+}
+$("#tabLog").addEventListener("click", ()=>setTab(false));
+$("#tabDb").addEventListener("click", ()=>setTab(true));
+$("#dbChips").addEventListener("click", e=>{ const b=e.target.closest("[data-t]"); if (!b) return; dbTable=b.dataset.t; renderDb(); });
+$("#dbFilter").addEventListener("input", renderDb);
+function download(name, text, type){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text],{type})); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+}
+$("#exportCsv").addEventListener("click", ()=>{
+  const rows = tables()[dbTable]; if (!rows.length) return;
+  const cols = Object.keys(rows[0]);
+  const cell = v => v===null||v===undefined ? "" : `"${String(v).replace(/"/g,'""')}"`;
+  download(`${dbTable}.csv`, [cols.join(","), ...rows.map(r=>cols.map(c=>cell(r[c])).join(","))].join("\n"), "text/csv");
+});
+$("#exportJson").addEventListener("click", ()=>download("qualifier-db.json", JSON.stringify(tables(), null, 2), "application/json"));
 
 function boot(){
   log("step","Prototype","Simulated: L2R, Gupshup, Meta. Real logic: eligibility, calendar, webhook auth, dedupe, mapping, rules, L2R sync.");
   log("info","Try","Create a lead at 'Fri 12:26 AM', then tap '1 Month' on the phone.");
 }
-boot(); render();
+if (!load()) boot(); else log("info","Prototype",`Restored ${S.leads.length} lead(s) and ${S.audit.length} log entries from browser storage`);
+render();
 </script>
 </body>
 </html>

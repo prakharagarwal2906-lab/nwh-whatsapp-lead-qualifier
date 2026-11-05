@@ -96,7 +96,8 @@ def env(tmp_path):
     repo.upsert_dealer(dealer())
     gs, l2r = FakeGupshup(), FakeL2R()
     svc = QualifierService(repo, gs, l2r)
-    settings = Settings(db_path=str(tmp_path / "t.db"), webhook_tokens=[TOKEN, "old-token"])
+    settings = Settings(db_path=str(tmp_path / "t.db"), webhook_tokens=[TOKEN, "old-token"],
+                        log_file=str(tmp_path / "logs" / "audit.log"))
     client = TestClient(create_app(svc, settings))
 
     class Env:

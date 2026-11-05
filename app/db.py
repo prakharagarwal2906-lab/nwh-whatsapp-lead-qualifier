@@ -39,6 +39,16 @@ CREATE TABLE IF NOT EXISTS wa_event (
   processed_at TEXT,
   result TEXT
 );
+CREATE TABLE IF NOT EXISTS audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL,
+  level TEXT NOT NULL,
+  event TEXT NOT NULL,
+  lead_id TEXT,
+  message_id INTEGER,
+  detail TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_audit_lead ON audit_log (lead_id, id);
 CREATE TABLE IF NOT EXISTS opt_out (
   mobile TEXT NOT NULL,
   dealer_id TEXT NOT NULL,
@@ -204,6 +214,41 @@ class Repo:
             (max_attempts,),
         ).fetchall()
         return [self._row_to_msg(r) for r in rows]
+
+    # ---- audit log + table browsing -----------------------------------
+    TABLES = ("dealer_config", "wa_message", "wa_event", "opt_out", "audit_log")
+
+    def add_audit(self, level: str, event: str, lead_id: str | None = None,
+                  message_id: int | None = None, detail: dict | None = None) -> None:
+        self._exec(
+            "INSERT INTO audit_log (ts, level, event, lead_id, message_id, detail) VALUES (?, ?, ?, ?, ?, ?)",
+            (now().isoformat(), level, event, lead_id, message_id,
+             json.dumps(detail, default=str) if detail is not None else None),
+        )
+
+    def table_counts(self) -> dict[str, int]:
+        return {t: self._exec(f"SELECT COUNT(*) AS n FROM {t}").fetchone()["n"] for t in self.TABLES}
+
+    def list_rows(self, table: str, limit: int = 100, offset: int = 0,
+                  lead_id: str | None = None) -> list[dict]:
+        if table not in self.TABLES:  # whitelist: table name is interpolated
+            raise KeyError(table)
+        order = "rowid DESC"
+        if lead_id and table in ("wa_message", "audit_log"):
+            sql, params = f"SELECT * FROM {table} WHERE lead_id = ? ORDER BY {order} LIMIT ? OFFSET ?", (lead_id, limit, offset)
+        else:
+            sql, params = f"SELECT * FROM {table} ORDER BY {order} LIMIT ? OFFSET ?", (limit, offset)
+        rows = []
+        for r in self._exec(sql, params).fetchall():
+            row = dict(r)
+            for k in ("data", "payload", "detail"):
+                if isinstance(row.get(k), str):
+                    try:
+                        row[k] = json.loads(row[k])
+                    except ValueError:
+                        pass
+            rows.append(row)
+        return rows
 
     # ---- inbound events (dedupe log) -----------------------------------
     def store_event(self, event_id: str, type_: str, payload: dict) -> bool:

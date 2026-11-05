@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -13,6 +14,7 @@ from .rules import BUTTONS, build_postback, classify_text, decide, parse_postbac
 from .working_hours import DealerCalendar
 
 log = logging.getLogger("qualifier")
+audit_log = logging.getLogger("qualifier.audit")
 
 EVENT_STATUS = {
     "enqueued": MsgStatus.SENT,
@@ -51,8 +53,26 @@ class QualifierService:
         self.max_event_age = max_event_age_seconds
         self.window_hours = session_window_hours
 
+    def audit(self, level: str, event: str, lead_id: str | None = None,
+              message_id: int | None = None, **detail) -> None:
+        """Write one audit row to the DB and one JSON line to the log file."""
+        try:
+            self.repo.add_audit(level, event, lead_id, message_id, detail or None)
+        except Exception:
+            log.exception("audit write failed")
+        audit_log.log(logging.WARNING if level in ("WARN", "ERROR") else logging.INFO,
+                      json.dumps({"event": event, "lead_id": lead_id, "message_id": message_id, **detail},
+                                 default=str))
+
     # ------------------------------------------------------------------ send
     def on_lead_created(self, lead: Lead) -> SendResult:
+        r = self._on_lead_created(lead)
+        self.audit("INFO" if r.sent else ("ERROR" if r.reason == "send_failed" else "INFO"),
+                   "template_sent" if r.sent else f"send_skipped:{r.reason}",
+                   lead.lead_id, r.message_id, mobile=lead.mobile, dealer_id=lead.dealer_id)
+        return r
+
+    def _on_lead_created(self, lead: Lead) -> SendResult:
         cfg = self.repo.get_dealer(lead.dealer_id)
         if cfg is None or not cfg.enabled:
             return SendResult(False, "dealer_not_enabled")
@@ -114,6 +134,12 @@ class QualifierService:
         eid = self.event_id(evt)
         if not eid:
             return False, "ignored_unknown_event"
+        ok, reason = self._accept(evt, eid)
+        if not ok:
+            self.audit("WARN", f"webhook_{reason}", event_id=eid, type=evt.get("type"))
+        return ok, reason
+
+    def _accept(self, evt: dict, eid: str) -> tuple[bool, str]:
         ts = evt.get("timestamp")
         if isinstance(ts, (int, float)):
             age = datetime.now(timezone.utc).timestamp() - ts / 1000
@@ -134,6 +160,16 @@ class QualifierService:
             log.exception("processing failed for %s", eid)
             result = f"error:{type(e).__name__}"
         self.repo.finish_event(eid, result)
+        msg = None
+        p = evt.get("payload") or {}
+        ctx = p.get("context") or {}
+        gs = ctx.get("gsId") or p.get("gsId")
+        if gs:
+            msg = self.repo.find_message(gs_id=gs)
+        level = "ERROR" if result.startswith(("error", "rejected")) else \
+            "WARN" if result.startswith(("unmapped", "unclassified", "ignored")) else "INFO"
+        self.audit(level, f"webhook_processed:{result}", msg.lead_id if msg else None,
+                   msg.id if msg else None, event_id=eid, type=evt.get("type"))
         return result
 
     def _handle_status(self, p: dict) -> str:
@@ -258,9 +294,11 @@ class QualifierService:
                                      else "Customer opted out of WhatsApp messages", key)
         except Exception as e:
             self.repo.set_sync(msg.id, "FAILED", str(e)[:500])
-            log.warning("L2R sync failed for msg %s: %s", msg.id, e)
+            self.audit("ERROR", "l2r_sync_failed", msg.lead_id, msg.id, error=str(e)[:300])
             return "failed"
         self.repo.set_sync(msg.id, "DONE")
+        self.audit("INFO", "l2r_synced", msg.lead_id, msg.id, outcome=msg.outcome.value,
+                   reply_code=msg.reply_code)
         return "done"
 
     # ------------------------------------------------------------ scheduled

@@ -17,7 +17,7 @@ A working reference implementation in Python (FastAPI + SQLite) lives in [`app/`
 | `app/working_hours.py` | Per-dealer calendar (hours, weekly offs, holidays, pre-close buffer) and callback phrase ("tomorrow", "on Monday") |
 | `app/rules.py` | Postback codes, qualification rule (≤ `qualify_max_days` → Qualified), typed-reply keyword classifier |
 | `app/security.py` | Constant-time token check with rotation, IP allowlist |
-| `app/db.py` | Tables `dealer_config`, `wa_message`, `wa_event` (dedupe), `opt_out` |
+| `app/db.py` | Tables `dealer_config`, `wa_message`, `wa_event` (dedupe), `opt_out`, `audit_log` |
 | `app/clients.py` | Gupshup partner API and L2R API clients (L2R paths are assumed) |
 
 **Run it**
@@ -42,7 +42,34 @@ cp .env.example .env   # fill in tokens, then export the variables
 | `POST` | `/v1/webhooks/gupshup` | Gupshup (callback URL in dashboard), header `X-Webhook-Token` |
 | `POST` | `/internal/leads/created` | L2R `LeadCreated` event or queue consumer |
 | `PUT` | `/internal/dealers/{dealerId}` | Dealer admin: hours, holidays, template, threshold |
+| `GET` | `/internal/db`, `/internal/db/{table}` | Row counts, and rows of any table (`?limit`, `?offset`, `?lead_id`) |
+| `GET` | `/internal/leads/{leadId}/audit` | Full audit trail for one lead |
 | `POST` | `/internal/maintenance` | Scheduler every few minutes: expire 24h conversations, retry failed L2R syncs |
+
+
+**See every table and the log**
+
+*Prototype (Netlify):* open the **Database** tab in the Backend panel. It shows `leads_l2r`, `dealer_config`, `wa_message`, `wa_event`, `opt_out` and `audit_log` live, with a filter box, **Export table CSV** and **Export full DB JSON**. Everything is kept in the browser and survives a refresh; **Reset** clears it.
+
+*Python service:* every step writes a row to the `audit_log` table and a JSON line to `logs/qualifier.log` (rotated at 10 MB, 5 files; path set by `LOG_FILE`). Read them with:
+
+```bash
+curl -s localhost:8000/internal/db -H "X-Internal-Key: $INTERNAL_API_KEY"
+```
+
+```bash
+curl -s "localhost:8000/internal/db/wa_message?limit=50" -H "X-Internal-Key: $INTERNAL_API_KEY"
+```
+
+```bash
+curl -s localhost:8000/internal/leads/L12345/audit -H "X-Internal-Key: $INTERNAL_API_KEY"
+```
+
+```bash
+tail -f logs/qualifier.log
+```
+
+Or open the database directly: `sqlite3 qualifier.db "SELECT * FROM audit_log ORDER BY id DESC LIMIT 20;"`
 
 In production, replace the in-process `BackgroundTasks` with a real queue (SQS/Kafka) and SQLite with Postgres; the boundaries are already split that way.
 
