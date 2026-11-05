@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -92,7 +93,12 @@ def quick_reply(code: str, lead_id: str, gs_id: str, mobile="919876543210", msg_
 
 @pytest.fixture
 def env(tmp_path):
-    repo = Repo(str(tmp_path / "t.db"))
+    pg = os.getenv("TEST_DATABASE_URL")
+    if pg:  # run the same suite against Postgres
+        import psycopg
+        with psycopg.connect(pg, autocommit=True) as c:
+            c.execute("DROP TABLE IF EXISTS dealer_config, wa_message, wa_event, audit_log, opt_out")
+    repo = Repo(pg or str(tmp_path / "t.db"))
     repo.upsert_dealer(dealer())
     gs, l2r = FakeGupshup(), FakeL2R()
     svc = QualifierService(repo, gs, l2r)

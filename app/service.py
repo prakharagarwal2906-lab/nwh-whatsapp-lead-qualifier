@@ -203,7 +203,7 @@ class QualifierService:
         msg = self.repo.find_message(gs_id=ctx.get("gsId"), wamid=ctx.get("id"), lead_id=postback_lead)
         if msg is None and p.get("type") == "text":
             # Typed replies may have no context; use the latest open message to this sender.
-            msg = self._latest_open_for(sender)
+            msg = self.repo.latest_open_for(sender)
         if msg is None:
             return "unmapped_reply"
         # A valid token alone must not be able to qualify an unrelated lead.
@@ -239,13 +239,6 @@ class QualifierService:
             except SendError:
                 log.warning("follow-up text failed for msg %s", msg.id)
         return f"reply:{decision.outcome.value}"
-
-    def _latest_open_for(self, mobile: str):
-        row = self.repo._exec(
-            "SELECT id FROM wa_message WHERE mobile = ? AND status IN ('SENT','DELIVERED','READ') "
-            "ORDER BY id DESC LIMIT 1", (mobile,)
-        ).fetchone()
-        return self.repo.get_message(row["id"]) if row else None
 
     # ------------------------------------------------------------- L2R sync
     def sync_to_l2r(self, msg_id: int, idempotency_key: str | None = None) -> str:

@@ -74,7 +74,7 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
     settings = settings or get_settings()
     if service is None:
         service = QualifierService(
-            Repo(settings.db_path),
+            Repo(settings.database_url or settings.db_path),
             HttpGupshupClient(settings.gupshup_base_url, settings.gupshup_app_token),
             HttpL2RClient(settings.l2r_base_url, settings.l2r_api_key),
             max_event_age_seconds=settings.max_event_age_seconds,
@@ -92,7 +92,7 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
 
     @app.get("/healthz")
     def health() -> dict:
-        return {"ok": True}
+        return {"ok": True, "db": service.repo.backend}
 
     @app.post("/v1/webhooks/gupshup")
     async def gupshup_webhook(request: Request, background: BackgroundTasks) -> dict:
@@ -135,7 +135,7 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
             qualify_max_days=body.qualifyMaxDays, rep_name=body.repName, rep_phone=body.repPhone,
             holdout_pct=body.holdoutPct,
         ))
-        return {"ok": True}
+        return {"ok": True, "db": service.repo.backend}
 
     @app.post("/internal/maintenance", dependencies=[Depends(internal_auth)])
     def maintenance() -> dict:

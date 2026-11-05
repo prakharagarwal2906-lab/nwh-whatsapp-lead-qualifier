@@ -1,20 +1,25 @@
-"""SQLite repository. Swap for Postgres in production; the SQL is portable."""
+"""Repository for PostgreSQL (production) or SQLite (local / tests).
+
+Pass a `postgresql://...` URL to use Postgres, or a file path to use SQLite.
+Queries are written once with `?` placeholders and translated for Postgres.
+"""
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 from datetime import datetime, timezone
 
 from .models import STATUS_RANK, TERMINAL, DealerConfig, MsgStatus, Outcome, WaMessage
 
-SCHEMA = """
+_SCHEMA = """
 CREATE TABLE IF NOT EXISTS dealer_config (
   dealer_id TEXT PRIMARY KEY,
-  data TEXT NOT NULL
+  data {json} NOT NULL
 );
 CREATE TABLE IF NOT EXISTS wa_message (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id {pk},
   lead_id TEXT NOT NULL,
   dealer_id TEXT NOT NULL,
   mobile TEXT NOT NULL,
@@ -31,22 +36,23 @@ CREATE TABLE IF NOT EXISTS wa_message (
   UNIQUE (lead_id, template_id)
 );
 CREATE INDEX IF NOT EXISTS ix_msg_mobile ON wa_message (mobile, dealer_id, sent_at);
+CREATE INDEX IF NOT EXISTS ix_msg_lead ON wa_message (lead_id);
 CREATE TABLE IF NOT EXISTS wa_event (
   event_id TEXT PRIMARY KEY,
   type TEXT NOT NULL,
-  payload TEXT NOT NULL,
+  payload {json} NOT NULL,
   received_at TEXT NOT NULL,
   processed_at TEXT,
   result TEXT
 );
 CREATE TABLE IF NOT EXISTS audit_log (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id {pk},
   ts TEXT NOT NULL,
   level TEXT NOT NULL,
   event TEXT NOT NULL,
   lead_id TEXT,
   message_id INTEGER,
-  detail TEXT
+  detail {json}
 );
 CREATE INDEX IF NOT EXISTS ix_audit_lead ON audit_log (lead_id, id);
 CREATE TABLE IF NOT EXISTS opt_out (
@@ -57,21 +63,66 @@ CREATE TABLE IF NOT EXISTS opt_out (
 );
 """
 
+# Column used to sort each table newest-first when browsing.
+_ORDER = {
+    "dealer_config": "dealer_id",
+    "wa_message": "id",
+    "wa_event": "received_at",
+    "opt_out": "created_at",
+    "audit_log": "id",
+}
+
 
 def now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class Repo:
-    def __init__(self, path: str):
-        self.conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
-        self.conn.row_factory = sqlite3.Row
-        self.lock = threading.Lock()
-        self.conn.executescript(SCHEMA)
+def _loads(v):
+    if isinstance(v, str):
+        try:
+            return json.loads(v)
+        except ValueError:
+            return v
+    return v
 
-    def _exec(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
+
+class Repo:
+    TABLES = tuple(_ORDER)
+
+    def __init__(self, dsn: str):
+        self.lock = threading.Lock()
+        self.is_pg = dsn.startswith(("postgres://", "postgresql://"))
+        if self.is_pg:
+            import psycopg
+            from psycopg.rows import dict_row
+
+            self.conn = psycopg.connect(dsn, autocommit=True, row_factory=dict_row)
+            schema = _SCHEMA.format(pk="BIGSERIAL PRIMARY KEY", json="JSONB")
+            with self.lock:
+                self.conn.execute(schema)
+        else:
+            self.conn = sqlite3.connect(dsn, check_same_thread=False, isolation_level=None)
+            self.conn.row_factory = sqlite3.Row
+            schema = _SCHEMA.format(pk="INTEGER PRIMARY KEY AUTOINCREMENT", json="TEXT")
+            self.conn.executescript(schema)
+
+    @property
+    def backend(self) -> str:
+        return "postgresql" if self.is_pg else "sqlite"
+
+    def _sql(self, sql: str) -> str:
+        if not self.is_pg:
+            return sql
+        if "INSERT OR IGNORE" in sql:
+            sql = sql.replace("INSERT OR IGNORE", "INSERT") + " ON CONFLICT DO NOTHING"
+        return re.sub(r"\?", "%s", sql)
+
+    def _exec(self, sql: str, params: tuple = ()):
         with self.lock:
-            return self.conn.execute(sql, params)
+            return self.conn.execute(self._sql(sql), params)
+
+    def close(self) -> None:
+        self.conn.close()
 
     # ---- dealer config -------------------------------------------------
     def upsert_dealer(self, cfg: DealerConfig) -> None:
@@ -83,7 +134,7 @@ class Repo:
 
     def get_dealer(self, dealer_id: str) -> DealerConfig | None:
         row = self._exec("SELECT data FROM dealer_config WHERE dealer_id = ?", (dealer_id,)).fetchone()
-        return DealerConfig(**json.loads(row["data"])) if row else None
+        return DealerConfig(**_loads(row["data"])) if row else None
 
     # ---- opt-out -------------------------------------------------------
     def is_opted_out(self, mobile: str, dealer_id: str) -> bool:
@@ -108,11 +159,16 @@ class Repo:
 
     def create_pending(self, lead_id: str, dealer_id: str, mobile: str, template_id: str) -> int | None:
         """Returns the new row id, or None if this lead already has the template (idempotent)."""
-        cur = self._exec(
-            "INSERT OR IGNORE INTO wa_message (lead_id, dealer_id, mobile, template_id, status) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (lead_id, dealer_id, mobile, template_id, MsgStatus.PENDING.value),
-        )
+        params = (lead_id, dealer_id, mobile, template_id, MsgStatus.PENDING.value)
+        sql = ("INSERT OR IGNORE INTO wa_message (lead_id, dealer_id, mobile, template_id, status) "
+               "VALUES (?, ?, ?, ?, ?)")
+        if self.is_pg:
+            row = self._exec(
+                "INSERT INTO wa_message (lead_id, dealer_id, mobile, template_id, status) "
+                "VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING RETURNING id", params
+            ).fetchone()
+            return row["id"] if row else None
+        cur = self._exec(sql, params)
         return cur.lastrowid if cur.rowcount else None
 
     def mark_sent(self, msg_id: int, gs_message_id: str) -> None:
@@ -127,7 +183,8 @@ class Repo:
             (MsgStatus.FAILED.value, reason[:500], msg_id),
         )
 
-    def _row_to_msg(self, row: sqlite3.Row | None) -> WaMessage | None:
+    @staticmethod
+    def _row_to_msg(row) -> WaMessage | None:
         if row is None:
             return None
         return WaMessage(
@@ -153,6 +210,12 @@ class Repo:
                 if row:
                     return self._row_to_msg(row)
         return None
+
+    def latest_open_for(self, mobile: str) -> WaMessage | None:
+        return self._row_to_msg(self._exec(
+            "SELECT * FROM wa_message WHERE mobile = ? AND status IN ('SENT','DELIVERED','READ') "
+            "ORDER BY id DESC LIMIT 1", (mobile,)
+        ).fetchone())
 
     def advance_status(self, msg_id: int, new: MsgStatus, wamid: str | None = None,
                        reason: str | None = None) -> bool:
@@ -216,8 +279,6 @@ class Repo:
         return [self._row_to_msg(r) for r in rows]
 
     # ---- audit log + table browsing -----------------------------------
-    TABLES = ("dealer_config", "wa_message", "wa_event", "opt_out", "audit_log")
-
     def add_audit(self, level: str, event: str, lead_id: str | None = None,
                   message_id: int | None = None, detail: dict | None = None) -> None:
         self._exec(
@@ -231,22 +292,20 @@ class Repo:
 
     def list_rows(self, table: str, limit: int = 100, offset: int = 0,
                   lead_id: str | None = None) -> list[dict]:
-        if table not in self.TABLES:  # whitelist: table name is interpolated
+        if table not in _ORDER:  # whitelist: table name is interpolated into SQL
             raise KeyError(table)
-        order = "rowid DESC"
+        order = f"{_ORDER[table]} DESC"
         if lead_id and table in ("wa_message", "audit_log"):
-            sql, params = f"SELECT * FROM {table} WHERE lead_id = ? ORDER BY {order} LIMIT ? OFFSET ?", (lead_id, limit, offset)
+            sql = f"SELECT * FROM {table} WHERE lead_id = ? ORDER BY {order} LIMIT ? OFFSET ?"
+            params = (lead_id, limit, offset)
         else:
             sql, params = f"SELECT * FROM {table} ORDER BY {order} LIMIT ? OFFSET ?", (limit, offset)
         rows = []
         for r in self._exec(sql, params).fetchall():
             row = dict(r)
             for k in ("data", "payload", "detail"):
-                if isinstance(row.get(k), str):
-                    try:
-                        row[k] = json.loads(row[k])
-                    except ValueError:
-                        pass
+                if k in row:
+                    row[k] = _loads(row[k])
             rows.append(row)
         return rows
 

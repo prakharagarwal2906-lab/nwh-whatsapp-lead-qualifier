@@ -17,6 +17,8 @@ def _csv(name: str) -> list[str]:
 @dataclass(frozen=True)
 class Settings:
     db_path: str = field(default_factory=lambda: os.getenv("DB_PATH", "qualifier.db"))
+    # postgresql://user:pass@host:5432/db  — when set, used instead of the SQLite file.
+    database_url: str = field(default_factory=lambda: os.getenv("DATABASE_URL", ""))
     # Two tokens may be valid at once so rotation never drops events.
     webhook_tokens: list[str] = field(default_factory=lambda: _csv("GUPSHUP_WEBHOOK_TOKENS"))
     webhook_token_header: str = field(
