@@ -1,0 +1,41 @@
+"""Runtime settings, read from environment variables.
+
+Secrets (webhook tokens, API keys) must come from a secrets manager or the
+environment, never from code.
+"""
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+
+
+def _csv(name: str) -> list[str]:
+    raw = os.getenv(name, "")
+    return [v.strip() for v in raw.split(",") if v.strip()]
+
+
+@dataclass(frozen=True)
+class Settings:
+    db_path: str = field(default_factory=lambda: os.getenv("DB_PATH", "qualifier.db"))
+    # Two tokens may be valid at once so rotation never drops events.
+    webhook_tokens: list[str] = field(default_factory=lambda: _csv("GUPSHUP_WEBHOOK_TOKENS"))
+    webhook_token_header: str = field(
+        default_factory=lambda: os.getenv("GUPSHUP_WEBHOOK_TOKEN_HEADER", "X-Webhook-Token")
+    )
+    # Empty list disables the IP check (useful locally); set Gupshup ranges in prod.
+    allowed_ips: list[str] = field(default_factory=lambda: _csv("GUPSHUP_ALLOWED_IPS"))
+    max_event_age_seconds: int = field(
+        default_factory=lambda: int(os.getenv("MAX_EVENT_AGE_SECONDS", "86400"))
+    )
+    gupshup_base_url: str = field(
+        default_factory=lambda: os.getenv("GUPSHUP_BASE_URL", "https://partner.gupshup.io")
+    )
+    gupshup_app_token: str = field(default_factory=lambda: os.getenv("GUPSHUP_APP_TOKEN", ""))
+    l2r_base_url: str = field(default_factory=lambda: os.getenv("L2R_BASE_URL", "http://localhost:9000"))
+    l2r_api_key: str = field(default_factory=lambda: os.getenv("L2R_API_KEY", ""))
+    internal_api_key: str = field(default_factory=lambda: os.getenv("INTERNAL_API_KEY", ""))
+    session_window_hours: int = 24
+
+
+def get_settings() -> Settings:
+    return Settings()

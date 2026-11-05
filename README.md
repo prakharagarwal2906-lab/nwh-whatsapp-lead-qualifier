@@ -6,6 +6,48 @@ When a lead lands in L2R outside the dealer's working hours, a templated WhatsAp
 
 The full styled version, with all sections, is in [`docs/design.html`](docs/design.html). Open it in a browser; the diagrams there use Mermaid.
 
+## Code
+
+A working reference implementation in Python (FastAPI + SQLite) lives in [`app/`](app), with tests in [`tests/`](tests).
+
+| File | What it does |
+|---|---|
+| `app/main.py` | HTTP API: Gupshup webhook, lead-created hook, dealer config, maintenance job |
+| `app/service.py` | Core flows: eligibility and template send, inbound reply/status processing, L2R sync, expiry and retries |
+| `app/working_hours.py` | Per-dealer calendar (hours, weekly offs, holidays, pre-close buffer) and callback phrase ("tomorrow", "on Monday") |
+| `app/rules.py` | Postback codes, qualification rule (≤ `qualify_max_days` → Qualified), typed-reply keyword classifier |
+| `app/security.py` | Constant-time token check with rotation, IP allowlist |
+| `app/db.py` | Tables `dealer_config`, `wa_message`, `wa_event` (dedupe), `opt_out` |
+| `app/clients.py` | Gupshup partner API and L2R API clients (L2R paths are assumed) |
+
+**Run it**
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+```
+
+```bash
+.venv/bin/python -m pytest -q
+```
+
+```bash
+cp .env.example .env   # fill in tokens, then export the variables
+.venv/bin/uvicorn app.main:app --reload
+```
+
+**Endpoints**
+
+| Method | Path | Caller |
+|---|---|---|
+| `POST` | `/v1/webhooks/gupshup` | Gupshup (callback URL in dashboard), header `X-Webhook-Token` |
+| `POST` | `/internal/leads/created` | L2R `LeadCreated` event or queue consumer |
+| `PUT` | `/internal/dealers/{dealerId}` | Dealer admin: hours, holidays, template, threshold |
+| `POST` | `/internal/maintenance` | Scheduler every few minutes: expire 24h conversations, retry failed L2R syncs |
+
+In production, replace the in-process `BackgroundTasks` with a real queue (SQS/Kafka) and SQLite with Postgres; the boundaries are already split that way.
+
+---
+
 ## Contents
 
 1. [Problem and goals](#problem-and-goals)
