@@ -28,7 +28,9 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .brand{font-weight:800;letter-spacing:-.02em;font-size:18px}
 .brand span{color:var(--accent)}
 .topbar .sub{color:var(--muted)}
-.topbar .links{margin-left:auto;display:flex;gap:14px}
+.topbar .links{margin-left:auto;display:flex;gap:14px;align-items:center}
+.store{font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.store.pg{background:var(--ok-soft);color:var(--ok);border-color:transparent}
 .topbar a{color:var(--info);text-decoration:none;font-weight:600}
 
 .app{display:grid;grid-template-columns:minmax(300px,1fr) 360px minmax(320px,1.1fr);gap:14px;padding:14px max(16px,env(safe-area-inset-left))}
@@ -151,6 +153,7 @@ details.cfg .pad{border-top:1px solid var(--line)}
   <div class="brand">L2R <span>×</span> WhatsApp</div>
   <div class="sub">After-hours lead qualifier, working prototype</div>
   <nav class="links">
+    <span class="store" id="storeBadge" title="Where the prototype's tables are stored">Storage: checking…</span>
     <a href="design.html">System design</a>
     <a href="https://github.com/prakharagarwal2906-lab/nwh-whatsapp-lead-qualifier" target="_blank" rel="noopener">Code</a>
   </nav>
@@ -250,7 +253,7 @@ details.cfg .pad{border-top:1px solid var(--line)}
       </div>
       <div id="logview">
         <div class="log" id="log" aria-live="polite"></div>
-        <div class="dbfoot"><button class="btn ghost small" id="clearLog" type="button">Clear screen</button><span>Every line is also kept in the <code>audit_log</code> table (Database tab) and survives a page refresh.</span></div>
+        <div class="dbfoot"><button class="btn ghost small" id="clearLog" type="button">Clear screen</button><span>Every line is also kept in the <code>audit_log</code> table (Database tab).</span></div>
       </div>
       <div id="dbview" class="dbview" hidden>
         <div class="dbbar" id="dbChips"></div>
@@ -738,31 +741,105 @@ $("#clearAll").addEventListener("click", ()=>{
   Object.assign(S,{leads:[],msgs:{},events:new Set(),optOut:new Set(),selected:null,lastWebhook:null,clockOffsetH:0,
     eventRows:[],optRows:[],audit:[],seq:1,gsSeq:100,inSeq:1,leadSeq:12345});
   try{ localStorage.removeItem(STORE_KEY); }catch(e){}
-  $("#log").innerHTML=""; boot(); render();
+  $("#log").innerHTML="";
+  if (REMOTE.on) fetch("/api/db/reset",{method:"POST"}).then(r=>r.json()).then(j=>{ REMOTE.version=j.version||0; REMOTE.lastPushed=""; setBadge(); boot(); render(); });
+  else { boot(); render(); }
 });
+function resetLocal(){
+  Object.assign(S,{leads:[],msgs:{},events:new Set(),optOut:new Set(),selected:null,lastWebhook:null,clockOffsetH:0,
+    eventRows:[],optRows:[],audit:[],seq:1,gsSeq:100,inSeq:1,leadSeq:12345});
+  $("#log").innerHTML=""; render();
+}
 
-/* ---------------- persistence (browser storage) ---------------- */
+/* ---------------- persistence: shared Postgres (via /api/db) or this browser ---------------- */
+const REMOTE = {on:false, version:0, lastPushed:"", pushTimer:null, applying:false, lastLocal:0};
 let saveTimer = null;
+function snapshot(){ return {...S, events:[...S.events], optOut:[...S.optOut], cfg:cfg()}; }
 function save(){
+  if (REMOTE.applying) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(()=>{
-    try{
-      localStorage.setItem(STORE_KEY, JSON.stringify({...S, events:[...S.events], optOut:[...S.optOut], cfg:cfg()}));
-    }catch(e){}
+    const snap = snapshot();
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(snap)); }catch(e){}
+    if (REMOTE.on) pushRemote(snap);
   }, 150);
 }
-function load(){
-  let d; try{ d = JSON.parse(localStorage.getItem(STORE_KEY)||"null"); }catch(e){ d=null; }
-  if (!d) return false;
+function pushRemote(snap){
+  const body = JSON.stringify({state:snap, tables:tables()});
+  if (body === REMOTE.lastPushed) return;          // nothing changed
+  REMOTE.lastLocal = Date.now();
+  clearTimeout(REMOTE.pushTimer);
+  REMOTE.pushTimer = setTimeout(async ()=>{
+    try{
+      const r = await fetch("/api/db", {method:"POST", headers:{"content-type":"application/json"}, body});
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || r.status);
+      REMOTE.version = j.version; REMOTE.lastPushed = body;
+      setBadge();
+    }catch(e){ setBadge("Postgres: save failed, retrying"); setTimeout(()=>pushRemote(snapshot()), 3000); }
+  }, 500);
+}
+function applyState(d){
+  REMOTE.applying = true;
   Object.assign(S, d, {events:new Set(d.events||[]), optOut:new Set(d.optOut||[])});
+  S.eventRows = S.eventRows||[]; S.optRows = S.optRows||[]; S.audit = S.audit||[];
   S.leads.forEach(l=>{ l.createdAt = new Date(l.createdAt); });
   Object.values(S.msgs).forEach(m=>{ if (m.sentAt) m.sentAt = new Date(m.sentAt); });
   if (d.cfg){
     const c=d.cfg; $("#cDealer").value=c.dealer; $("#cRep").value=c.rep; $("#cOpen").value=c.open; $("#cClose").value=c.close;
     $("#cOff").value=String(c.off); $("#cBuffer").value=c.buffer; $("#cMax").value=String(c.maxDays); $("#cHoldout").value=c.holdout; $("#cEnabled").checked=c.enabled;
   }
-  S.audit.forEach(drawLog);
-  return true;
+  $("#log").innerHTML = ""; S.audit.forEach(drawLog);
+  render();
+  REMOTE.applying = false;
+}
+function loadLocal(){
+  let d; try{ d = JSON.parse(localStorage.getItem(STORE_KEY)||"null"); }catch(e){ d=null; }
+  if (!d) return false;
+  applyState(d); return true;
+}
+function setBadge(text){
+  const b = $("#storeBadge");
+  b.className = "store" + (REMOTE.on ? " pg" : "");
+  b.textContent = text || (REMOTE.on ? `Storage: Postgres (shared) · v${REMOTE.version}` : "Storage: this browser only");
+}
+async function fetchRemote(){
+  const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 4000);
+  try{
+    const r = await fetch("/api/db", {signal:ctl.signal, cache:"no-store"});
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j && j.ok ? j : null;
+  }catch(e){ return null; } finally { clearTimeout(t); }
+}
+async function startStorage(){
+  const remote = location.protocol.startsWith("http") ? await fetchRemote() : null;
+  if (remote){
+    REMOTE.on = true; REMOTE.version = remote.version;
+    if (remote.state){
+      applyState(remote.state);
+      REMOTE.lastPushed = JSON.stringify({state:snapshot(), tables:tables()});
+      log("info","Prototype",`Loaded ${S.leads.length} lead(s) and ${S.audit.length-0} log entries from shared Postgres (v${remote.version})`);
+    } else {
+      if (!loadLocal()) boot();
+      log("info","Prototype","Connected to shared Postgres. Your data is now saved there for everyone who opens this site.");
+    }
+    setInterval(pollRemote, 8000);
+  } else {
+    if (loadLocal()) log("info","Prototype",`Restored ${S.leads.length} lead(s) from browser storage`);
+    else boot();
+  }
+  setBadge(); render();
+}
+async function pollRemote(){
+  if (Date.now() - REMOTE.lastLocal < 4000) return;   // don't overwrite your own in-flight work
+  const j = await fetchRemote();
+  if (j && j.version > REMOTE.version){
+    REMOTE.version = j.version;
+    if (j.state){ applyState(j.state); REMOTE.lastPushed = JSON.stringify({state:snapshot(), tables:tables()}); }
+    else { resetLocal(); }
+    setBadge();
+  }
 }
 
 /* ---------------- database viewer ---------------- */
@@ -793,7 +870,9 @@ function renderDb(){
       const v=r[c]; if (v===null||v===undefined) return `<td class="null">NULL</td>`;
       const cls = c==="level" ? (v==="ERROR"?"lv-bad":v==="WARN"?"lv-warn":"lv-ok") : "";
       const sv = String(v); return `<td class="${cls}" title="${esc(sv)}">${esc(sv.length>300?sv.slice(0,300)+"…":sv)}</td>`;}).join("")}</tr>`).join("")}</tbody></table>`;
-  $("#dbFoot").textContent = `${rows.length} row(s) in ${dbTable}. Stored in this browser; refresh keeps it, Reset clears it.`;
+  $("#dbFoot").textContent = `${rows.length} row(s) in ${dbTable}. ` + (REMOTE.on
+    ? `Saved to shared Postgres (schema proto, table ${dbTable}); everyone opening this site sees the same data. Reset clears it.`
+    : "Stored in this browser only; refresh keeps it, Reset clears it.");
 }
 function setTab(db){
   $("#tabLog").setAttribute("aria-selected", String(!db)); $("#tabDb").setAttribute("aria-selected", String(db));
@@ -820,8 +899,8 @@ function boot(){
   log("step","Prototype","Simulated: L2R, Gupshup, Meta. Real logic: eligibility, calendar, webhook auth, dedupe, mapping, rules, L2R sync.");
   log("info","Try","Create a lead at 'Fri 12:26 AM', then tap '1 Month' on the phone.");
 }
-if (!load()) boot(); else log("info","Prototype",`Restored ${S.leads.length} lead(s) and ${S.audit.length} log entries from browser storage`);
 render();
+startStorage();
 </script>
 </body>
 </html>

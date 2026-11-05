@@ -1,0 +1,177 @@
+// Shared database API for the prototype (Netlify Function, Node 18+).
+//
+//   GET  /api/db               -> { ok, version, state, counts }
+//   POST /api/db               -> save { state, tables } ; returns { version }
+//   POST /api/db/reset         -> empty every prototype table
+//   GET  /api/db/tables/:name  -> rows of one table
+//
+// Connection string: NETLIFY_DATABASE_URL (Netlify DB / Neon) or DATABASE_URL
+// (any Postgres: Neon, Supabase, RDS ...). Tables live in schema "proto" so they
+// never collide with the Python service's tables in the same database.
+import pg from "pg";
+
+const SCHEMA = "proto";
+const MAX_BODY = 2_000_000;
+
+// name -> [primary key columns, column definitions]
+export const TABLES = {
+  leads_l2r: [["lead_id"], {
+    lead_id: "text", customer_name: "text", mobile: "text", model: "text", created_at_ist: "text",
+    consent: "boolean", stage: "text", priority: "text", call_status: "text",
+    purchase_timeline: "text", follow_up: "text", bot_state: "text",
+  }],
+  dealer_config: [["dealer_id"], {
+    dealer_id: "text", enabled: "boolean", dealer_name: "text", rep_name: "text", rep_phone: "text",
+    working_hours: "text", weekly_off: "text", pre_close_buffer_min: "integer",
+    qualify_max_days: "integer", holdout_pct: "integer", template_id: "text",
+  }],
+  wa_message: [["id"], {
+    id: "integer", lead_id: "text", mobile: "text", template_id: "text", gs_message_id: "text",
+    wamid: "text", status: "text", sent_at: "text", reply_code: "text", outcome: "text",
+    l2r_sync_status: "text",
+  }],
+  wa_event: [["event_id"], {
+    event_id: "text", type: "text", received_at: "text", lead_id: "text", payload: "jsonb",
+  }],
+  opt_out: [["mobile", "dealer_id"], {
+    mobile: "text", dealer_id: "text", created_at: "text", source: "text",
+  }],
+  audit_log: [["id"], {
+    id: "integer", ts: "text", level: "text", source: "text", lead_id: "text",
+    message: "text", detail: "jsonb",
+  }],
+};
+
+let pool = null;
+export function getPool(url = process.env.NETLIFY_DATABASE_URL || process.env.DATABASE_URL) {
+  if (pool) return pool;
+  if (!url) return null;
+  const local = /localhost|127\.0\.0\.1/.test(url);
+  pool = new pg.Pool({ connectionString: url, max: 3, ssl: local ? false : { rejectUnauthorized: false } });
+  return pool;
+}
+export function setPool(p) { pool = p; }
+
+let ready = null;
+async function ensureSchema(db) {
+  if (!ready) {
+    ready = (async () => {
+      await db.query(`CREATE SCHEMA IF NOT EXISTS ${SCHEMA}`);
+      await db.query(`CREATE TABLE IF NOT EXISTS ${SCHEMA}.snapshot (
+        id integer PRIMARY KEY, state jsonb NOT NULL, version bigint NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now())`);
+      for (const [name, [pk, cols]] of Object.entries(TABLES)) {
+        const defs = Object.entries(cols).map(([c, t]) => `${c} ${t}`).join(", ");
+        await db.query(`CREATE TABLE IF NOT EXISTS ${SCHEMA}.${name} (${defs},
+          updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (${pk.join(", ")}))`);
+      }
+    })().catch(e => { ready = null; throw e; });
+  }
+  return ready;
+}
+
+function clean(name, row) {
+  const cols = TABLES[name][1];
+  const out = {};
+  for (const [c, t] of Object.entries(cols)) {
+    let v = row[c];
+    if (v === undefined) v = null;
+    if (t === "jsonb" && typeof v === "string") { try { v = JSON.parse(v); } catch { /* keep text */ } }
+    out[c] = v;
+  }
+  return out;
+}
+
+// Replace one table's contents with `rows`: upsert incoming, delete the rest.
+async function syncTable(client, name, rows) {
+  const [pk, cols] = TABLES[name];
+  const names = Object.keys(cols);
+  const data = JSON.stringify(rows.map(r => clean(name, r)));
+  const nonPk = names.filter(c => !pk.includes(c));
+  await client.query(
+    `INSERT INTO ${SCHEMA}.${name} (${names.join(", ")})
+     SELECT ${names.join(", ")} FROM jsonb_populate_recordset(NULL::${SCHEMA}.${name}, $1::jsonb)
+     ON CONFLICT (${pk.join(", ")}) DO UPDATE SET
+       ${nonPk.map(c => `${c} = EXCLUDED.${c}`).join(", ")}, updated_at = now()`,
+    [data],
+  );
+  const keyExpr = pk.length === 1 ? pk[0] : `(${pk.join(", ")})`;
+  const incoming = pk.length === 1
+    ? `SELECT ${pk[0]} FROM jsonb_populate_recordset(NULL::${SCHEMA}.${name}, $1::jsonb)`
+    : `SELECT ${pk.join(", ")} FROM jsonb_populate_recordset(NULL::${SCHEMA}.${name}, $1::jsonb)`;
+  await client.query(`DELETE FROM ${SCHEMA}.${name} WHERE ${keyExpr} NOT IN (${incoming})`, [data]);
+}
+
+const json = (body, status = 200) => new Response(JSON.stringify(body), {
+  status, headers: { "content-type": "application/json", "cache-control": "no-store" },
+});
+
+export default async function handler(req) {
+  const db = getPool();
+  if (!db) return json({ ok: false, error: "No database configured. Set NETLIFY_DATABASE_URL or DATABASE_URL." }, 503);
+  const url = new URL(req.url);
+  const path = url.pathname.replace(/\/+$/, "");
+  try {
+    await ensureSchema(db);
+
+    if (req.method === "GET" && path === "/api/db") {
+      const snap = await db.query(`SELECT state, version, updated_at FROM ${SCHEMA}.snapshot WHERE id = 1`);
+      const counts = {};
+      for (const name of Object.keys(TABLES)) {
+        counts[name] = Number((await db.query(`SELECT count(*) AS n FROM ${SCHEMA}.${name}`)).rows[0].n);
+      }
+      const s = snap.rows[0];
+      return json({ ok: true, backend: "postgresql", version: s ? Number(s.version) : 0,
+                    updated_at: s?.updated_at ?? null, state: s?.state ?? null, counts });
+    }
+
+    const m = path.match(/^\/api\/db\/tables\/([a-z_]+)$/);
+    if (req.method === "GET" && m) {
+      if (!TABLES[m[1]]) return json({ ok: false, error: "unknown table" }, 404);
+      const limit = Math.min(Number(url.searchParams.get("limit")) || 200, 1000);
+      const rows = (await db.query(`SELECT * FROM ${SCHEMA}.${m[1]} ORDER BY updated_at DESC LIMIT $1`, [limit])).rows;
+      return json({ ok: true, table: m[1], count: rows.length, rows });
+    }
+
+    if (req.method === "POST" && path === "/api/db/reset") {
+      await db.query(`TRUNCATE ${Object.keys(TABLES).map(t => `${SCHEMA}.${t}`).join(", ")}, ${SCHEMA}.snapshot`);
+      return json({ ok: true, version: 0 });
+    }
+
+    if (req.method === "POST" && path === "/api/db") {
+      const text = await req.text();
+      if (text.length > MAX_BODY) return json({ ok: false, error: "payload too large" }, 413);
+      let body;
+      try { body = JSON.parse(text); } catch { return json({ ok: false, error: "invalid json" }, 400); }
+      if (!body || typeof body.state !== "object" || typeof body.tables !== "object") {
+        return json({ ok: false, error: "expected { state, tables }" }, 400);
+      }
+      const client = await db.connect();
+      try {
+        await client.query("BEGIN");
+        const r = await client.query(
+          `INSERT INTO ${SCHEMA}.snapshot (id, state, version) VALUES (1, $1::jsonb, 1)
+           ON CONFLICT (id) DO UPDATE SET state = EXCLUDED.state,
+             version = ${SCHEMA}.snapshot.version + 1, updated_at = now()
+           RETURNING version`, [JSON.stringify(body.state)]);
+        for (const name of Object.keys(TABLES)) {
+          if (Array.isArray(body.tables[name])) await syncTable(client, name, body.tables[name]);
+        }
+        await client.query("COMMIT");
+        return json({ ok: true, version: Number(r.rows[0].version) });
+      } catch (e) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
+    }
+
+    return json({ ok: false, error: "not found" }, 404);
+  } catch (e) {
+    console.error(e);
+    return json({ ok: false, error: String(e.message || e) }, 500);
+  }
+}
+
+export const config = { path: ["/api/db", "/api/db/*"] };

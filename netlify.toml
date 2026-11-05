@@ -1,11 +1,15 @@
-# Netlify hosts only the static design page. The FastAPI service in app/
-# is a long-running server and needs a container host (Render, Railway,
-# Fly.io, AWS ECS), not Netlify.
+# Netlify hosts the interactive prototype (docs/) and a small API
+# (netlify/functions/db.mjs) that stores the prototype's tables in Postgres.
+# The FastAPI service in app/ is a long-running server; host it on
+# Render / Railway / Fly.io / ECS instead.
 [build]
-  base = "/"
   publish = "docs"
-  command = "echo 'Static site, no build step'"
+  command = "echo 'Static site + functions, no build step'"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
 
 [build.environment]
-  # Stop Netlify from trying to install requirements.txt for a static site.
+  NODE_VERSION = "20"
   PYTHON_VERSION = "3.12"

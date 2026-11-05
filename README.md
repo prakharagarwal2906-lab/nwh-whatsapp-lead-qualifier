@@ -71,7 +71,23 @@ tail -f logs/qualifier.log
 
 Or open the database directly: `sqlite3 qualifier.db "SELECT * FROM audit_log ORDER BY id DESC LIMIT 20;"`
 
-In production, replace the in-process `BackgroundTasks` with a real queue (SQS/Kafka) and SQLite with Postgres; the boundaries are already split that way.
+
+**Shared Postgres for the prototype**
+
+The Netlify site includes a function (`netlify/functions/db.mjs`) that saves the prototype's tables to Postgres in a schema called `proto` (`leads_l2r`, `dealer_config`, `wa_message`, `wa_event`, `opt_out`, `audit_log`, plus a `snapshot` of the full page state). When a database is connected, everyone who opens the site sees the same data, and the header shows **Storage: Postgres (shared)**. Without one, it falls back to **Storage: this browser only**.
+
+To connect one:
+1. Create a free Postgres database (for example on neon.tech or supabase.com) and copy its connection string (`postgresql://user:pass@host/db?sslmode=require`).
+2. In Netlify: **Site configuration → Environment variables → Add a variable**, key `DATABASE_URL`, value = that connection string. (If you use Netlify's own Neon database, it sets `NETLIFY_DATABASE_URL`, which the function also reads.)
+3. **Deploys → Trigger deploy**. The tables are created automatically on the first request.
+
+Query them from the Neon/Supabase SQL editor, for example `SELECT * FROM proto.audit_log ORDER BY id DESC;`, or via `GET /api/db/tables/wa_message` on your site.
+
+To run the Python service on the same database, set `DATABASE_URL` for it too; its tables live in the default `public` schema.
+
+Run the API tests against a local Postgres: `TEST_DATABASE_URL=postgresql://... npm run test:api`. Run the Python tests against Postgres: `TEST_DATABASE_URL=postgresql://... .venv/bin/python -m pytest -q`.
+
+In production, replace the in-process `BackgroundTasks` with a real queue (SQS/Kafka) and set `DATABASE_URL` to Postgres; the boundaries are already split that way.
 
 ---
 

@@ -1,0 +1,12 @@
+{
+  "name": "nwh-whatsapp-lead-qualifier-site",
+  "private": true,
+  "type": "module",
+  "description": "Netlify site: interactive prototype + shared Postgres API",
+  "scripts": {
+    "test:api": "node --test netlify/tests/db.test.mjs"
+  },
+  "dependencies": {
+    "pg": "8.13.1"
+  }
+}
