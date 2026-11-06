@@ -680,7 +680,7 @@ function l2rDealerEvent(lead, event){
   if (first) lead.dealerPushedAt = simNow(lead).toISOString();
   const label = {QUALIFIED:"Lead sent to dealer panel", VISIT_BOOKED:"Dealer panel updated: visit booked", SPAN_UPDATED:"Dealer panel updated: buying timeline changed",
     WITHDRAWN:"Dealer panel updated: lead no longer qualified", BOOKED:"Dealer panel updated: booking"}[event] || "Dealer panel updated";
-  if (event==="VISIT_BOOKED") return;   // sent to the dealer panel, not shown in the feed
+  if (event!=="QUALIFIED") return;   // updates go to the dealer panel but are not shown in the feed
   addFeed(lead, {icon:"dealer", tone:"dealer", title:label, lines:[dealer.name]});
 }
 function setLeadStatus(lead, st, spanCode){
@@ -878,7 +878,7 @@ async function handleReply(p){
       lead.waAnswer = target; lead.timeline = t[1]; lead.priority = null;
       if (target==="GT2M"){
         setLeadStatus(lead, "NOT_QUALIFIED_OPEN", "GT2M"); lead.botState = "Nurture";
-        addFeed(lead, {icon:"wa", tone:"waf", title:"WhatsApp has updated the lead", lines:[`Customer confirmed the change from '${P}' to '${t[1]}'`, "Lead Status: Not qualified · open"]});
+        addFeed(lead, {icon:"wa", tone:"waf", title:"WhatsApp has updated the lead", lines:[`Customer confirmed the change from '${P}' to '${t[1]}'`]});
         l2rDealerEvent(lead, "WITHDRAWN");
         l2r(lead, "dispose", {source:"WHATSAPP_BOT", leadStatus:"NOT_QUALIFIED_OPEN", expectedBuyingSpan:t[1]});
         scheduleNext(lead, nextCallAt(lead, "GT2M", null));
@@ -943,7 +943,7 @@ function saveVisit(lead, data, by){
   const wa = by==="WhatsApp";
   addFeed(lead, {icon:"td", tone:"task",
     title: wa ? (isNew ? `WhatsApp has created a ${v.type} task` : `WhatsApp has rescheduled the ${v.type} task`) : (isNew ? `Visit scheduled by ${by}` : `Visit rescheduled by ${by}`),
-    lines:[`Date: ${dayLabel(at(v.date))}`, `Time: ${v.slot}`, wa ? null : `Location: ${v.location}`].filter(Boolean)});
+    lines:[`Date: ${dayLabel(at(v.date))}`, `Time: ${v.slot}`]});
   l2r(lead, "task", {taskId:v.task_id, type:v.type.toUpperCase().replace(/ /g,"_"), date:v.date, time:v.time, location:v.location, assignedTo:v.assigned_to, createdBy: wa ? "WHATSAPP" : by});
   rescheduleForVisit(lead);
   l2rDealerEvent(lead, "VISIT_BOOKED");
@@ -978,9 +978,10 @@ function scheduleNext(lead, n){
 }
 /* Customer taps the timeline template again (WhatsApp keeps the buttons active).
    Rules (from the Excel), keyed by the answer the customer ALREADY gave:
-   - earlier 15 Days / 1 Month / 1-2 Months:
+   - earlier 15 Days / 1 Month / 1-2 Months (lead qualified):
        new tap is another of these three -> thank-you message confirming the update
-       new tap is More than 2 Months / Still Researching -> ask for confirmation first, then handle it
+       new tap is More than 2 Months / Still Researching -> lead stays qualified (never disqualified),
+         the new answer is noted, thank-you message
    - earlier More than 2 Months -> any other tap: thanks, next call by the new buying span
    - earlier Still Researching (lead closed as Not interested) -> any other tap: reopen the lead,
        next call by the new buying span, thanks message
@@ -993,7 +994,8 @@ async function timelineChanged(lead, option, dealer){
   if (prev===option){
     return say(`Got it, '${N}' is already noted. Thank you!`);
   }
-  if (QUALIFY.includes(prev)){
+  const isQualified = ["QUALIFIED","BOOKED","QUALIFIED_CLOSED"].includes(lead.leadStatus);
+  if (QUALIFY.includes(prev) || (isQualified && !QUALIFY.includes(option))){
     if (QUALIFY.includes(option)){
       lead.waAnswer = option; lead.timeline = N; lead.priority = t[2]<=30 ? "P1" : "P2";
       setLeadStatus(lead, "QUALIFIED", option);
@@ -1003,10 +1005,13 @@ async function timelineChanged(lead, option, dealer){
       l2rDealerEvent(lead, "SPAN_UPDATED");
       return say("Thank you for the confirmation.");
     }
-    lead.pendingChange = option;
-    await wait(300);
-    return sendMessage(lead, {kind:"buttons", step:"CONFIRM_CHANGE", text:`You earlier told us "${P}". Do you want to change it to "${N}"?`,
-      buttons:[{code:"YES", label:"Yes, change it"}, {code:"NO", label:"No, keep earlier answer"}], payload:{type:"quick_reply", options:["Yes, change it","No, keep earlier answer"]}});
+    // A qualified lead is never disqualified: keep it Qualified, note the new answer,
+    // and for More than 2 Months let the next call follow the new span.
+    lead.waAnswer = option; lead.timeline = N;
+    addFeed(lead, {icon:"wa", tone:"waf", title:"WhatsApp has updated the buying timeline", lines:[`From '${P}' to '${N}'`]});
+    l2r(lead, "comment", {comment:`Customer changed the buying timeline from '${P}' to '${N}' on WhatsApp (lead stays qualified)`});
+    if (option==="GT2M") scheduleNext(lead, nextCallAt(lead, "GT2M", lead.visitDate));
+    return say("Thank you for the confirmation.");
   }
   // Earlier More than 2 Months -> Still Researching: confirm first, then close the lead.
   if (prev==="GT2M" && option==="RESEARCH"){
@@ -1034,7 +1039,7 @@ async function timelineChanged(lead, option, dealer){
   if (reopened) setLeadStatus(lead, "NOT_QUALIFIED_OPEN");
   lead.spanCode = option; lead.eagerness = eagerness(option);
   addFeed(lead, {icon:"wa", tone:"waf", title: reopened ? "WhatsApp has reopened the lead" : "WhatsApp has updated the lead",
-    lines:[`From '${P}' to '${N}'`, reopened ? "Lead Status: Not qualified · open" : null].filter(Boolean)});
+    lines:[`From '${P}' to '${N}'`]});
   l2r(lead, "dispose", {source:"WHATSAPP_BOT", reopen:reopened, expectedBuyingSpan:N});
   scheduleNext(lead, nextCallAt(lead, option, lead.visitDate));
   return say("Thank you for the confirmation.");
@@ -1181,7 +1186,7 @@ function renderLms(){
   const left = `
     <div class="lcard"><div class="lead-top">
       <div class="ltags">${leadTags(l)}</div>
-      <div class="lmob">${esc(l.mobile.slice(0,2))}XXXXXXXXXX <button type="button" class="callbtn" title="Call">${ICONS.call}</button></div>
+      <div class="lmob">${esc(l.mobile.slice(0,2))}XXXXXXXXXX</div>
       <div class="lname">${esc(l.name)} <span style="color:var(--l-navy);font-size:13px">✎</span></div>
       <div class="lmeta">
         <span>📍 Location - ${esc(l.city)}, ${esc(STATE_OF[l.city]||"")}</span>
@@ -1256,7 +1261,8 @@ function tasksHtml(l, list){
     const st = t.status==="COMPLETED" ? `<span class="vstatus lt-vdone">Completed</span>` : t.status==="CANCELLED" ? `<span class="vstatus lt-closed">Cancelled</span>`
       : visitAt(t) < simNow(l) ? `<span class="vstatus lt-vlate">Pending</span>` : `<span class="vstatus lt-vsched">Scheduled</span>`;
     const act = VISIT_OPEN(t) ? `<select data-task-action="${t.task_id}" aria-label="Action"><option value="">Action</option><option value="complete">Complete</option><option value="edit">Edit</option><option value="delete">Delete</option></select>` : "";
-    return `<div class="trow"><span class="tm">${esc(t.slot||fmtTime(t.time))}</span><div><b>${esc(t.type)}</b><small>${esc(l.make)} ${esc(l.model)} · ${esc(dayLabel(at(t.date)))} · ${esc(t.assigned_to||"")}</small></div>${st}${act}</div>`;
+    const when = VISIT_OPEN(t) ? esc(t.slot||fmtTime(t.time)) : `${esc(dayLabel(at(t.date)))}<br>${esc(t.slot||fmtTime(t.time))}`;
+    return `<div class="trow"><span class="tm">${when}</span><div><b>${esc(t.type)}</b><small>${esc(l.make)} ${esc(l.model)} · ${esc(dayLabel(at(t.date)))}</small></div>${st}${act}</div>`;
   };
   const open = list.filter(VISIT_OPEN), past = list.filter(t=>!VISIT_OPEN(t));
   return `<div class="tasksbar"><select aria-label="Users"><option>All Users</option></select><button type="button" class="add" data-act="visit-new" ${OPEN_STATUSES.includes(l.leadStatus)?"":"disabled"}>Add Task</button></div>
@@ -1290,8 +1296,7 @@ function renderVisitModal(){
           <div class="vrow"><span>Mobile Number</span><b>${esc(l.mobile)}</b></div>
           <div class="vrow"><span>MMV</span><b>${esc(l.make)} ${esc(l.model)}</b></div>
           <div class="vrow"><span>Scheduled</span><b>${esc(visitWhen(v))}</b></div>
-          <div class="vrow"><span>Assigned To</span><b>${esc(v.assigned_to||"")}</b></div>
-          <div class="vrow"><span>Location</span><b>${esc(where)}</b></div>
+          <div class="vrow"><span>Dealer</span><b>${esc(where)}</b></div>
           <div class="vrow"><span>Comments</span><b>${esc(v.comments||"—")}</b></div>
           <div class="vrow"><span>Status</span><b>${v.status==="COMPLETED" ? "Completed" : v.status==="CANCELLED" ? "Cancelled" : visitAt(v) < simNow(l) ? "Pending" : "Scheduled"}</b></div>
         </div>
@@ -1304,11 +1309,8 @@ function renderVisitModal(){
   box.innerHTML = `<div class="vcard" role="dialog" aria-label="Schedule Visit">
     <div class="vhead"><h3>${MV.mode==="edit" ? "Edit Visit" : "Schedule Visit"}</h3><button type="button" data-v="close" aria-label="Close">✕</button></div>
     <div class="vbody">
-      <label class="vfield"><span>Assign To<sup>*</sup></span><select id="vAssign"><option value="">Select Assignee</option>${d.team.map(n=>`<option ${f.assigned_to===n?"selected":""}>${esc(n)}</option>`).join("")}</select></label>
       <label class="vfield"><span>Scheduled Date<sup>*</sup></span><input type="date" id="vDate" value="${f.date}" min="${today}"></label>
       <label class="vfield"><span>Scheduled Time<sup>*</sup></span><input type="time" id="vTime" value="${f.time}"></label>
-      <div><div class="vlabel" style="margin-bottom:8px">Location<sup>*</sup></div>
-        <div class="vradios"><label><input type="radio" name="vLoc" value="Showroom" ${f.location==="Showroom"?"checked":""}> Showroom</label><label><input type="radio" name="vLoc" value="Customer's Place" ${f.location==="Customer's Place"?"checked":""}> Customer's Place</label></div></div>
       <label class="vfield"><span>Comments</span><textarea id="vComments" placeholder="Comments">${esc(f.comments)}</textarea></label>
       ${MV.err ? `<div class="verr">${esc(MV.err)}</div>` : ""}
       <button type="button" class="vprimary" data-v="save">${MV.mode==="edit" ? "Update Visit" : "Schedule Visit"}</button>
@@ -1316,9 +1318,9 @@ function renderVisitModal(){
   </div>`;
 }
 function readVisitForm(){
-  if (!MV || !$("#vAssign")) return;
-  MV.form = {assigned_to:$("#vAssign").value, date:$("#vDate").value, time:$("#vTime").value,
-    location:(document.querySelector('input[name="vLoc"]:checked')||{}).value || "Showroom", comments:$("#vComments").value.trim()};
+  if (!MV || !$("#vDate")) return;
+  const d = DEALERS[leadById(S.selected).dealerId];
+  MV.form = {assigned_to:d.exec, date:$("#vDate").value, time:$("#vTime").value, location:"Showroom", comments:$("#vComments").value.trim()};
 }
 function visitAction(action){
   const l = leadById(S.selected); if (!l || !MV) return;
@@ -1331,7 +1333,6 @@ function visitAction(action){
   if (action==="complete"){ completeVisit(l, v, TELECALLER); MV = null; return render(); }
   if (action==="save"){
     readVisitForm(); const f = MV.form;
-    if (!f.assigned_to) { MV.err = "Choose who the visit is assigned to."; return renderVisitModal(); }
     if (!f.date || !f.time) { MV.err = "Choose the scheduled date and time."; return renderVisitModal(); }
     if (at(f.date, f.time) < simNow(l)) { MV.err = "Choose a date and time in the future."; return renderVisitModal(); }
     const saved = saveVisit(l, {...f, task_id: MV.mode==="edit" ? MV.taskId : null}, TELECALLER);

@@ -132,7 +132,7 @@ flowchart TD
 | Already selected | Then taps | What happens |
 |---|---|---|
 | 15 Days / 1 Month / 1–2 Months | another of these three | Thank-you confirming the update |
-| 15 Days / 1 Month / 1–2 Months | More than 2 Months / Still Researching | Confirmation first, then handle the new answer |
+| 15 Days / 1 Month / 1–2 Months (qualified) | More than 2 Months / Still Researching | Lead stays qualified (never disqualified); answer noted, thanks |
 | More than 2 Months | 15 Days / 1 Month / 1–2 Months | Qualified straight away (dealer panel via L2R), thanks, visit date |
 | More than 2 Months | Still Researching | Confirmation first; on Yes the lead is closed (Not interested in buying · Just researching) |
 | Still Researching (closed) | 15 Days / 1 Month / 1–2 Months | Reopened and qualified straight away, thanks, visit date |
@@ -140,7 +140,7 @@ flowchart TD
 
 **Who works where.** L2R is the internal calling team's tool: an internal telecaller owns the lead, qualifies it and keeps making follow-up calls until the customer books (the OEM contract pays on conversion). Dealers use a separate dealer panel. There is one path to it, owned by L2R: a telecaller tags the follow-up form on a call, or the WhatsApp bot fills the same form fields through the L2R API, and when the lead becomes qualified L2R's event calls the dealer panel API. The bot never calls the dealer panel itself.
 
-**Visits:** a visit is a task against the lead, created by WhatsApp (date + time), by the telecaller ("Visit Required? Yes") or with **Schedule Visit** (Assign To, date, time, Showroom / Customer's Place, comments). **View Visit** offers Edit, Cancel and Complete; All Tasks lists tasks with Complete / Edit / Delete. The visit shows at the top and on the Visits step in orange (scheduled), red (time passed, not completed) or green (completed).
+**Visits:** a visit is a task against the lead, created by WhatsApp (date + time), by the telecaller ("Visit Required? Yes") or with **Schedule Visit** (date, time, comments). **View Visit** offers Edit, Cancel and Complete; All Tasks lists tasks with Complete / Edit / Delete. The visit shows at the top and on the Visits step in orange (scheduled), red (time passed, not completed) or green (completed).
 
 **When the customer types instead of tapping:** anything but "Hi" gets "Please type Hi to start the journey." "Hi" from a qualified lead gets the assigned dealer's number and the BikeWale number; "Hi" from an unqualified lead asks the buying-timeline question again with the same buttons.
 

@@ -383,7 +383,7 @@ class QualifierService:
     def _timeline_changed(self, tpl: WaMessage, cfg: DealerConfig, option: str, key: str) -> str:
         """Rules keyed by the answer the customer already gave:
         earlier 15D/1M/1-2M -> another of these: thank-you confirming the update
-        earlier 15D/1M/1-2M -> GT2M / RESEARCH: ask for confirmation first
+        earlier 15D/1M/1-2M -> GT2M / RESEARCH: lead stays qualified (never disqualified), answer noted
         earlier GT2M / RESEARCH -> 15D/1M/1-2M: qualify straight away (form tagged in L2R), visit date next
         earlier GT2M -> RESEARCH: ask for confirmation first, then close the lead
         earlier RESEARCH (lead closed) -> GT2M: reopen the lead, next call by the new span, thanks
@@ -393,8 +393,15 @@ class QualifierService:
         if option == prev:
             self._text(tpl, cfg, "CHANGE_ACK", same_answer_text(new_label))
             return "reply:SAME_ANSWER"
-        if prev in QUALIFYING or (prev == "GT2M" and option == "RESEARCH"):
-            if option in QUALIFYING:
+        try:
+            l2r_lead = self.l2r.get_lead(tpl.lead_id)
+        except Exception:
+            l2r_lead = None
+        is_qualified = bool(l2r_lead and l2r_lead.stage in ("QUALIFICATION", "VISITS", "BOOKING"))
+        # A qualified lead is never disqualified, whatever its last answer was.
+        stays_qualified = prev in QUALIFYING or (is_qualified and option not in QUALIFYING)
+        if stays_qualified or (prev == "GT2M" and option == "RESEARCH"):
+            if option in QUALIFYING and prev in QUALIFYING:
                 d = decide_timeline(option, cfg.qualify_max_days)
                 self.repo.set_answer(tpl.id, option, d.outcome)
                 self._l2r(self.l2r.dispose, tpl.lead_id, {
@@ -403,6 +410,20 @@ class QualifierService:
                     "actor": "system:whatsapp-bot"}, key)
                 self._text(tpl, cfg, "CHANGE_ACK", updated_text(new_label))
                 return "reply:TIMELINE_UPDATED"
+            if stays_qualified:
+                # A qualified lead is never disqualified: it stays qualified, the new answer is noted,
+                # and for More than 2 Months the next call follows the new buying span.
+                self.repo.set_answer(tpl.id, option, Outcome.QUALIFIED)
+                reason = f"Customer changed the buying timeline from '{prev_label}' to '{new_label}' on WhatsApp (lead stays qualified)"
+                if option == "GT2M":
+                    self._l2r(self.l2r.schedule_call, tpl.lead_id, {
+                        "dueAt": self._span_call(cfg, option, tpl.lead_id).isoformat(), "reopen": False,
+                        "purchaseTimeline": option, "reason": reason, "actor": "system:whatsapp-bot"}, key)
+                else:
+                    self._safe_comment(tpl.lead_id, reason, key)
+                self._text(tpl, cfg, "CHANGE_ACK", updated_text(new_label))
+                return "reply:NOTED_STAYS_QUALIFIED"
+            # More than 2 Months -> Still Researching: confirm first, then close
             buttons = [ListRow("Yes, change it", build_postback(STEP_CONFIRM, f"YES:{option}", tpl.lead_id)),
                        ListRow("No, keep earlier answer", build_postback(STEP_CONFIRM, "NO", tpl.lead_id))]
             self._send_session(tpl, cfg, STEP_CONFIRM, "buttons", lambda: self.gupshup.send_buttons(

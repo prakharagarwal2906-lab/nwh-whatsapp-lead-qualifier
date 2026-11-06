@@ -201,9 +201,9 @@ flowchart TD
     <thead><tr><th>Already selected</th><th>Then taps</th><th>What happens</th></tr></thead>
     <tbody>
       <tr><td>15 Days / 1 Month / 1–2 Months</td><td>Another of these three</td><td>Thank-you message confirming the update; span, eagerness and next call updated</td></tr>
-      <tr><td>15 Days / 1 Month / 1–2 Months</td><td>More than 2 Months or Still Researching</td><td>Ask for confirmation first ("Yes, change it" / "No, keep earlier answer"). On Yes, handle the new answer: More than 2 Months → Not qualified · open with the span-based call; Still Researching → lead closed (Not interested in buying · Just researching)</td></tr>
+      <tr><td>15 Days / 1 Month / 1–2 Months (lead qualified)</td><td>More than 2 Months or Still Researching</td><td><b>Lead stays qualified</b>; a qualified lead is never disqualified. The new answer is noted on the lead and the customer gets "Thank you for the confirmation." For More than 2 Months the next call follows the new span</td></tr>
       <tr><td>More than 2 Months</td><td>15 Days / 1 Month / 1–2 Months</td><td>Qualified straight away (follow-up form tagged in L2R, so L2R sends it to the dealer panel), thank-you, visit date question; next call by the new buying span</td></tr>
-      <tr><td>More than 2 Months</td><td>Still Researching</td><td>Ask for confirmation first. On Yes: lead closed (Not interested in buying · Just researching), help message. On No: earlier answer kept</td></tr>
+      <tr><td>More than 2 Months (never qualified)</td><td>Still Researching</td><td>Ask for confirmation first. On Yes: lead closed (Not interested in buying · Just researching), help message. On No: earlier answer kept</td></tr>
       <tr><td>Still Researching (lead closed)</td><td>15 Days / 1 Month / 1–2 Months</td><td>Lead reopened and qualified straight away, thank-you, visit date question</td></tr>
       <tr><td>Still Researching (lead closed)</td><td>More than 2 Months</td><td>Lead reopened (Not qualified · open), next call by the buying span, thank-you</td></tr>
       <tr><td>Any</td><td>The same option again</td><td>"Already noted" message, no change</td></tr>
@@ -211,7 +211,7 @@ flowchart TD
   </table></div>
   <p>More than 2 Months → Still Researching keeps the existing call and adds a note on the lead.</p>
   <h3>Visits</h3>
-  <p>A visit is a task against the lead, created by WhatsApp (once the customer picks both a date and a time), by the telecaller in the follow-up form ("Visit Required? Yes"), or with <b>Schedule Visit</b> (Assign To, date, time, Showroom / Customer's Place, comments). <b>View Visit</b> offers Edit, Cancel and Complete. The lead shows the visit at the top and on the Visits step: <span style="color:#c25e00;font-weight:700">orange</span> when scheduled, <span style="color:#c62828;font-weight:700">red</span> when the time has passed without completion, <span style="color:#1e7d32;font-weight:700">green</span> when completed. Only tasks count under All Tasks; calls do not.</p>
+  <p>A visit is a task against the lead, created by WhatsApp (once the customer picks both a date and a time), by the telecaller in the follow-up form ("Visit Required? Yes"), or with <b>Schedule Visit</b> (date, time, comments; at the dealer's showroom). <b>View Visit</b> offers Edit, Cancel and Complete. The lead shows the visit at the top and on the Visits step: <span style="color:#c25e00;font-weight:700">orange</span> when scheduled, <span style="color:#c62828;font-weight:700">red</span> when the time has passed without completion, <span style="color:#1e7d32;font-weight:700">green</span> when completed. Only tasks count under All Tasks; calls do not.</p>
   <h3>When the customer types instead of tapping</h3>
   <div class="table-wrap"><table>
     <thead><tr><th>Customer types</th><th>Lead</th><th>Reply</th></tr></thead>

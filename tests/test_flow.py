@@ -199,40 +199,25 @@ def test_qualified_to_qualified_sends_thank_you(env):
     assert env.repo.find_template("L1").reply_code == "1_2M"
 
 
-def test_qualified_to_research_asks_first_then_closes(env):
+def test_qualified_lead_is_never_disqualified_by_research(env):
     send(env)
     post(env, quick_reply("1M", "L1", "gs-1"))
     n = len(env.l2r.dispositions)
     post(env, quick_reply("RESEARCH", "L1", "gs-1", msg_id="wamid.in9"))
-    assert env.repo.event_result("wamid.in9") == "reply:CONFIRMATION_ASKED"
-    assert env.gs.buttons[-1]["body"] == 'You earlier told us "1 Month". Do you want to change it to "Still Researching"?'
-    assert len(env.l2r.dispositions) == n                     # nothing changes until confirmed
-    confirm(env, "YES")
-    body = env.l2r.dispositions[-1][1]
-    assert body["closeLead"] is True and body["subReason"] == "Just researching"
-    assert "Please feel free to reach us" in env.gs.texts[-1][1]
-    assert env.repo.find_template("L1").reply_code == "RESEARCH"
+    assert env.repo.event_result("wamid.in9") == "reply:NOTED_STAYS_QUALIFIED"
+    assert len(env.l2r.dispositions) == n and env.gs.buttons == []      # no close, no confirmation
+    assert "lead stays qualified" in env.l2r.comments[-1][1]
+    assert env.gs.texts[-1][1] == "Thank you for the confirmation."
 
-
-def test_qualified_to_gt2m_no_keeps_answer(env):
+def test_qualified_lead_tapping_gt2m_stays_qualified_with_span_call(env):
     send(env)
     post(env, quick_reply("1M", "L1", "gs-1"))
-    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.in9"))
     n = len(env.l2r.dispositions)
-    confirm(env, "NO")
-    assert len(env.l2r.dispositions) == n
-    assert env.gs.texts[-1][1] == "No problem, we've kept your earlier answer."
-    assert env.repo.find_template("L1").reply_code == "1M"
-
-
-def test_qualified_to_gt2m_yes_moves_to_not_qualified_open(env):
-    send(env)
-    post(env, quick_reply("1M", "L1", "gs-1"))
     post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.in9"))
-    confirm(env, "YES")
-    body = env.l2r.dispositions[-1][1]
-    assert body["leadStatus"] == "NOT_QUALIFIED_OPEN" and body["followUpInDays"] == 60
-    assert env.gs.texts[-1][1].startswith("Thanks, Prakhar!")
+    assert len(env.l2r.dispositions) == n
+    body = env.l2r.calls[-1][1]
+    assert body["reopen"] is False and body["purchaseTimeline"] == "GT2M"
+
 
 
 def test_gt2m_to_one_month_qualifies_straight_away(env):
@@ -292,8 +277,8 @@ def test_same_answer_again_changes_nothing(env):
 
 def test_every_tap_is_tracked_including_changes(env):
     send(env)
-    post(env, quick_reply("1M", "L1", "gs-1"))
-    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.in9"))
+    post(env, quick_reply("GT2M", "L1", "gs-1"))
+    post(env, quick_reply("RESEARCH", "L1", "gs-1", msg_id="wamid.in9"))
     confirm(env, "YES")
     steps = [r["step"] for r in env.client.get("/internal/db/wa_interaction").json()["rows"]]
     assert sorted(steps) == ["CONFIRM_CHANGE", "TIMELINE", "TIMELINE"]
@@ -416,3 +401,15 @@ def test_bot_tags_the_follow_up_form_like_a_telecaller(env):
     assert body["followUpStatus"] == "SPOKE_TO_CUSTOMER" and body["leadStatus"] == "INTERESTED"
     assert body["expectedBuyingSpan"] == "1M" and body["eagerness"] == "HOT"
     assert body["targetStage"] == "QUALIFICATION"
+
+
+
+def test_qualified_lead_cannot_be_closed_after_gt2m_then_research(env):
+    send(env)
+    post(env, quick_reply("1M", "L1", "gs-1"))
+    env.l2r.leads["L1"].stage = "QUALIFICATION"
+    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.a1"))
+    post(env, quick_reply("RESEARCH", "L1", "gs-1", msg_id="wamid.a2"))
+    assert env.repo.event_result("wamid.a2") == "reply:NOTED_STAYS_QUALIFIED"
+    assert env.gs.buttons == []
+    assert not any(d[1].get("closeLead") for d in env.l2r.dispositions)
