@@ -23,7 +23,11 @@ CREATE TABLE IF NOT EXISTS wa_message (
   lead_id TEXT NOT NULL,
   dealer_id TEXT NOT NULL,
   mobile TEXT NOT NULL,
-  template_id TEXT NOT NULL,
+  template_id TEXT,
+  root_template_id TEXT,
+  flow TEXT NOT NULL DEFAULT 'NWH_QUALIFIER',
+  step TEXT NOT NULL DEFAULT 'TIMELINE',
+  msg_type TEXT NOT NULL DEFAULT 'template',
   gs_message_id TEXT UNIQUE,
   wamid TEXT UNIQUE,
   status TEXT NOT NULL,
@@ -55,6 +59,20 @@ CREATE TABLE IF NOT EXISTS audit_log (
   detail {json}
 );
 CREATE INDEX IF NOT EXISTS ix_audit_lead ON audit_log (lead_id, id);
+CREATE TABLE IF NOT EXISTS wa_interaction (
+  inbound_id TEXT PRIMARY KEY,
+  context_message_id TEXT,
+  lead_id TEXT NOT NULL,
+  dealer_id TEXT NOT NULL,
+  template_id TEXT,
+  flow TEXT NOT NULL,
+  step TEXT NOT NULL,
+  option_code TEXT NOT NULL,
+  option_title TEXT,
+  received_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_inter_lead ON wa_interaction (lead_id, step);
+CREATE INDEX IF NOT EXISTS ix_inter_tpl ON wa_interaction (template_id, step);
 CREATE TABLE IF NOT EXISTS opt_out (
   mobile TEXT NOT NULL,
   dealer_id TEXT NOT NULL,
@@ -68,6 +86,7 @@ _ORDER = {
     "dealer_config": "dealer_id",
     "wa_message": "id",
     "wa_event": "received_at",
+    "wa_interaction": "received_at",
     "opt_out": "created_at",
     "audit_log": "id",
 }
@@ -157,18 +176,24 @@ class Repo:
         ).fetchall()
         return any(datetime.fromisoformat(r["sent_at"]).timestamp() >= cutoff for r in rows)
 
-    def create_pending(self, lead_id: str, dealer_id: str, mobile: str, template_id: str) -> int | None:
-        """Returns the new row id, or None if this lead already has the template (idempotent)."""
-        params = (lead_id, dealer_id, mobile, template_id, MsgStatus.PENDING.value)
-        sql = ("INSERT OR IGNORE INTO wa_message (lead_id, dealer_id, mobile, template_id, status) "
-               "VALUES (?, ?, ?, ?, ?)")
+    def create_pending(self, lead_id: str, dealer_id: str, mobile: str, template_id: str | None,
+                       step: str = "TIMELINE", msg_type: str = "template",
+                       root_template_id: str | None = None) -> int | None:
+        """Insert an outbound message row before sending it.
+
+        Returns the row id, or None if this lead already got this template (idempotent).
+        Session messages (template_id None) never conflict.
+        """
+        params = (lead_id, dealer_id, mobile, template_id, root_template_id or template_id, step, msg_type,
+                  MsgStatus.PENDING.value)
+        cols = "lead_id, dealer_id, mobile, template_id, root_template_id, step, msg_type, status"
         if self.is_pg:
             row = self._exec(
-                "INSERT INTO wa_message (lead_id, dealer_id, mobile, template_id, status) "
-                "VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING RETURNING id", params
+                f"INSERT INTO wa_message ({cols}) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT DO NOTHING RETURNING id", params
             ).fetchone()
             return row["id"] if row else None
-        cur = self._exec(sql, params)
+        cur = self._exec(f"INSERT OR IGNORE INTO wa_message ({cols}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", params)
         return cur.lastrowid if cur.rowcount else None
 
     def mark_sent(self, msg_id: int, gs_message_id: str) -> None:
@@ -195,6 +220,7 @@ class Repo:
             reply_code=row["reply_code"],
             outcome=Outcome(row["outcome"]) if row["outcome"] else None,
             l2r_sync_status=row["l2r_sync_status"],
+            step=row["step"], msg_type=row["msg_type"], root_template_id=row["root_template_id"],
         )
 
     def get_message(self, msg_id: int) -> WaMessage | None:
@@ -214,7 +240,7 @@ class Repo:
     def latest_open_for(self, mobile: str) -> WaMessage | None:
         return self._row_to_msg(self._exec(
             "SELECT * FROM wa_message WHERE mobile = ? AND status IN ('SENT','DELIVERED','READ') "
-            "ORDER BY id DESC LIMIT 1", (mobile,)
+            "AND msg_type = 'template' ORDER BY id DESC LIMIT 1", (mobile,)
         ).fetchone())
 
     def advance_status(self, msg_id: int, new: MsgStatus, wamid: str | None = None,
@@ -259,7 +285,8 @@ class Repo:
     def expire_stale(self, hours: int) -> list[WaMessage]:
         cutoff = now().timestamp() - hours * 3600
         rows = self._exec(
-            "SELECT * FROM wa_message WHERE status IN ('SENT','DELIVERED','READ') AND sent_at IS NOT NULL"
+            "SELECT * FROM wa_message WHERE status IN ('SENT','DELIVERED','READ') AND sent_at IS NOT NULL "
+            "AND msg_type = 'template'"
         ).fetchall()
         expired = []
         for r in rows:
@@ -277,6 +304,56 @@ class Repo:
             (max_attempts,),
         ).fetchall()
         return [self._row_to_msg(r) for r in rows]
+
+    # ---- interactions (one row per customer tap) ------------------------
+    def add_interaction(self, row: dict) -> bool:
+        """False if this inbound message was already recorded."""
+        cols = ("inbound_id", "context_message_id", "lead_id", "dealer_id", "template_id", "flow", "step",
+                "option_code", "option_title", "received_at")
+        cur = self._exec(
+            f"INSERT OR IGNORE INTO wa_interaction ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})",
+            tuple(row.get(c) for c in cols),
+        )
+        return cur.rowcount == 1
+
+    def latest_interaction(self, lead_id: str, step: str) -> dict | None:
+        row = self._exec(
+            "SELECT * FROM wa_interaction WHERE lead_id = ? AND step = ? ORDER BY received_at DESC LIMIT 1",
+            (lead_id, step),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def engagement(self) -> list[dict]:
+        """Per template: sends, delivery, reads, replies, option split, visit steps."""
+        rows = self._exec(
+            "SELECT template_id, COUNT(*) AS sent, "
+            "SUM(CASE WHEN status IN ('DELIVERED','READ','REPLIED') THEN 1 ELSE 0 END) AS delivered, "
+            "SUM(CASE WHEN read_at IS NOT NULL OR status = 'REPLIED' THEN 1 ELSE 0 END) AS read, "
+            "SUM(CASE WHEN status = 'REPLIED' THEN 1 ELSE 0 END) AS replied "
+            "FROM wa_message WHERE msg_type = 'template' GROUP BY template_id ORDER BY template_id"
+        ).fetchall()
+        out = []
+        for r in rows:
+            r = dict(r)
+            t = r["template_id"]
+            opts = {o["option_code"]: o["n"] for o in self._exec(
+                "SELECT option_code, COUNT(DISTINCT lead_id) AS n FROM wa_interaction "
+                "WHERE template_id = ? AND step = 'TIMELINE' GROUP BY option_code", (t,)).fetchall()}
+            steps = {o["step"]: o["n"] for o in self._exec(
+                "SELECT step, COUNT(DISTINCT lead_id) AS n FROM wa_interaction "
+                "WHERE template_id = ? GROUP BY step", (t,)).fetchall()}
+            delivered = int(r["delivered"] or 0)
+            replied = int(r["replied"] or 0)
+            out.append({
+                "template_id": t, "sent": int(r["sent"]), "delivered": delivered,
+                "read": int(r["read"] or 0), "replied": replied,
+                "engagement_pct": round(100 * replied / delivered, 1) if delivered else 0.0,
+                "options": opts,
+                "qualified": sum(opts.get(k, 0) for k in ("15D", "1M", "1_2M")),
+                "visit_date_chosen": steps.get("VISIT_DATE", 0),
+                "visit_booked": steps.get("VISIT_TIME", 0),
+            })
+        return out
 
     # ---- audit log + table browsing -----------------------------------
     def add_audit(self, level: str, event: str, lead_id: str | None = None,

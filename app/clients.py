@@ -30,15 +30,26 @@ class TemplateSend:
     postbacks: list[str]  # one per quick-reply button, in button order
 
 
+@dataclass
+class ListRow:
+    title: str
+    postback: str
+    description: str = ""
+
+
 class GupshupClient(Protocol):
+    """Every send returns Gupshup's messageId, unique per send."""
     def send_template(self, req: TemplateSend) -> str: ...
-    def send_text(self, app_id: str, source: str, destination: str, text: str) -> None: ...
+    def send_text(self, app_id: str, source: str, destination: str, text: str) -> str: ...
+    def send_list(self, app_id: str, source: str, destination: str, title: str, body: str,
+                  button: str, section: str, rows: list[ListRow]) -> str: ...
 
 
 class L2RClient(Protocol):
     def get_lead(self, lead_id: str) -> Lead | None: ...
     def dispose(self, lead_id: str, body: dict, idempotency_key: str) -> None: ...
     def add_comment(self, lead_id: str, text: str, idempotency_key: str) -> None: ...
+    def schedule_visit(self, lead_id: str, body: dict, idempotency_key: str) -> None: ...
 
 
 def _with_retry(fn, attempts: int = 4, base: float = 0.5):
@@ -82,12 +93,30 @@ class HttpGupshupClient:
             raise SendError(f"no messageId in response: {body}", retryable=False)
         return msg_id
 
-    def send_text(self, app_id: str, source: str, destination: str, text: str) -> None:
-        data = {
-            "channel": "whatsapp", "source": source, "destination": destination,
-            "message": json.dumps({"type": "text", "text": text}),
+    def _send_session(self, app_id: str, source: str, destination: str, message: dict) -> str:
+        data = {"channel": "whatsapp", "source": source, "destination": destination,
+                "message": json.dumps(message)}
+        body = _with_retry(lambda: self._post(f"/partner/app/{app_id}/v3/message", data))
+        msg_id = body.get("messageId")
+        if not msg_id:
+            raise SendError(f"no messageId in response: {body}", retryable=False)
+        return msg_id
+
+    def send_text(self, app_id: str, source: str, destination: str, text: str) -> str:
+        return self._send_session(app_id, source, destination, {"type": "text", "text": text})
+
+    def send_list(self, app_id: str, source: str, destination: str, title: str, body: str,
+                  button: str, section: str, rows: list[ListRow]) -> str:
+        """WhatsApp list message: up to 10 rows, each with its own postbackText."""
+        message = {
+            "type": "list", "title": title, "body": body,
+            "globalButtons": [{"type": "text", "title": button}],
+            "items": [{"title": section, "options": [
+                {"type": "text", "title": r.title, "description": r.description, "postbackText": r.postback}
+                for r in rows[:10]
+            ]}],
         }
-        _with_retry(lambda: self._post(f"/partner/app/{app_id}/v3/message", data))
+        return self._send_session(app_id, source, destination, message)
 
 
 class HttpL2RClient:
@@ -118,5 +147,10 @@ class HttpL2RClient:
     def add_comment(self, lead_id: str, text: str, idempotency_key: str) -> None:
         r = self.http.post(f"/api/v1/leads/{lead_id}/comments",
                            json={"comment": text, "actor": "system:whatsapp-bot"},
+                           headers={"Idempotency-Key": idempotency_key})
+        r.raise_for_status()
+
+    def schedule_visit(self, lead_id: str, body: dict, idempotency_key: str) -> None:
+        r = self.http.post(f"/api/v1/leads/{lead_id}/visits", json=body,
                            headers={"Idempotency-Key": idempotency_key})
         r.raise_for_status()

@@ -35,6 +35,8 @@ class Outcome(str, Enum):
     HANDOFF = "HANDOFF"
     NO_RESPONSE = "NO_RESPONSE"
     OPT_OUT = "OPT_OUT"
+    DATE_CHOSEN = "DATE_CHOSEN"      # visit date picked from the list
+    VISIT_BOOKED = "VISIT_BOOKED"    # visit time picked: showroom visit scheduled
 
 
 @dataclass
@@ -46,6 +48,8 @@ class Lead:
     model_name: str
     created_at: datetime
     whatsapp_consent: bool = True
+    make: str = ""
+    city: str = ""
     stage: str = "FIRST_CALL"
     closed: bool = False
 
@@ -56,7 +60,7 @@ class DealerConfig:
     enabled: bool
     dealer_name: str
     gupshup_app_id: str
-    source_number: str
+    source_number: str          # WABA number messages are sent from
     template_id: str
     timezone: str
     # {"mon": [["09:30", "17:30"]], ... } ; missing day = weekly off
@@ -64,8 +68,9 @@ class DealerConfig:
     holidays: list[str] = field(default_factory=list)  # ISO dates
     pre_close_buffer_min: int = 15
     qualify_max_days: int = 60
-    rep_name: str = "our representative"
-    rep_phone: str = ""
+    rep_name: str = "our representative"   # sales executive name (template variable)
+    rep_phone: str = ""                    # virtual number (template variable)
+    city: str = ""
     holdout_pct: int = 0
 
 
@@ -75,7 +80,7 @@ class WaMessage:
     lead_id: str
     dealer_id: str
     mobile: str
-    template_id: str
+    template_id: str | None       # set for template sends, None for session messages
     gs_message_id: str | None
     wamid: str | None
     status: MsgStatus
@@ -83,3 +88,6 @@ class WaMessage:
     reply_code: str | None
     outcome: Outcome | None
     l2r_sync_status: str
+    step: str = "TIMELINE"
+    msg_type: str = "template"
+    root_template_id: str | None = None   # template that started this flow (for engagement)

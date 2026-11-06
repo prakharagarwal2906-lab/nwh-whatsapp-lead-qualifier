@@ -7,6 +7,7 @@ Endpoints
   GET  /internal/db             row counts for every table
   GET  /internal/db/{table}     rows of one table (?limit, ?offset, ?lead_id)
   GET  /internal/leads/{id}/audit  full audit trail for one lead
+  GET  /internal/engagement     engagement % per template, option split, visit steps
   PUT  /internal/dealers/{id}   dealer working hours and template config
   GET  /healthz
 """
@@ -49,7 +50,9 @@ class LeadCreatedIn(BaseModel):
     dealerId: str
     mobile: str
     customerName: str = ""
+    make: str = ""
     modelName: str = ""
+    city: str = ""
     createdAt: datetime
     whatsappConsent: bool = True
 
@@ -58,15 +61,16 @@ class DealerConfigIn(BaseModel):
     enabled: bool = True
     dealerName: str
     gupshupAppId: str
-    sourceNumber: str
+    sourceNumber: str          # WABA number
     templateId: str
     timezone: str = "Asia/Kolkata"
     workingHours: dict[str, list[list[str]]]
     holidays: list[str] = []
     preCloseBufferMin: int = 15
     qualifyMaxDays: int = 60
-    repName: str = "our representative"
-    repPhone: str = ""
+    repName: str = "our representative"   # sales executive
+    repPhone: str = ""                    # virtual number
+    city: str = ""
     holdoutPct: int = 0
 
 
@@ -119,7 +123,7 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
     def lead_created(body: LeadCreatedIn) -> dict:
         lead = Lead(
             lead_id=body.leadId, dealer_id=body.dealerId, mobile=body.mobile,
-            customer_name=body.customerName, model_name=body.modelName,
+            customer_name=body.customerName, model_name=body.modelName, make=body.make, city=body.city,
             created_at=body.createdAt, whatsapp_consent=body.whatsappConsent,
         )
         r = service.on_lead_created(lead)
@@ -132,7 +136,7 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
             gupshup_app_id=body.gupshupAppId, source_number=body.sourceNumber,
             template_id=body.templateId, timezone=body.timezone, working_hours=body.workingHours,
             holidays=body.holidays, pre_close_buffer_min=body.preCloseBufferMin,
-            qualify_max_days=body.qualifyMaxDays, rep_name=body.repName, rep_phone=body.repPhone,
+            qualify_max_days=body.qualifyMaxDays, rep_name=body.repName, rep_phone=body.repPhone, city=body.city,
             holdout_pct=body.holdoutPct,
         ))
         return {"ok": True, "db": service.repo.backend}
@@ -154,11 +158,16 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
             raise HTTPException(status_code=404, detail=f"unknown table; use one of {list(service.repo.TABLES)}")
         return {"table": table, "count": len(rows), "rows": rows}
 
+    @app.get("/internal/engagement", dependencies=[Depends(internal_auth)])
+    def engagement() -> dict:
+        return {"flow": "NWH_QUALIFIER", "templates": service.repo.engagement()}
+
     @app.get("/internal/leads/{lead_id}/audit", dependencies=[Depends(internal_auth)])
     def lead_audit(lead_id: str) -> dict:
         return {
             "lead_id": lead_id,
             "messages": service.repo.list_rows("wa_message", 100, 0, lead_id),
+            "interactions": [r for r in service.repo.list_rows("wa_interaction", 1000) if r["lead_id"] == lead_id],
             "audit": list(reversed(service.repo.list_rows("audit_log", 1000, 0, lead_id))),
         }
 

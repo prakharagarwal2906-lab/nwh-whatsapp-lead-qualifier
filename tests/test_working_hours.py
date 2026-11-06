@@ -44,3 +44,25 @@ def test_callback_phrase_same_day_early_morning():
 def test_callback_phrase_skips_sunday():
     # Saturday 9 PM -> Monday
     assert cal().callback_phrase(datetime(2026, 11, 7, 21, 0, tzinfo=IST))[0] == "on Monday"
+
+
+def test_next_open_days_skips_weekly_off_and_late_today():
+    # Sat 9 PM: too late for today, Sunday is off -> starts Monday
+    days = cal().next_open_days(datetime(2026, 11, 7, 21, 0, tzinfo=IST))
+    assert len(days) == 7
+    assert days[0].isoformat() == "2026-11-09"
+    assert all(d.weekday() != 6 for d in days)
+
+
+def test_next_open_days_includes_today_after_midnight():
+    days = cal().next_open_days(datetime(2026, 11, 6, 0, 26, tzinfo=IST))
+    assert days[0].isoformat() == "2026-11-06"
+
+
+def test_hourly_slots_within_working_hours():
+    from datetime import date
+    slots = cal().hourly_slots(date(2026, 11, 6))
+    assert slots[0] == ("0930", "9:30 AM - 10:30 AM")
+    assert slots[-1] == ("1630", "4:30 PM - 5:30 PM")
+    assert len(slots) == 8
+    assert cal().hourly_slots(date(2026, 11, 8)) == []  # Sunday off

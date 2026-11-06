@@ -71,3 +71,35 @@ class DealerCalendar:
             day = "on " + start.strftime("%A")
         fmt = lambda d: d.strftime("%I:%M %p").lstrip("0")  # noqa: E731
         return day, fmt(start), fmt(end)
+
+    # ---- visit booking -------------------------------------------------
+    def next_open_days(self, when: datetime, n: int = 7) -> list[date]:
+        """The next `n` days the dealer is open, starting today if a visit is still possible."""
+        local = when.astimezone(self.tz)
+        out: list[date] = []
+        for offset in range(0, 31):
+            day = local.date() + timedelta(days=offset)
+            wins = self.windows(day)
+            if not wins:
+                continue
+            if offset == 0 and local >= wins[-1][1] - timedelta(hours=2):
+                continue  # too late for a same-day visit
+            out.append(day)
+            if len(out) == n:
+                break
+        return out
+
+    def hourly_slots(self, day: date, max_slots: int = 10) -> list[tuple[str, str]]:
+        """[("1130", "11:30 AM - 12:30 PM"), ...] within working hours (WhatsApp lists hold 10 rows)."""
+        fmt = lambda d: d.strftime("%I:%M %p").lstrip("0")  # noqa: E731
+        out = []
+        for start, end in self.windows(day):
+            t = start
+            while t + timedelta(hours=1) <= end and len(out) < max_slots:
+                out.append((t.strftime("%H%M"), f"{fmt(t)} - {fmt(t + timedelta(hours=1))}"))
+                t += timedelta(hours=1)
+        return out
+
+
+def day_label(day: date) -> str:
+    return day.strftime("%a, ") + str(day.day) + day.strftime(" %b")

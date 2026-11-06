@@ -1,17 +1,22 @@
-"""Core flows: send on lead creation, process inbound Gupshup events, sync to L2R."""
+"""Core flows: send on lead creation, process inbound Gupshup events, run the
+qualification flow (timeline -> visit date -> visit time), sync to L2R."""
 from __future__ import annotations
 
 import hashlib
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from .clients import GupshupClient, L2RClient, SendError, TemplateSend
+from .clients import GupshupClient, L2RClient, ListRow, SendError, TemplateSend
 from .db import Repo
-from .models import Lead, MsgStatus, Outcome
-from .rules import BUTTONS, build_postback, classify_text, decide, parse_postback
-from .working_hours import DealerCalendar
+from .models import DealerConfig, Lead, MsgStatus, Outcome, WaMessage
+from .rules import (
+    FLOW, STEP_TIMELINE, STEP_VISIT_DATE, STEP_VISIT_TIME, TIMELINE_LABEL, TIMELINE_OPTIONS,
+    build_postback, classify_text, decide_timeline, gt2m_text, parse_postback, research_text,
+    visit_confirm_text,
+)
+from .working_hours import DealerCalendar, day_label
 
 log = logging.getLogger("qualifier")
 audit_log = logging.getLogger("qualifier.audit")
@@ -23,10 +28,8 @@ EVENT_STATUS = {
     "read": MsgStatus.READ,
     "failed": MsgStatus.FAILED,
 }
-TIMELINE_LABEL = {
-    "TIMELINE_15D": "15_DAYS", "TIMELINE_1M": "1_MONTH", "TIMELINE_1_2M": "1_2_MONTHS",
-    "TIMELINE_GT2M": "GT_2_MONTHS", "RESEARCHING": "RESEARCHING",
-}
+# Inbound message types that carry a button/list choice.
+CHOICE_TYPES = {"quick_reply", "button_reply", "list_reply"}
 
 
 @dataclass
@@ -42,6 +45,17 @@ def in_holdout(lead_id: str, pct: int) -> bool:
         return False
     bucket = int(hashlib.sha256(lead_id.encode()).hexdigest(), 16) % 100
     return bucket < pct
+
+
+def template_variables(lead: Lead, cfg: DealerConfig) -> list[str]:
+    """Template params in order: customer name, make, model, working hours,
+    virtual number, sales executive, dealer name."""
+    cal = DealerCalendar(cfg)
+    first = next((w for d in cal.next_open_days(lead.created_at, 1) for w in cal.windows(d)), None)
+    fmt = lambda d: d.strftime("%I:%M %p").lstrip("0")  # noqa: E731
+    hours = f"{fmt(first[0])} - {fmt(first[1])}" if first else "working hours"
+    return [lead.customer_name or "there", lead.make, lead.model_name, hours,
+            cfg.rep_phone, cfg.rep_name, cfg.dealer_name]
 
 
 class QualifierService:
@@ -80,8 +94,7 @@ class QualifierService:
             return SendResult(False, "no_consent")
         if not lead.mobile.isdigit() or len(lead.mobile) < 11:
             return SendResult(False, "invalid_mobile")
-        cal = DealerCalendar(cfg)
-        if not cal.is_non_working(lead.created_at):
+        if not DealerCalendar(cfg).is_non_working(lead.created_at):
             return SendResult(False, "working_hours")
         if self.repo.is_opted_out(lead.mobile, lead.dealer_id):
             return SendResult(False, "opted_out")
@@ -94,15 +107,13 @@ class QualifierService:
         if msg_id is None:
             return SendResult(False, "already_sent")
 
-        day, start, end = cal.callback_phrase(lead.created_at)
         req = TemplateSend(
             app_id=cfg.gupshup_app_id,
-            source=cfg.source_number,
+            source=cfg.source_number,                     # WABA number
             destination=lead.mobile,
             template_id=cfg.template_id,
-            params=[lead.customer_name or "there", lead.model_name, cfg.dealer_name,
-                    cfg.rep_name, day, start, end, cfg.rep_phone],
-            postbacks=[build_postback(code, lead.lead_id) for code, _, _ in BUTTONS],
+            params=template_variables(lead, cfg),
+            postbacks=[build_postback(STEP_TIMELINE, code, lead.lead_id) for code, _, _ in TIMELINE_OPTIONS],
         )
         try:
             gs_id = self.gupshup.send_template(req)
@@ -111,9 +122,24 @@ class QualifierService:
             self._safe_comment(lead.lead_id, f"WhatsApp qualifier could not send message: {e}",
                                f"wa-sendfail-{msg_id}")
             return SendResult(False, "send_failed", msg_id)
-        # Written synchronously, before any reply can be processed.
+        # Gupshup's messageId is unique per send (the template id is shared), so it is
+        # written synchronously, before any reply can be processed.
         self.repo.mark_sent(msg_id, gs_id)
         return SendResult(True, "sent", msg_id)
+
+    def _send_session(self, root: WaMessage, cfg: DealerConfig, step: str, kind: str, send) -> int | None:
+        """Send a follow-up (text or list) in the same flow and track it like the template."""
+        row_id = self.repo.create_pending(root.lead_id, root.dealer_id, root.mobile, None, step=step,
+                                          msg_type=kind, root_template_id=root.root_template_id or root.template_id)
+        try:
+            gs_id = send()
+        except SendError as e:
+            self.repo.mark_failed(row_id, str(e))
+            self.audit("ERROR", f"session_send_failed:{step}", root.lead_id, row_id, error=str(e)[:300])
+            return None
+        self.repo.mark_sent(row_id, gs_id)
+        self.audit("INFO", f"session_sent:{step}", root.lead_id, row_id, gs_message_id=gs_id)
+        return row_id
 
     # --------------------------------------------------------------- inbound
     @staticmethod
@@ -127,10 +153,7 @@ class QualifierService:
         return None
 
     def accept(self, evt: dict) -> tuple[bool, str]:
-        """Synchronous part of the webhook: validate shape and store for dedupe.
-
-        Returns (should_process, reason).
-        """
+        """Synchronous part of the webhook: validate shape and store for dedupe."""
         eid = self.event_id(evt)
         if not eid:
             return False, "ignored_unknown_event"
@@ -160,12 +183,9 @@ class QualifierService:
             log.exception("processing failed for %s", eid)
             result = f"error:{type(e).__name__}"
         self.repo.finish_event(eid, result)
-        msg = None
         p = evt.get("payload") or {}
-        ctx = p.get("context") or {}
-        gs = ctx.get("gsId") or p.get("gsId")
-        if gs:
-            msg = self.repo.find_message(gs_id=gs)
+        gs = (p.get("context") or {}).get("gsId") or p.get("gsId")
+        msg = self.repo.find_message(gs_id=gs) if gs else None
         level = "ERROR" if result.startswith(("error", "rejected")) else \
             "WARN" if result.startswith(("unmapped", "unclassified", "ignored")) else "INFO"
         self.audit(level, f"webhook_processed:{result}", msg.lead_id if msg else None,
@@ -179,11 +199,10 @@ class QualifierService:
         msg = self.repo.find_message(gs_id=p.get("gsId"), wamid=p.get("id"))
         if msg is None:
             return "unmapped_status"
-        reason = None
-        if status == MsgStatus.FAILED:
-            reason = str((p.get("payload") or {}).get("reason", "failed"))
-        changed = self.repo.advance_status(msg.id, status, wamid=p.get("id"), reason=reason)
-        if changed and status == MsgStatus.FAILED:
+        wamid = (p.get("payload") or {}).get("whatsappMessageId") or p.get("id")
+        reason = str((p.get("payload") or {}).get("reason", "failed")) if status == MsgStatus.FAILED else None
+        changed = self.repo.advance_status(msg.id, status, wamid=wamid, reason=reason)
+        if changed and status == MsgStatus.FAILED and msg.msg_type == "template":
             self._safe_comment(msg.lead_id, f"WhatsApp message failed: {reason}", f"wa-fail-{msg.id}")
         return f"status:{status.value}" if changed else "status_unchanged"
 
@@ -191,54 +210,110 @@ class QualifierService:
         inner = p.get("payload") or {}
         ctx = p.get("context") or {}
         sender = p.get("source", "")
-        postback_code, postback_lead = parse_postback(inner.get("postbackText"))
-
-        if p.get("type") == "quick_reply":
-            code = postback_code or classify_text(inner.get("text", ""))
-        elif p.get("type") == "text":
-            code = classify_text(inner.get("text", ""))
-        else:
+        mtype = p.get("type")
+        if mtype not in CHOICE_TYPES and mtype != "text":
             return "ignored_message_type"
 
-        msg = self.repo.find_message(gs_id=ctx.get("gsId"), wamid=ctx.get("id"), lead_id=postback_lead)
-        if msg is None and p.get("type") == "text":
-            # Typed replies may have no context; use the latest open message to this sender.
-            msg = self.repo.latest_open_for(sender)
+        pb = parse_postback(inner.get("postbackText") or inner.get("id"))
+        msg = self.repo.find_message(gs_id=ctx.get("gsId"), wamid=ctx.get("id"),
+                                     lead_id=pb.lead_id if pb else None)
+        if msg is None and mtype == "text":
+            msg = self.repo.latest_open_for(sender)   # typed replies may have no context
         if msg is None:
             return "unmapped_reply"
         # A valid token alone must not be able to qualify an unrelated lead.
         if msg.mobile != sender:
             log.warning("mobile mismatch for msg %s", msg.id)
             return "rejected_mobile_mismatch"
-        if postback_lead and postback_lead != msg.lead_id:
+        if pb and pb.lead_id and pb.lead_id != msg.lead_id:
             return "rejected_lead_mismatch"
-        if code is None:
-            return "unclassified_reply"
+
+        if pb:
+            step, option = pb.step, pb.option
+            title = inner.get("title") or inner.get("text") or option
+        else:  # typed text: only the timeline question accepts free text
+            option = classify_text(inner.get("text", ""))
+            if option is None:
+                return "unclassified_reply"
+            step, title = (msg.step, inner.get("text", ""))
+            if option != "STOP" and step != STEP_TIMELINE:
+                return "unclassified_reply"
+        if step != msg.step and option != "STOP":
+            return "rejected_step_mismatch"
 
         cfg = self.repo.get_dealer(msg.dealer_id)
-        decision = decide(code, cfg.qualify_max_days if cfg else 60, cfg.rep_name if cfg else "we")
-
-        if decision.outcome == Outcome.OPT_OUT:
+        if option == "STOP":
             self.repo.add_opt_out(msg.mobile, msg.dealer_id)
-
+            self._safe_comment(msg.lead_id, "Customer opted out of WhatsApp messages", f"wa-{p.get('id')}")
+            return "reply:OPT_OUT"
         if msg.status in (MsgStatus.EXPIRED, MsgStatus.FAILED):
             return "ignored_closed_conversation"
+
+        self.repo.add_interaction({
+            "inbound_id": p.get("id"), "context_message_id": msg.gs_message_id, "lead_id": msg.lead_id,
+            "dealer_id": msg.dealer_id, "template_id": msg.root_template_id or msg.template_id,
+            "flow": FLOW, "step": step, "option_code": option, "option_title": title,
+            "received_at": datetime.now(timezone.utc).isoformat(),
+        })
+
         if msg.status == MsgStatus.REPLIED and msg.l2r_sync_status == "DONE":
-            # Lead already acted on; record the later answer as a comment only.
-            self._safe_comment(msg.lead_id, f"Later WhatsApp reply: {inner.get('text', code)}",
-                               f"wa-{p.get('id')}")
+            # This question was already answered and acted on; keep the later tap as a comment.
+            self._safe_comment(msg.lead_id, f"Later WhatsApp reply ({step}): {title}", f"wa-{p.get('id')}")
             return "comment_only"
 
-        self.repo.record_reply(msg.id, code, decision.outcome)
+        if step == STEP_TIMELINE:
+            decision = decide_timeline(option, cfg.qualify_max_days if cfg else 60)
+            outcome = decision.outcome
+        elif step == STEP_VISIT_DATE:
+            outcome = Outcome.DATE_CHOSEN
+        else:
+            outcome = Outcome.VISIT_BOOKED
+        self.repo.record_reply(msg.id, option, outcome)
         self.sync_to_l2r(msg.id, idempotency_key=f"wa-{p.get('id')}")
+        if cfg:
+            self._next_step(msg, cfg, step, option)
+        return f"reply:{outcome.value}"
 
-        if decision.reply_text and cfg:
-            try:
-                self.gupshup.send_text(cfg.gupshup_app_id, cfg.source_number, msg.mobile,
-                                       decision.reply_text)
-            except SendError:
-                log.warning("follow-up text failed for msg %s", msg.id)
-        return f"reply:{decision.outcome.value}"
+    def _next_step(self, msg: WaMessage, cfg: DealerConfig, step: str, option: str) -> None:
+        """Send the next message of the flow."""
+        cal = DealerCalendar(cfg)
+        lead_name = self._lead_name(msg.lead_id)
+        send = self.gupshup
+        app, src, dst = cfg.gupshup_app_id, cfg.source_number, msg.mobile
+        if step == STEP_TIMELINE:
+            if option in ("15D", "1M", "1_2M") and decide_timeline(option, cfg.qualify_max_days).ask_visit:
+                days = cal.next_open_days(datetime.now(timezone.utc))
+                rows = [ListRow(day_label(d), build_postback(STEP_VISIT_DATE, d.isoformat(), msg.lead_id)) for d in days]
+                self._send_session(msg, cfg, STEP_VISIT_DATE, "list", lambda: send.send_list(
+                    app, src, dst, "Plan your visit",
+                    f"Great! When would you like to visit {cfg.dealer_name}?",
+                    "Choose date", "Choose your preferred date", rows))
+            elif option == "GT2M":
+                self._send_session(msg, cfg, "GT2M_ACK", "text",
+                                   lambda: send.send_text(app, src, dst, gt2m_text(lead_name, cfg.rep_phone)))
+            elif option == "RESEARCH":
+                self._send_session(msg, cfg, "RESEARCH_ACK", "text",
+                                   lambda: send.send_text(app, src, dst, research_text(cfg.rep_phone)))
+        elif step == STEP_VISIT_DATE:
+            day = date.fromisoformat(option)
+            rows = [ListRow(label, build_postback(STEP_VISIT_TIME, code, msg.lead_id)) for code, label in cal.hourly_slots(day)]
+            self._send_session(msg, cfg, STEP_VISIT_TIME, "list", lambda: send.send_list(
+                app, src, dst, day_label(day), f"{day_label(day)} it is. What time suits you?",
+                "Choose time", "Choose your preferred time", rows))
+        elif step == STEP_VISIT_TIME:
+            chosen = self.repo.latest_interaction(msg.lead_id, STEP_VISIT_DATE)
+            day = date.fromisoformat(chosen["option_code"]) if chosen else None
+            slot = dict(cal.hourly_slots(day)).get(option, option) if day else option
+            self._send_session(msg, cfg, "VISIT_CONFIRM", "text", lambda: send.send_text(
+                app, src, dst, visit_confirm_text(cfg.dealer_name, cfg.city, day_label(day) if day else "",
+                                                  slot, cfg.rep_name, cfg.rep_phone)))
+
+    def _lead_name(self, lead_id: str) -> str:
+        try:
+            lead = self.l2r.get_lead(lead_id)
+            return (lead.customer_name if lead else "") or "there"
+        except Exception:
+            return "there"
 
     # ------------------------------------------------------------- L2R sync
     def sync_to_l2r(self, msg_id: int, idempotency_key: str | None = None) -> str:
@@ -251,52 +326,56 @@ class QualifierService:
             if lead is None or lead.closed:
                 self.repo.set_sync(msg.id, "SKIPPED", "lead missing or closed")
                 return "skipped"
-            label = TIMELINE_LABEL.get(msg.reply_code or "", msg.reply_code)
-            note = f"Customer answered '{label}' on WhatsApp" if msg.reply_code else \
-                "No reply to WhatsApp qualifier within 24h"
+            cfg = self.repo.get_dealer(msg.dealer_id)
 
-            if lead.stage != "FIRST_CALL":
-                # A human has already moved this lead on. Never downgrade.
-                self.l2r.add_comment(lead.lead_id, note, key)
-            elif msg.outcome == Outcome.QUALIFIED:
-                cfg = self.repo.get_dealer(msg.dealer_id)
-                decision = decide(msg.reply_code, cfg.qualify_max_days if cfg else 60, "")
-                self.l2r.dispose(lead.lead_id, {
-                    "callStatus": "CONNECTED",
-                    "disposition": "WHATSAPP_BOT",
-                    "targetStage": "QUALIFICATION",
-                    "purchaseTimeline": label,
-                    "priority": decision.priority,
-                    "comment": note,
+            if msg.outcome == Outcome.DATE_CHOSEN:
+                day = date.fromisoformat(msg.reply_code)
+                self.l2r.add_comment(lead.lead_id, f"Preferred visit date on WhatsApp: {day_label(day)}", key)
+            elif msg.outcome == Outcome.VISIT_BOOKED:
+                chosen = self.repo.latest_interaction(msg.lead_id, STEP_VISIT_DATE)
+                self.l2r.schedule_visit(lead.lead_id, {
+                    "type": "SHOWROOM_VISIT",
+                    "date": chosen["option_code"] if chosen else None,
+                    "slotStart": msg.reply_code,
+                    "assignee": cfg.rep_name if cfg else None,
+                    "source": "WHATSAPP_BOT",
                     "actor": "system:whatsapp-bot",
                 }, key)
-            elif msg.outcome in (Outcome.NURTURE, Outcome.HANDOFF):
-                decision = decide(msg.reply_code, 60, "")
-                self.l2r.dispose(lead.lead_id, {
-                    "callStatus": "CONNECTED",
-                    "disposition": "WHATSAPP_BOT",
-                    "targetStage": "FIRST_CALL",
-                    "purchaseTimeline": label,
-                    "followUpInDays": decision.follow_up_days,
-                    "priority": decision.priority,
-                    "comment": note,
-                    "actor": "system:whatsapp-bot",
-                }, key)
-            else:  # NO_RESPONSE, OPT_OUT
-                self.l2r.add_comment(lead.lead_id, note if msg.outcome == Outcome.NO_RESPONSE
-                                     else "Customer opted out of WhatsApp messages", key)
+            else:
+                label = TIMELINE_LABEL.get(msg.reply_code or "", msg.reply_code)
+                note = f"Customer answered '{label}' on WhatsApp" if msg.reply_code else \
+                    "No reply to WhatsApp qualifier within 24h"
+                if lead.stage != "FIRST_CALL":
+                    # A human has already moved this lead on. Never downgrade.
+                    self.l2r.add_comment(lead.lead_id, note, key)
+                elif msg.outcome == Outcome.QUALIFIED:
+                    d = decide_timeline(msg.reply_code, cfg.qualify_max_days if cfg else 60)
+                    self.l2r.dispose(lead.lead_id, {
+                        "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT",
+                        "targetStage": "QUALIFICATION", "purchaseTimeline": msg.reply_code,
+                        "priority": d.priority, "comment": note, "actor": "system:whatsapp-bot",
+                    }, key)
+                elif msg.outcome == Outcome.NURTURE:
+                    d = decide_timeline(msg.reply_code, cfg.qualify_max_days if cfg else 60)
+                    self.l2r.dispose(lead.lead_id, {
+                        "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT",
+                        "targetStage": "FIRST_CALL", "purchaseTimeline": msg.reply_code,
+                        "followUpInDays": d.follow_up_days, "comment": note, "actor": "system:whatsapp-bot",
+                    }, key)
+                else:  # NO_RESPONSE
+                    self.l2r.add_comment(lead.lead_id, note, key)
         except Exception as e:
             self.repo.set_sync(msg.id, "FAILED", str(e)[:500])
             self.audit("ERROR", "l2r_sync_failed", msg.lead_id, msg.id, error=str(e)[:300])
             return "failed"
         self.repo.set_sync(msg.id, "DONE")
         self.audit("INFO", "l2r_synced", msg.lead_id, msg.id, outcome=msg.outcome.value,
-                   reply_code=msg.reply_code)
+                   reply_code=msg.reply_code, step=msg.step)
         return "done"
 
     # ------------------------------------------------------------ scheduled
     def run_maintenance(self) -> dict:
-        """Run every few minutes: expire 24h-old conversations, retry failed syncs."""
+        """Run every few minutes: expire 24h-old templates, retry failed syncs."""
         expired = self.repo.expire_stale(self.window_hours)
         retried = [self.sync_to_l2r(m.id) for m in self.repo.pending_sync()]
         return {"expired": len(expired), "synced": retried.count("done"),
