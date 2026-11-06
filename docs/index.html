@@ -596,7 +596,6 @@ function createCall(lead, at, why){
     due_at:at.toISOString(), due_reason:why, disposed_at:null, disposed_by:null, call_status:null, followup_status:null, interest:null,
     buying_span:null, reason:null, sub_reason:null, td_required:null, td_at:null, comment:null, next_call_at:null};
   lead.calls.push(c);
-  addFeed(lead, {icon:"call", title:`Call #${c.seq} created`, lines:[`Scheduled for ${fmtWall(at)}`, `Reason: ${why}`]});
   log("info","L2R",`call ${c.call_id} created for ${lead.id}, due ${fmtWall(at)} (${why})`, undefined, lead.id);
   return c;
 }
@@ -612,7 +611,7 @@ function disposeCall(lead, by, d){
     c.reason&&`Reason: ${c.reason}`, c.sub_reason&&`Sub Reason: ${c.sub_reason}`,
     c.td_required&&`TD Required: ${c.td_required}${c.td_at?` · ${c.td_at}`:""}`, d.extra,
     d.next ? `Next Call: ${fmtWall(d.next.at)} (${d.next.why})` : "Next Call: none, lead closed"].filter(Boolean);
-  addFeed(lead, {icon:"follow", tone:"call", title:`Call #${c.seq} disposed by ${by}`, lines});
+  addFeed(lead, {icon:"follow", tone:"call", title:`Call disposed by ${by}`, lines});
   l2r(lead, "dispose", {callId:c.call_id, disposedBy:by, callStatus:c.call_status, followUpStatus:c.followup_status, leadStatus:c.interest,
     expectedBuyingSpan:c.buying_span, reason:c.reason, subReason:c.sub_reason, tdRequired:c.td_required, tdAt:c.td_at, nextCallAt:c.next_call_at, comment:c.comment});
   if (d.next) createCall(lead, d.next.at, d.next.why);
@@ -629,7 +628,7 @@ function rescheduleForVisit(lead){
   const n = nextCallAt(lead, lead.spanCode, lead.visitDate);
   if (n.at < new Date(c.due_at)){
     const old = new Date(c.due_at); c.due_at = n.at.toISOString(); c.due_reason = n.why;
-    addFeed(lead, {icon:"call", title:`Call #${c.seq} rescheduled`, lines:[`From ${fmtWall(old)} to ${fmtWall(n.at)}`, `Reason: ${n.why}, earlier than the buying-span date`]});
+    addFeed(lead, {icon:"call", title:`Next call rescheduled`, lines:[`From ${fmtWall(old)} to ${fmtWall(n.at)}`, `Reason: ${n.why}, earlier than the buying-span date`]});
     log("info","L2R",`call ${c.call_id} moved to ${fmtWall(n.at)} (${n.why})`, undefined, lead.id);
   }
 }
@@ -961,18 +960,17 @@ function formHtml(l, c){
   if (!OPEN_STATUSES.includes(l.leadStatus)) return `<div class="lclosed">This lead is <b>${esc(LEAD_STATUS[l.leadStatus])}</b>. No further calls.</div>`;
   if (!c) return `<div class="lclosed">No open call.</div>`;
   const today = simNow(l), tomorrow = new Date(today.getTime()+86400e3);
-  const callInfo = `<div class="lnote">Open call <b>#${c.seq}</b> (${c.call_id}) · due ${esc(fmtWall(new Date(c.due_at)))} · ${esc(c.due_reason)}</div>`;
   const err = F.err ? `<div class="lerr">${esc(F.err)}</div>` : "";
   const comments = `<div class="frow2"><label for="fComment">Comments<sup>*</sup></label><textarea id="fComment" class="ltext" placeholder="Type your comments here">${esc(F.comment)}</textarea></div>`;
   const submit = `<div class="frow2"><span></span><div class="opts2"><button type="button" class="lsubmit" data-act="submit">Submit</button>${err}</div></div>`;
   if (l.leadStatus==="QUALIFIED"){   // follow-up call on a qualified lead (second screenshot)
-    return `<div class="lform">${callInfo}
+    return `<div class="lform">
       <div class="frow2"><label>Call Status<sup>*</sup></label><div class="opts2">${tog("callStatus","CONNECTED","Connected")}${tog("callStatus","NOT_CONNECTED","Not Connected")}</div></div>
       ${F.callStatus==="CONNECTED" ? `<div class="frow2"><label>Next Call Date<sup>*</sup></label><div class="opts2"><input type="date" id="fNextDate" class="ldate" value="${F.nextDate}"><input type="time" id="fNextTime" class="ldate" value="${F.nextTime}"><span class="lhint">Set by the telecaller for now (rule to be decided with booking)</span></div></div>`
         : F.callStatus==="NOT_CONNECTED" ? `<div class="frow2"><span></span><span class="lhint">The next call is scheduled for the next working day.</span></div>` : ""}
       ${comments}${submit}</div>`;
   }
-  let h = `<div class="lform">${callInfo}
+  let h = `<div class="lform">
     <div class="frow2"><label>Follow-up Status<sup>*</sup></label><div class="opts2">${tog("followup","SPOKE","Spoke to Customer")}${tog("followup","BUSY","Customer was Busy")}</div></div>`;
   if (F.followup==="SPOKE"){
     h += `<div class="frow2"><label>Lead Status<sup>*</sup></label><div class="opts2">${tog("interest","INTERESTED","Interested")}${tog("interest","NOT_INTERESTED","Not Interested")}</div></div>`;
