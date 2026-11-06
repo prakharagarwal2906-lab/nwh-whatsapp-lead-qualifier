@@ -136,11 +136,11 @@ flowchart TD
 | More than 2 Months | any other | Thanks; next call by the new buying span |
 | Still Researching (closed) | any other | Reopen the lead, next call by the new buying span, thanks |
 
-**Who works where.** L2R is the internal calling team's tool: an internal telecaller owns the lead, qualifies it and keeps making follow-up calls until the customer books (the OEM contract pays on conversion). Dealers use a separate dealer panel: a lead is sent there by API only once it is qualified, and later changes (visit booked, timeline changed, withdrawn, booked) are sent as updates.
+**Who works where.** L2R is the internal calling team's tool: an internal telecaller owns the lead, qualifies it and keeps making follow-up calls until the customer books (the OEM contract pays on conversion). Dealers use a separate dealer panel. There is one path to it, owned by L2R: a telecaller tags the follow-up form on a call, or the WhatsApp bot fills the same form fields through the L2R API, and when the lead becomes qualified L2R's event calls the dealer panel API. The bot never calls the dealer panel itself.
 
 **Tracking and message IDs.** The template ID is shared by every customer. Gupshup's send API returns a unique `messageId` immediately (HTTP 202), saved against the lead, dealer, template, flow and step before any reply can arrive. WhatsApp's `wamid` arrives with the first status callback. Every tap carries `context.gsId` (the `messageId` it answers) plus the postback, and is stored in `wa_interaction`. Date and time lists are session messages that keep a pointer to the template that started the flow, so engagement for every step rolls up per template (`GET /internal/engagement`).
 
-**Tables:** `dealer_config`, `wa_message` (one row per outbound message), `wa_interaction` (one row per tap), `dealer_push` (leads sent to the dealer panel), `wa_event` (raw webhook log for dedupe), `opt_out`, `audit_log`.
+**Tables:** `dealer_config`, `wa_message` (one row per outbound message), `wa_interaction` (one row per tap), `wa_event` (raw webhook log for dedupe), `opt_out`, `audit_log`.
 
 **Webhook security:** header token (constant-time compare, rotation with two valid tokens), optional Gupshup IP allowlist, dedupe on event ID, stale-event rejection, and every reply must match a message we sent and the lead's mobile, so a leaked token alone can't qualify leads.
 

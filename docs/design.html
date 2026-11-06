@@ -236,22 +236,24 @@ flowchart TD
 <section id="dealer">
   <h2>Who works where <span class="pill pm">Product</span></h2>
   <p>L2R is the <b>internal calling team's</b> tool. Dealers work in a separate <b>dealer panel</b>. The OEM contract pays on conversion, so our team stays on the lead until it books.</p>
+  <p>There is <b>one path to the dealer</b>, and it belongs to L2R. A telecaller tags the follow-up form on a call, or the WhatsApp bot fills the same form fields through the L2R API. Either way, when the lead becomes qualified, L2R's event calls the dealer panel API. The bot never calls the dealer panel itself.</p>
   <div class="table-wrap"><table>
-    <thead><tr><th>Moment</th><th>L2R (internal calling team)</th><th>Dealer panel</th></tr></thead>
+    <thead><tr><th>Moment</th><th>Who tags L2R</th><th>What L2R does</th></tr></thead>
     <tbody>
-      <tr><td>Lead created</td><td>Lead assigned to an internal telecaller; first call created</td><td>Nothing yet</td></tr>
-      <tr><td>Qualified (bot or telecaller)</td><td>Call disposed, next call by the buying-span rule</td><td><b>Lead sent by API</b> (POST) with customer, vehicle, buying span, eagerness</td></tr>
-      <tr><td>Visit / TD booked</td><td>Next call moved to 1 day after the visit if earlier</td><td>Update (PATCH): visit date and slot</td></tr>
-      <tr><td>Timeline changed / no longer qualified</td><td>Lead status and next call updated</td><td>Update: new span, or withdrawn</td></tr>
-      <tr><td>Follow-up call confirms booking</td><td>Lead Booked, conversion recorded</td><td>Update: booked</td></tr>
+      <tr><td>Lead created</td><td>System</td><td>Lead assigned to an internal telecaller; first call created</td></tr>
+      <tr><td>Qualified on a call</td><td>Telecaller, in the follow-up form</td><td>Call disposed, next call scheduled, <b>lead sent to the dealer panel</b></td></tr>
+      <tr><td>Qualified on WhatsApp</td><td>Bot, same form fields via the L2R API</td><td>Same as above: call disposed, next call scheduled, <b>lead sent to the dealer panel</b></td></tr>
+      <tr><td>Visit / TD booked, timeline changed, withdrawn</td><td>Telecaller or bot</td><td>Lead and next call updated; dealer panel updated</td></tr>
+      <tr><td>Follow-up call confirms booking</td><td>Telecaller</td><td>Lead Booked, conversion recorded, dealer panel updated</td></tr>
     </tbody>
   </table></div>
-<pre class="code"><code>POST  /dealer-panel/api/v1/leads            # first time the lead is qualified
-PATCH /dealer-panel/api/v1/leads/{leadId}   # VISIT_BOOKED | SPAN_UPDATED | WITHDRAWN | BOOKED
-{ "event":"QUALIFIED", "dealerId":"D101", "leadId":"L12345", "customerName":"Prakhar",
-  "mobile":"919876543210", "vehicle":"Royal Enfield Classic 350", "purchaseTimeline":"1M",
-  "source":"WHATSAPP_BOT" }</code></pre>
-  <p>Leads that were never qualified are never sent. Pushes are recorded in <code>dealer_push</code> (first push time, last event) so updates go only to leads the dealer already has.</p>
+  <p>What the bot sends to L2R when it qualifies a lead, the same fields as the follow-up form:</p>
+<pre class="code"><code>POST /api/v1/leads/{leadId}/dispositions
+{ "callStatus":"CONNECTED", "followUpStatus":"SPOKE_TO_CUSTOMER", "leadStatus":"INTERESTED",
+  "expectedBuyingSpan":"1M", "eagerness":"HOT", "targetStage":"QUALIFICATION",
+  "disposition":"WHATSAPP_BOT", "actor":"system:whatsapp-bot" }
+# → L2R disposes the call, schedules the next one and fires its lead-qualified event,
+#   which calls the dealer panel API exactly as it does for a telecaller's tag.</code></pre>
 </section>
 
 <section id="tracking">
@@ -290,7 +292,7 @@ flowchart LR
     CFG["Dealer config<br/>admin UI"]
   end
   GS["Gupshup"] <--> META["Meta WhatsApp<br/>Cloud API"] <--> CUST(("Customer"))
-  SYNC -->|qualified leads + updates| DP["Dealer panel API"]
+  L2RAPI -->|"lead-qualified event<br/>(any source)"| DP["Dealer panel API"]
   BUS --> EL --> SND -->|template API| GS
   SND --> DB
   GS -->|callback URL| WH --> Q --> PR --> SYNC --> L2RAPI

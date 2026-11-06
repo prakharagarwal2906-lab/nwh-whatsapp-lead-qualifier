@@ -371,7 +371,7 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
 <main class="screen wrapx" id="s-lms" hidden>
   <div class="screen-head">
     <div><h1>2 · The lead lands in L2R, the internal calling team's tool</h1>
-      <p>Every lead gets a call. Whoever tags it first (our telecaller or the WhatsApp bot) disposes it. Once the lead is <b>qualified</b> it is sent to the <b>dealer panel</b> by API; our team keeps calling until the customer books, since the OEM contract pays on conversion.</p></div>
+      <p>Every lead gets a call. Our telecaller, or the WhatsApp bot through the L2R API, tags the follow-up form, which disposes the call. When a lead becomes <b>qualified</b>, L2R's event sends it to the <b>dealer panel</b> automatically. Our team keeps calling until the customer books, since the OEM contract pays on conversion.</p></div>
     <div class="next">
       <span class="l2rpick"><label for="leadPick" class="hint">Lead</label><select id="leadPick"></select></span>
       <button class="btn ghost" id="resetAll" type="button">Reset demo</button>
@@ -614,25 +614,28 @@ function disposeCall(lead, by, d){
     c.reason&&`Reason: ${c.reason}`, c.sub_reason&&`Sub Reason: ${c.sub_reason}`,
     c.td_required&&`TD Required: ${c.td_required}${c.td_at?` · ${c.td_at}`:""}`, d.extra,
     d.next ? `Next Call: ${fmtWall(d.next.at)} (${d.next.why})` : "Next Call: none, lead closed"].filter(Boolean);
-  addFeed(lead, {icon:"follow", tone:"call", title:`Call disposed by ${by}`, lines});
+  addFeed(lead, {icon:"follow", tone:"call", title:`Follow up added by ${by}`, lines});
   l2r(lead, "dispose", {callId:c.call_id, disposedBy:by, callStatus:c.call_status, followUpStatus:c.followup_status, leadStatus:c.interest,
     expectedBuyingSpan:c.buying_span, reason:c.reason, subReason:c.sub_reason, tdRequired:c.td_required, tdAt:c.td_at, nextCallAt:c.next_call_at, comment:c.comment});
   if (d.next) createCall(lead, d.next.at, d.next.why);
   return c;
 }
-/* Dealers work in their own panel: a lead is sent there by API once it is qualified,
-   and later changes (visit, timeline, booking, withdrawal) are pushed as updates. */
-function pushToDealer(lead, event){
+/* Dealers work in their own panel. Neither the bot nor the telecaller calls it: when the follow-up
+   form is tagged in L2R (by a telecaller, or by the bot through the L2R API) and the lead becomes
+   qualified, L2R's own event calls the dealer panel API. Later changes go out the same way. */
+function l2rDealerEvent(lead, event){
   const dealer = DEALERS[lead.dealerId], first = !lead.dealerPushedAt;
   if (first && event!=="QUALIFIED") return;             // only qualified leads reach the dealer
+  const by = lead.humanSpoke ? TELECALLER : "WhatsApp Bot";
   const body = {event, dealerId:dealer.id, leadId:lead.id, customerName:lead.name, mobile:lead.mobile,
     vehicle:`${lead.make} ${lead.model}`, expectedBuyingSpan:lead.timeline||null, eagerness:lead.eagerness||null,
-    visit: lead.visitSlot ? `${lead.visitDateLabel}, ${lead.visitSlot}` : null, qualifiedBy: lead.humanSpoke ? TELECALLER : "WhatsApp Bot"};
-  log("info","Dealer panel API",`${first?"POST":"PATCH"} /dealer-panel/v1/leads${first?"":"/"+lead.id}  (${event})`, body, lead.id);
+    visit: lead.visitSlot ? `${lead.visitDateLabel}, ${lead.visitSlot}` : null, taggedBy: by};
+  log("info","L2R event → Dealer panel API",`${first?"POST":"PATCH"} /dealer-panel/v1/leads${first?"":"/"+lead.id}  (${event})`, body, lead.id);
   if (first) lead.dealerPushedAt = simNow(lead).toISOString();
   const label = {QUALIFIED:"Lead sent to dealer panel", VISIT_BOOKED:"Dealer panel updated: visit booked", SPAN_UPDATED:"Dealer panel updated: buying timeline changed",
     WITHDRAWN:"Dealer panel updated: lead no longer qualified", BOOKED:"Dealer panel updated: booking"}[event] || "Dealer panel updated";
   addFeed(lead, {icon:"dealer", tone:"dealer", title:label, lines:[`${dealer.name} (${dealer.id})`,
+    event==="QUALIFIED" ? `Triggered automatically when the lead was qualified (follow up added by ${by})` : null,
     body.expectedBuyingSpan && `Expected Buying Span: ${body.expectedBuyingSpan}`, body.visit && `Visit: ${body.visit}`].filter(Boolean)});
 }
 function setLeadStatus(lead, st, spanCode){
@@ -803,7 +806,7 @@ async function handleReply(p){
       if (target==="GT2M"){
         setLeadStatus(lead, "NOT_QUALIFIED_OPEN", "GT2M"); lead.botState = "Nurture";
         addFeed(lead, {icon:"wa", tone:"waf", title:"Buying timeline changed via WhatsApp", lines:[`Customer confirmed the change from '${P}' to '${t[1]}'`, "Lead Status: Not qualified · open · Eagerness: Normal"]});
-        pushToDealer(lead, "WITHDRAWN");
+        l2rDealerEvent(lead, "WITHDRAWN");
         l2r(lead, "dispose", {source:"WHATSAPP_BOT", leadStatus:"NOT_QUALIFIED_OPEN", expectedBuyingSpan:t[1]});
         scheduleNext(lead, nextCallAt(lead, "GT2M", null));
         await wait(400);
@@ -811,7 +814,7 @@ async function handleReply(p){
       } else {
         setLeadStatus(lead, "NOT_QUALIFIED_CLOSED"); lead.eagerness = null; lead.botState = "Closed · just researching";
         addFeed(lead, {icon:"wa", tone:"waf", title:"Buying timeline changed via WhatsApp", lines:[`Customer confirmed the change from '${P}' to '${t[1]}'`]});
-        pushToDealer(lead, "WITHDRAWN");
+        l2rDealerEvent(lead, "WITHDRAWN");
         disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected (WhatsApp)", followup:"Spoke to customer (WhatsApp)", interest:"Not interested",
           reason:"Not interested in buying", subReason:"Just researching", comment:`Customer changed the answer to '${t[1]}' on WhatsApp`, next:null});
         await wait(400);
@@ -837,7 +840,7 @@ async function handleReply(p){
     addFeed(lead, {icon:"td", tone:"waf", title: again ? "Showroom visit rescheduled via WhatsApp" : "Showroom visit scheduled via WhatsApp", lines:[`${lead.visitDateLabel}, ${title}`, `Dealer sales executive: ${dealer.exec}`]});
     l2r(lead, "visit", {type:"SHOWROOM_VISIT", date:lead.visitDate, slot:title, assignee:dealer.exec});
     rescheduleForVisit(lead);
-    pushToDealer(lead, "VISIT_BOOKED");
+    l2rDealerEvent(lead, "VISIT_BOOKED");
     await wait(400);
     await sendMessage(lead, {kind:"text", step:"VISIT_CONFIRM",
       text:`✅ Your visit is booked\n\n📍 ${dealer.name}, ${dealer.city}\n📅 ${lead.visitDateLabel}\n🕒 ${title}\n\n${dealer.exec} will call you to confirm. Need help? Call ${dealer.virtual}.`, payload:{type:"text"}});
@@ -883,7 +886,7 @@ async function timelineChanged(lead, option, dealer){
       addFeed(lead, {icon:"wa", tone:"waf", title:"Buying timeline updated via WhatsApp", lines:[`From '${P}' to '${N}'`, `Eagerness: ${lead.eagerness}`]});
       l2r(lead, "dispose", {source:"WHATSAPP_BOT", expectedBuyingSpan:N});
       scheduleNext(lead, nextCallAt(lead, option, lead.visitDate));
-      pushToDealer(lead, "SPAN_UPDATED");
+      l2rDealerEvent(lead, "SPAN_UPDATED");
       return say(`Thank you for confirming! We've updated your buying timeline to ${N}.`);
     }
     lead.pendingChange = option;
@@ -916,7 +919,7 @@ function botDispose(lead, spanCode, label, status, interest, next, extra={}){
   setLeadStatus(lead, status, spanCode);
   disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected (WhatsApp)", followup:"Spoke to customer (WhatsApp)", interest, span:spanCode, spanLabel:spanCode?null:label,
     eager: lead.eagerness, comment:`Customer chose '${label}' on WhatsApp`, next, ...extra});
-  if (status==="QUALIFIED") pushToDealer(lead, "QUALIFIED");
+  if (status==="QUALIFIED") l2rDealerEvent(lead, "QUALIFIED");
 }
 function l2r(lead, kind, body){
   const path = kind==="dispose" ? `/api/v1/leads/${lead.id}/dispositions` : kind==="visit" ? `/api/v1/leads/${lead.id}/visits` : `/api/v1/leads/${lead.id}/comments`;
@@ -1170,7 +1173,7 @@ function submitForm(){
     const next = {at: at(F.nextDate, F.nextTime), why: F.nextTouched ? "set by telecaller" : (F.nextWhy||"suggested")};
     disposeCall(l, by, {followup:"Spoke to customer", interest:"Interested", span:F.span, eager:l.eagerness, td:F.td==="YES", tdAt, comment:F.comment, next});
     if (tdAt) addFeed(l, {icon:"td", title:"Test drive scheduled", lines:[tdAt, `Dealer sales executive: ${dealer.exec}`]});
-    if (qualified) pushToDealer(l, "QUALIFIED");
+    if (qualified) l2rDealerEvent(l, "QUALIFIED");
   }
   resetForm(l); render();
 }
@@ -1181,7 +1184,7 @@ function closeLead(kind){
     setLeadStatus(l, "BOOKED"); l.botState = "Booked";
     disposeCall(l, by, {followup:"Spoke to customer", interest:"Booked", comment:"Customer confirmed the booking", next:null});
     addFeed(l, {icon:"dealer", tone:"conv", title:"Booking confirmed · conversion recorded", lines:[`${l.make} ${l.model} at ${DEALERS[l.dealerId].name}`, "Counts towards the OEM conversion target"]});
-    pushToDealer(l, "BOOKED");
+    l2rDealerEvent(l, "BOOKED");
   } else {
     const st = l.leadStatus==="QUALIFIED" ? "QUALIFIED_CLOSED" : "NOT_QUALIFIED_CLOSED";
     setLeadStatus(l, st); l.botState = "Closed";

@@ -55,11 +55,6 @@ class L2RClient(Protocol):
     def schedule_call(self, lead_id: str, body: dict, idempotency_key: str) -> None: ...
 
 
-class DealerPanelClient(Protocol):
-    """Dealers work in their own panel; qualified leads (and later changes) are pushed there."""
-    def push_lead(self, body: dict, idempotency_key: str) -> None: ...
-
-
 def _with_retry(fn, attempts: int = 4, base: float = 0.5):
     for i in range(attempts):
         try:
@@ -176,16 +171,3 @@ class HttpL2RClient:
                            headers={"Idempotency-Key": idempotency_key})
         r.raise_for_status()
 
-
-class HttpDealerPanelClient:
-    def __init__(self, base_url: str, api_key: str, timeout: float = 10.0):
-        self.http = httpx.Client(base_url=base_url, timeout=timeout, headers={"X-Api-Key": api_key})
-
-    def push_lead(self, body: dict, idempotency_key: str) -> None:
-        """POST for a newly qualified lead, PATCH for updates (visit, timeline, withdrawal, booking)."""
-        if body.get("event") == "QUALIFIED":
-            r = self.http.post("/api/v1/leads", json=body, headers={"Idempotency-Key": idempotency_key})
-        else:
-            r = self.http.patch(f"/api/v1/leads/{body['leadId']}", json=body,
-                                headers={"Idempotency-Key": idempotency_key})
-        r.raise_for_status()

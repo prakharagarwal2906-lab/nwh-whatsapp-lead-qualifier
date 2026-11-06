@@ -35,8 +35,6 @@ class Settings:
     gupshup_app_token: str = field(default_factory=lambda: os.getenv("GUPSHUP_APP_TOKEN", ""))
     l2r_base_url: str = field(default_factory=lambda: os.getenv("L2R_BASE_URL", "http://localhost:9000"))
     l2r_api_key: str = field(default_factory=lambda: os.getenv("L2R_API_KEY", ""))
-    dealer_panel_base_url: str = field(default_factory=lambda: os.getenv("DEALER_PANEL_BASE_URL", "http://localhost:9100"))
-    dealer_panel_api_key: str = field(default_factory=lambda: os.getenv("DEALER_PANEL_API_KEY", ""))
     internal_api_key: str = field(default_factory=lambda: os.getenv("INTERNAL_API_KEY", ""))
     log_file: str = field(default_factory=lambda: os.getenv("LOG_FILE", "logs/qualifier.log"))
     session_window_hours: int = 24

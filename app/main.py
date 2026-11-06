@@ -22,7 +22,7 @@ from logging.handlers import RotatingFileHandler
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from .clients import HttpDealerPanelClient, HttpGupshupClient, HttpL2RClient
+from .clients import HttpGupshupClient, HttpL2RClient
 from .config import Settings, get_settings
 from .db import Repo
 from .models import DealerConfig, Lead
@@ -83,7 +83,6 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
             HttpL2RClient(settings.l2r_base_url, settings.l2r_api_key),
             max_event_age_seconds=settings.max_event_age_seconds,
             session_window_hours=settings.session_window_hours,
-            dealer_panel=HttpDealerPanelClient(settings.dealer_panel_base_url, settings.dealer_panel_api_key),
         )
     setup_file_log(settings.log_file)
     app = FastAPI(title="WhatsApp After-Hours Lead Qualifier")
