@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import pg from "pg";
-import handler, { getPool, setPool } from "../functions/db.mjs";
+import handler, { cleanDatabaseUrl, getPool, setPool } from "../functions/db.mjs";
 
 const URL_ = process.env.TEST_DATABASE_URL;
 const skip = !URL_ && "TEST_DATABASE_URL not set";
@@ -73,4 +73,10 @@ test("reset empties everything", { skip }, async () => {
   const r = await call("GET", "/api/db");
   assert.equal(r.body.state, null);
   assert.ok(Object.values(r.body.counts).every(n => n === 0));
+});
+
+test("hosted database URL options that break node-postgres are removed", () => {
+  const u = cleanDatabaseUrl("postgresql://user:pw@ep-x-pooler.neon.tech/neondb?sslmode=require&channel_binding=require");
+  assert.equal(u, "postgresql://user:pw@ep-x-pooler.neon.tech/neondb");
+  assert.equal(cleanDatabaseUrl("not a url"), "not a url");
 });

@@ -65,11 +65,24 @@ export const TABLES = {
 };
 
 let pool = null;
-export function getPool(url = process.env.NETLIFY_DATABASE_URL || process.env.DATABASE_URL) {
+/* Hosted Postgres URLs (Netlify DB / Neon) carry query options such as sslmode=require and
+   channel_binding=require. node-postgres can fail on channel_binding, and sslmode in the URL
+   overrides the ssl option below, so both are removed and SSL is set explicitly. */
+export function cleanDatabaseUrl(url) {
+  try {
+    const u = new URL(url);
+    for (const k of ["sslmode", "channel_binding", "sslrootcert", "sslcert", "sslkey"]) u.searchParams.delete(k);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+export function getPool(url = process.env.NETLIFY_DATABASE_URL || process.env.DATABASE_URL || process.env.NETLIFY_DATABASE_URL_UNPOOLED) {
   if (pool) return pool;
   if (!url) return null;
   const local = /localhost|127\.0\.0\.1/.test(url);
-  pool = new pg.Pool({ connectionString: url, max: 3, ssl: local ? false : { rejectUnauthorized: false } });
+  pool = new pg.Pool({ connectionString: cleanDatabaseUrl(url), max: 3, connectionTimeoutMillis: 10000,
+                       ssl: local ? false : { rejectUnauthorized: false } });
   // A dropped idle connection (e.g. a serverless database scaling to zero) must not crash the function.
   pool.on("error", (err) => console.error("idle database connection error:", err.message));
   return pool;
