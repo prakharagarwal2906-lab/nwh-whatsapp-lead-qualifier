@@ -6,6 +6,15 @@ When a lead lands in L2R outside the dealer's working hours, a templated WhatsAp
 
 The full styled version, with all sections, is in [`docs/design.html`](docs/design.html). Open it in a browser; the diagrams there use Mermaid.
 
+## Prototype (docs/index.html)
+
+A clickable, four-step journey hosted on Netlify:
+
+1. **Customer website** — the customer enquires about a vehicle with a dealer. A demo control sets the enquiry time so you can try after-hours and open-hours cases.
+2. **Lead management (L2R)** — the lead lands, the working-hours check runs, and the Gupshup template call is shown with its six inputs: dealer ID, lead ID, template ID, customer mobile, WABA number, and variables (customer name, make, model, working hours, virtual number, sales executive, dealer name). The response `messageId` is saved against the lead.
+3. **Customer's WhatsApp** — the template offers 15 Days / 1 Month / 1–2 Months / More than 2 Months / Still Researching. The first three qualify the lead and ask for a visit date (next 7 open days) and then a time slot (working hours). More than 2 Months and Still Researching each get their own message and a follow-up task.
+4. **Tracking & engagement** — every tap is stored in `wa_interaction` with the inbound message ID, the `messageId` it replied to, and the flow, step and option. Engagement % is shown per template ID, with a funnel from sent to visit booked.
+
 ## Code
 
 A working reference implementation in Python (FastAPI + SQLite) lives in [`app/`](app), with tests in [`tests/`](tests).
@@ -49,7 +58,7 @@ cp .env.example .env   # fill in tokens, then export the variables
 
 **See every table and the log**
 
-*Prototype (Netlify):* open the **Database** tab in the Backend panel. It shows `leads_l2r`, `dealer_config`, `wa_message`, `wa_event`, `opt_out` and `audit_log` live, with a filter box, **Export table CSV** and **Export full DB JSON**. Everything is kept in the browser and survives a refresh; **Reset** clears it.
+*Prototype (Netlify):* open step 4, **Tracking & engagement**, and scroll to **Database & logs**. It shows `leads_l2r`, `dealer_config`, `wa_message`, `wa_interaction`, `wa_event`, `audit_log` and the live log, with a filter box, **Export table CSV** and **Export full DB JSON**. Everything is kept in the browser and survives a refresh; **Reset** clears it.
 
 *Python service:* every step writes a row to the `audit_log` table and a JSON line to `logs/qualifier.log` (rotated at 10 MB, 5 files; path set by `LOG_FILE`). Read them with:
 
@@ -74,14 +83,14 @@ Or open the database directly: `sqlite3 qualifier.db "SELECT * FROM audit_log OR
 
 **Shared Postgres for the prototype**
 
-The Netlify site includes a function (`netlify/functions/db.mjs`) that saves the prototype's tables to Postgres in a schema called `proto` (`leads_l2r`, `dealer_config`, `wa_message`, `wa_event`, `opt_out`, `audit_log`, plus a `snapshot` of the full page state). When a database is connected, everyone who opens the site sees the same data, and the header shows **Storage: Postgres (shared)**. Without one, it falls back to **Storage: this browser only**.
+The Netlify site includes a function (`netlify/functions/db.mjs`) that saves the prototype's tables to Postgres in a schema called `nwh` (`leads_l2r`, `dealer_config`, `wa_message`, `wa_interaction`, `wa_event`, `audit_log`, plus a `snapshot` of the full page state). When a database is connected, everyone who opens the site sees the same data, and the header shows **Storage: Postgres (shared)**. Without one, it falls back to **Storage: this browser only**.
 
 To connect one:
 1. Create a free Postgres database (for example on neon.tech or supabase.com) and copy its connection string (`postgresql://user:pass@host/db?sslmode=require`).
 2. In Netlify: **Site configuration → Environment variables → Add a variable**, key `DATABASE_URL`, value = that connection string. (If you use Netlify's own Neon database, it sets `NETLIFY_DATABASE_URL`, which the function also reads.)
 3. **Deploys → Trigger deploy**. The tables are created automatically on the first request.
 
-Query them from the Neon/Supabase SQL editor, for example `SELECT * FROM proto.audit_log ORDER BY id DESC;`, or via `GET /api/db/tables/wa_message` on your site.
+Query them from the Neon/Supabase SQL editor, for example `SELECT * FROM nwh.wa_interaction ORDER BY received_at DESC;`, or via `GET /api/db/tables/wa_message` on your site.
 
 To run the Python service on the same database, set `DATABASE_URL` for it too; its tables live in the default `public` schema.
 

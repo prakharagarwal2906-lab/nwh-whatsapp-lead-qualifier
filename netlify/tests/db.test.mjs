@@ -13,20 +13,20 @@ const call = (method, path, body) => handler(new Request("https://site.test" + p
 before(async () => {
   if (skip) return;
   const c = new pg.Client({ connectionString: URL_ }); await c.connect();
-  await c.query("DROP SCHEMA IF EXISTS proto CASCADE"); await c.end();
+  await c.query("DROP SCHEMA IF EXISTS nwh CASCADE"); await c.end();
   setPool(null); getPool(URL_);
 });
 after(async () => { if (!skip) await getPool().end(); });
 
 const sample = (status = "SENT") => ({
-  state: { leads: [{ id: "L1" }], note: "full client state" },
+  state: { schema: 2, leads: [{ id: "L1" }], note: "full client state" },
   tables: {
-    leads_l2r: [{ lead_id: "L1", customer_name: "Prakhar", mobile: "919876543210", consent: true, stage: "FIRST_CALL" }],
-    dealer_config: [{ dealer_id: "D1", enabled: true, dealer_name: "Vishnu Cars TN", qualify_max_days: 60 }],
-    wa_message: [{ id: 1, lead_id: "L1", status, gs_message_id: "gs-100" }],
-    wa_event: [{ event_id: "wamid.in1", type: "message", payload: JSON.stringify({ a: 1 }) }],
-    opt_out: [],
-    audit_log: [{ id: 1, ts: "2026-11-06T00:26:00Z", level: "INFO", source: "Qualifier", message: "LeadCreated L1", detail: null }],
+    leads_l2r: [{ lead_id: "L1", customer_name: "Prakhar", mobile: "919876543210", make: "Royal Enfield", model: "Classic 350", dealer_id: "D101", stage: "FIRST_CALL" }],
+    dealer_config: [{ dealer_id: "D101", dealer_name: "Vishnu Motors TN", waba_number: "918047104444", template_id: "tpl_nwh_timeline_v1" }],
+    wa_message: [{ message_id: "gs-a000", lead_id: "L1", dealer_id: "D101", template_id: "tpl_nwh_timeline_v1", flow: "NWH_QUALIFIER", step: "TIMELINE", status }],
+    wa_interaction: [{ inbound_id: "wamid.IN1", context_message_id: "gs-a000", lead_id: "L1", template_id: "tpl_nwh_timeline_v1", flow: "NWH_QUALIFIER", step: "TIMELINE", option_code: "1M", option_title: "1 Month" }],
+    wa_event: [{ event_id: "wamid.IN1", type: "message:quick_reply", payload: JSON.stringify({ a: 1 }) }],
+    audit_log: [{ id: 1, ts: "2026-11-06T00:26:00Z", level: "INFO", source: "L2R", message: "LeadCreated L1", detail: null }],
   },
 });
 
@@ -43,13 +43,14 @@ test("save then load round-trips state and fills tables", { skip }, async () => 
   const r = await call("GET", "/api/db");
   assert.equal(r.body.state.note, "full client state");
   assert.equal(r.body.counts.wa_message, 1);
+  assert.equal(r.body.counts.wa_interaction, 1);
   const ev = await call("GET", "/api/db/tables/wa_event");
   assert.deepEqual(ev.body.rows[0].payload, { a: 1 });
 });
 
 test("second save upserts rows and deletes removed ones", { skip }, async () => {
   const s = sample("REPLIED");
-  s.tables.audit_log.push({ id: 2, ts: "x", level: "INFO", source: "Sync", message: "L2R updated" });
+  s.tables.audit_log.push({ id: 2, ts: "x", level: "INFO", source: "Processor", message: "mapped" });
   s.tables.wa_event = [];
   const w = await call("POST", "/api/db", s);
   assert.equal(w.body.version, 2);

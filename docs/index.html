@@ -5,13 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>After-Hours Lead Qualifier · Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
+/* Layout: one screen at a time behind a 4-step journey bar (website → LMS → WhatsApp → tracking). */
 :root{
   --bg:#eef1f5; --surface:#fff; --ink:#1b2230; --muted:#5f6a7d; --line:#dbe0e8;
-  --accent:#c8102e; --accent-ink:#fff; --info:#1f5fae; --info-soft:#e7eff9;
+  --accent:#c8102e; --info:#1f5fae; --info-soft:#e7eff9;
   --ok:#147a4a; --ok-soft:#e3f3ea; --warn:#9a6200; --warn-soft:#fbf1dc; --bad:#b42318; --bad-soft:#fde8e6;
-  --chat-bg:#e9e4dc; --bubble-in:#fff; --bubble-out:#d8f5c6; --chat-head:#1f6f5c;
+  --site:#0f4c81; --site-soft:#eaf2fa;
+  --chat-bg:#efe7dd; --bubble-in:#fff; --bubble-out:#d9fdd3; --chat-head:#1f6f5c; --wa-btn:#0a7c66;
   --log-bg:#141a23; --log-ink:#d5dbe5; --log-muted:#7f8a9c;
   --f-body:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -22,883 +24,1053 @@ html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+code,.mono{font-family:var(--f-mono);font-size:.9em}
+[hidden]{display:none!important}
 
-.topbar{background:var(--surface);border-bottom:1px solid var(--line);padding:10px max(16px,env(safe-area-inset-left));display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.wrapx{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
+.topbar{background:var(--surface);border-bottom:1px solid var(--line);padding-block:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .brand{font-weight:800;letter-spacing:-.02em;font-size:18px}
 .brand span{color:var(--accent)}
 .topbar .sub{color:var(--muted)}
-.topbar .links{margin-left:auto;display:flex;gap:14px;align-items:center}
+.topbar .links{margin-left:auto;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.topbar a{color:var(--info);text-decoration:none;font-weight:600}
 .store{font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--line)}
 .store.pg{background:var(--ok-soft);color:var(--ok);border-color:transparent}
-.topbar a{color:var(--info);text-decoration:none;font-weight:600}
 
-.app{display:grid;grid-template-columns:minmax(300px,1fr) 360px minmax(320px,1.1fr);gap:14px;padding:14px max(16px,env(safe-area-inset-left))}
-@media (max-width:1180px){.app{grid-template-columns:1fr 360px}.logcol{grid-column:1 / -1}}
-@media (max-width:760px){.app{grid-template-columns:minmax(0,1fr)}}
-.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.journey{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.steps{display:flex;overflow-x:auto;max-width:1240px;margin:0 auto}
+.steps a{flex:1;min-width:175px;display:flex;gap:10px;align-items:center;padding:12px 14px;text-decoration:none;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
+.steps a .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--bg);font-weight:800;font-size:12px;border:1px solid var(--line);flex:none}
+.steps a b{display:block;color:var(--ink);font-size:13.5px}
+.steps a small{font-size:11.5px}
+.steps a[aria-current="step"]{border-bottom-color:var(--accent)}
+.steps a[aria-current="step"] .n{background:var(--accent);color:#fff;border-color:var(--accent)}
+.steps a.done .n{background:var(--ok);color:#fff;border-color:var(--ok)}
+
+main.screen{max-width:1240px;margin:0 auto;padding-block:18px 40px}
+.screen-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.screen-head h1{font-size:22px;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.screen-head p{margin:2px 0 0;color:var(--muted);max-width:75ch}
+.screen-head .next{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:0;border-radius:6px;padding:9px 16px;font-weight:700;display:inline-flex;gap:6px;align-items:center;text-decoration:none}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.site{background:var(--site);color:#fff}
+.btn.ghost{background:var(--surface);border:1px solid var(--line);color:var(--ink)}
+.btn.small{padding:5px 10px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;min-width:0}
-.panel>h2{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0;padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
-.panel>h2 .right{margin-left:auto;text-transform:none;letter-spacing:0;font-size:12px}
-.pad{padding:12px 14px}
+.panel>h2{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0;padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.panel>h2 .right{margin-left:auto;text-transform:none;letter-spacing:0}
+.pad{padding:14px}
+.hint{font-size:12px;color:var(--muted)}
+.label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:6px}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap}
+.t-ok{background:var(--ok-soft);color:var(--ok)}.t-warn{background:var(--warn-soft);color:var(--warn)}
+.t-info{background:var(--info-soft);color:var(--info)}.t-bad{background:var(--bad-soft);color:var(--bad)}.t-mute{background:var(--bg);color:var(--muted)}
+.empty{padding:28px 14px;text-align:center;color:var(--muted)}
+.empty a{color:var(--info)}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px;font-size:12px}
+.chip[aria-pressed="true"]{border-color:var(--info);background:var(--info-soft);color:var(--info);font-weight:700}
 
+/* website */
+.site{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.site-nav{background:var(--site);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.site-nav b{font-size:17px;letter-spacing:-.01em}
+.site-nav span{opacity:.8;font-size:13px}
+.site-body{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(300px,1fr)}
+@media (max-width:860px){.site-body{grid-template-columns:minmax(0,1fr)}}
+.vehicle{padding:22px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:14px;min-width:0}
+.vehicle .crumbs{font-size:12px;color:var(--muted)}
+.vehicle h2{margin:0;font-size:26px;letter-spacing:-.02em}
+.vehicle .price{font-size:20px;font-weight:800}
+.vehicle .price small{font-size:12px;color:var(--muted);font-weight:500}
+.hero{aspect-ratio:16/8;border-radius:10px;background:var(--site-soft);display:grid;place-items:center;max-width:100%;overflow:hidden}
+.hero svg{width:78%;height:auto}
+.specs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:520px){.specs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.specs div{background:var(--bg);border-radius:8px;padding:8px 10px}
+.specs b{display:block;font-size:14px}
+.specs span{font-size:11px;color:var(--muted)}
+.enquiry{padding:22px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,var(--site-soft),var(--surface) 40%);min-width:0}
+.enquiry h3{margin:0;font-size:18px}
 .form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 @media (max-width:480px){.form{grid-template-columns:minmax(0,1fr)}}
-.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:600}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:600;min-width:0}
 .form .full{grid-column:1 / -1}
-.form input,.form select{width:100%;min-width:0;border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:var(--surface);font-size:14px;font-weight:400}
-.check input{width:auto!important;flex:none}
-.check{flex-direction:row!important;align-items:center;gap:8px!important;color:var(--ink)!important;font-weight:500!important}
-.presets{display:flex;gap:6px;flex-wrap:wrap}
-.chip{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:3px 10px;font-size:12px}
-.chip:hover{border-color:var(--info);color:var(--info)}
-.btn{border:0;border-radius:6px;padding:8px 14px;font-weight:700}
-.btn.primary{background:var(--accent);color:var(--accent-ink)}
-.btn.ghost{background:var(--bg);border:1px solid var(--line)}
-.btn.small{padding:5px 10px;font-size:12px}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.hint{font-size:12px;color:var(--muted)}
-details.cfg summary{cursor:pointer;font-weight:600;padding:10px 14px;list-style:none;display:flex;gap:8px;align-items:center}
-details.cfg summary::before{content:"▸";color:var(--muted)}
-details.cfg[open] summary::before{content:"▾"}
-details.cfg .pad{border-top:1px solid var(--line)}
+.form input,.form select{border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--surface);font-size:14px;font-weight:400;width:100%;min-width:0}
+.check{flex-direction:row!important;align-items:flex-start;gap:8px!important;color:var(--ink)!important;font-weight:500!important}
+.check input{width:auto!important;flex:none;margin-top:3px}
+.thanks{border:1px solid var(--ok);background:var(--ok-soft);color:var(--ok);border-radius:8px;padding:12px 14px;font-weight:600}
+.democtl{margin-top:14px;border:1px dashed var(--line);border-radius:10px;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--surface)}
+.democtl b{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 
-.leads{display:flex;flex-direction:column}
-.lead{border-bottom:1px solid var(--line);padding:12px 14px;cursor:pointer;display:grid;gap:6px}
-.lead:last-child{border-bottom:0}
-.lead.sel{background:var(--info-soft)}
-.lead .l1{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.lead .name{font-weight:700}
-.lead .mob{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
-.empty{padding:28px 14px;text-align:center;color:var(--muted)}
-.tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap}
-.t-ok{background:var(--ok-soft);color:var(--ok)}
-.t-warn{background:var(--warn-soft);color:var(--warn)}
-.t-info{background:var(--info-soft);color:var(--info)}
-.t-bad{background:var(--bad-soft);color:var(--bad)}
-.t-mute{background:var(--bg);color:var(--muted)}
-.stepper{display:flex;gap:0;align-items:center;margin-top:2px}
+/* LMS */
+.lms{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(0,1.6fr);gap:14px;align-items:start}
+@media (max-width:900px){.lms{grid-template-columns:minmax(0,1fr)}}
+.leadrow{border-bottom:1px solid var(--line);padding:11px 14px;cursor:pointer;display:grid;gap:4px}
+.leadrow:last-child{border-bottom:0}
+.leadrow.sel{background:var(--info-soft)}
+.leadrow .l1{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.leadrow .name{font-weight:700}
+.leadlist{max-height:640px;overflow-y:auto}
+.mobtxt{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.stepper{display:flex;align-items:center;flex-wrap:wrap;gap:2px}
 .step{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
 .step i{width:9px;height:9px;border-radius:50%;background:var(--line);display:inline-block}
-.step.on{color:var(--ok);font-weight:700}
-.step.on i{background:var(--ok)}
-.step+.step::before{content:"";width:16px;height:1px;background:var(--line);margin:0 5px}
-.feed{margin:4px 0 0;padding:0;list-style:none;display:grid;gap:3px}
-.feed li{font-size:12px;color:var(--muted);display:flex;gap:6px}
-.feed time{font-family:var(--f-mono);font-size:11px;white-space:nowrap}
+.step.on{color:var(--ok);font-weight:700}.step.on i{background:var(--ok)}
+.step+.step::before{content:"";width:14px;height:1px;background:var(--line);margin:0 4px}
+.leadcard{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:620px){.leadcard{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kv span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.kv b{font-weight:600;word-break:break-word}
+.pipeline{list-style:none;margin:0;padding:0}
+.pipeline li{display:grid;grid-template-columns:26px minmax(0,1fr);gap:10px;padding:8px 0;position:relative}
+.pipeline li::before{content:"";position:absolute;left:12px;top:30px;bottom:-8px;width:2px;background:var(--line)}
+.pipeline li:last-child::before{display:none}
+.dot{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;background:var(--bg);color:var(--muted);border:1px solid var(--line);z-index:1}
+.dot.ok{background:var(--ok);color:#fff;border-color:var(--ok)}
+.dot.warn{background:var(--warn);color:#fff;border-color:var(--warn)}
+.dot.run{background:var(--info);color:#fff;border-color:var(--info)}
+.pipeline li>div>b{display:block}
+.pipeline .d{font-size:12.5px;color:var(--muted)}
+.apibox{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:6px}
+.apibox .bar,.hookcard .bar{display:flex;gap:8px;align-items:center;padding:7px 10px;background:var(--bg);font-size:12px;flex-wrap:wrap}
+.apibox .bar .method{font-family:var(--f-mono);font-weight:700;color:var(--info)}
+.fields{width:100%;border-collapse:collapse;font-size:12.5px}
+.fields td{padding:6px 10px;border-top:1px solid var(--line);vertical-align:top}
+.fields td:first-child{color:var(--muted);width:40%}
+.fields td:last-child{font-family:var(--f-mono);font-size:12px;word-break:break-word}
+.num1{display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--info-soft);color:var(--info);font-size:10.5px;font-weight:800;text-align:center;line-height:18px;margin-right:6px}
+pre.json{margin:0;padding:10px;background:var(--log-bg);color:#c9d2df;font-family:var(--f-mono);font-size:11.5px;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto}
+details summary{padding:6px 10px;cursor:pointer;font-size:12px;color:var(--muted)}
+.callout{border-left:3px solid var(--info);background:var(--info-soft);padding:10px 12px;border-radius:0 8px 8px 0;font-size:13px}
+.feed{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.feed li{display:flex;gap:10px;font-size:13px}
+.feed time{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);white-space:nowrap;padding-top:1px}
 
-/* phone */
-.phone{border-radius:28px;background:#111;padding:10px;box-shadow:0 10px 30px rgba(20,30,50,.18)}
-.screen{border-radius:20px;overflow:hidden;display:flex;flex-direction:column;height:640px;background:var(--chat-bg)}
+/* WhatsApp */
+.wa{display:grid;grid-template-columns:380px minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:900px){.wa{grid-template-columns:minmax(0,1fr)}}
+.phone{border-radius:30px;background:#111;padding:10px;box-shadow:0 12px 34px rgba(20,30,50,.2);max-width:380px;width:100%;margin:0 auto}
+.screenp{border-radius:22px;overflow:hidden;display:flex;flex-direction:column;height:700px;background:var(--chat-bg);position:relative}
 .chathead{background:var(--chat-head);color:#fff;padding:12px 14px;display:flex;align-items:center;gap:10px}
-.avatar{width:34px;height:34px;border-radius:50%;background:#fff;color:var(--chat-head);display:grid;place-items:center;font-weight:800}
-.chathead .who{font-weight:700;line-height:1.2}
-.chathead .who small{display:block;font-weight:400;opacity:.8;font-size:11px}
-.msgs{flex:1;overflow-y:auto;padding:12px 10px;display:flex;flex-direction:column;gap:8px}
-.bubble{max-width:86%;padding:8px 10px 6px;border-radius:8px;font-size:13.5px;box-shadow:0 1px 1px rgba(0,0,0,.08);white-space:pre-wrap;word-wrap:break-word}
+.avatar{width:36px;height:36px;border-radius:50%;background:#fff;color:var(--chat-head);display:grid;place-items:center;font-weight:800;flex:none}
+.chathead .who{font-weight:700;line-height:1.2;min-width:0}
+.chathead .who small{display:block;font-weight:400;opacity:.85;font-size:11px}
+.verified{display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;background:#25d366;color:#fff;font-size:9px;margin-left:4px;vertical-align:1px}
+.msgs{flex:1;overflow-y:auto;padding:12px 10px;display:flex;flex-direction:column;gap:7px}
+.bubble{max-width:85%;padding:7px 9px 5px;border-radius:8px;font-size:13.5px;box-shadow:0 1px 1px rgba(0,0,0,.08);white-space:pre-wrap;word-wrap:break-word}
 .bubble.in{background:var(--bubble-in);align-self:flex-start;border-top-left-radius:2px}
 .bubble.out{background:var(--bubble-out);align-self:flex-end;border-top-right-radius:2px}
-.bubble .meta{display:block;text-align:right;font-size:10.5px;color:#667;margin-top:3px}
-.bubble .quote{display:block;border-left:3px solid var(--chat-head);background:rgba(0,0,0,.05);padding:4px 7px;border-radius:4px;margin-bottom:5px;font-size:12px;color:#445}
-.qr{align-self:flex-start;width:86%;display:grid;gap:4px;margin-top:-4px}
-.qr button{background:var(--bubble-in);border:0;border-radius:8px;padding:9px;color:#1a7f64;font-weight:600;box-shadow:0 1px 1px rgba(0,0,0,.08)}
-.qr button:hover:not(:disabled){background:#f3f7f5}
-.qr button:disabled{color:#9aa;cursor:default}
-.daychip{align-self:center;background:#fff;opacity:.85;font-size:11px;padding:3px 10px;border-radius:6px;color:#556}
+.bubble .meta{display:block;text-align:right;font-size:10.5px;color:#667;margin-top:2px}
+.bubble .quote{display:block;border-left:3px solid var(--chat-head);background:rgba(0,0,0,.05);padding:4px 7px;border-radius:4px;margin-bottom:4px;font-size:12px;color:#445;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bubble .ttl{display:block;font-weight:700;margin-bottom:2px}
+.bubble .foot{display:block;font-size:11.5px;color:#778;margin-top:3px}
+.qr{align-self:flex-start;width:85%;display:grid;gap:3px;margin-top:-4px}
+.qr button{background:var(--bubble-in);border:0;border-radius:8px;padding:9px;color:var(--wa-btn);font-weight:600;box-shadow:0 1px 1px rgba(0,0,0,.08)}
+.qr button:hover:not(:disabled){background:#f4f8f6}
+.qr button:disabled{color:#9aa6a3;cursor:default}
+.qr button.picked{color:var(--wa-btn);background:#e8f6f1}
+.daychip{align-self:center;background:#fff;font-size:11px;padding:3px 10px;border-radius:6px;color:#556;box-shadow:0 1px 1px rgba(0,0,0,.06)}
 .compose{display:flex;gap:6px;padding:8px;background:#f0f0f0}
 .compose input{flex:1;border:0;border-radius:18px;padding:9px 14px;background:#fff;min-width:0}
-.compose button{border:0;border-radius:50%;width:38px;height:38px;background:var(--chat-head);color:#fff;font-weight:800}
+.compose button{border:0;border-radius:50%;width:38px;height:38px;background:var(--chat-head);color:#fff;font-weight:800;flex:none}
 .phone-empty{flex:1;display:grid;place-items:center;text-align:center;color:#556;padding:24px}
+.sheet{position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:flex-end}
+.sheet .card{background:#fff;width:100%;border-radius:16px 16px 0 0;max-height:82%;display:flex;flex-direction:column}
+.sheet .card h4{margin:0;padding:14px 16px 10px;text-align:center;font-size:15px;border-bottom:1px solid #eee;position:relative}
+.sheet .card h4 button{position:absolute;left:12px;top:9px;border:0;background:none;font-size:22px;line-height:1;color:#556}
+.sheet .opts{overflow-y:auto;padding:4px 0}
+.sheet label{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid #f2f2f2;cursor:pointer}
+.sheet label span{flex:1}
+.sheet label small{display:block;color:#778;font-size:12px}
+.sheet input[type=radio]{accent-color:var(--wa-btn);width:18px;height:18px}
+.sheet .send{margin:10px 16px 14px;border:0;border-radius:22px;padding:11px;background:var(--wa-btn);color:#fff;font-weight:700}
+.sheet .send:disabled{background:#b8c7c3}
+.listbtn{display:block;width:100%;border:0;border-top:1px solid #eee;background:none;padding:8px 0 3px;margin-top:6px;color:var(--wa-btn);font-weight:600}
+.listbtn:disabled{color:#9aa6a3}
+.side{display:flex;flex-direction:column;gap:14px;min-width:0}
+.hookcard{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.hookcard .bar b{font-family:var(--f-mono);font-size:12px}
+.flowmap{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px}
+.flowmap .node{border:1px solid var(--line);border-radius:6px;padding:5px 9px;background:var(--surface)}
+.flowmap .node.on{border-color:var(--ok);background:var(--ok-soft);color:var(--ok);font-weight:700}
+.flowmap .node.cur{border-color:var(--info);background:var(--info-soft);color:var(--info);font-weight:700}
+.flowmap .arr{color:var(--muted)}
 
-/* log */
-.logcol .panel{display:flex;flex-direction:column}
-.tools{display:flex;gap:6px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line)}
-.log{background:var(--log-bg);color:var(--log-ink);font-family:var(--f-mono);font-size:12px;height:560px;overflow-y:auto;padding:10px 0;border-radius:0 0 10px 10px}
-.entry{padding:6px 14px;border-left:3px solid transparent}
+/* tracking */
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:var(--line);border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+@media (max-width:820px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:460px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpis div{background:var(--surface);padding:12px 14px}
+.kpis b{display:block;font-size:24px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.kpis span{font-size:12px;color:var(--muted)}
+.kpis em{font-style:normal;font-size:12px;color:var(--ok);font-weight:700;margin-left:4px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+@media (max-width:900px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.funnel{display:grid;gap:8px}
+.frow{display:grid;grid-template-columns:160px minmax(0,1fr) 84px;gap:10px;align-items:center;font-size:13px}
+@media (max-width:520px){.frow{grid-template-columns:110px minmax(0,1fr) 72px}}
+.fbar{height:22px;background:var(--bg);border-radius:4px;overflow:hidden}
+.fbar i{display:block;height:100%;background:var(--info);border-radius:4px}
+.frow .v{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+.frow .v small{color:var(--muted);font-weight:500}
+.opts-bar{display:flex;height:20px;border-radius:4px;overflow:hidden;background:var(--bg);min-width:150px}
+.opts-bar i{display:block;height:100%}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.tablewrap{overflow-x:auto}
+table.data{border-collapse:collapse;width:100%;font-size:12.5px}
+table.data th,table.data td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;white-space:nowrap}
+table.data th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--bg);position:sticky;top:0}
+table.data td.mono{font-family:var(--f-mono);font-size:11.5px}
+table.data .num{text-align:right;font-variant-numeric:tabular-nums}
+.scroll{max-height:380px;overflow:auto}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.dbtable{max-height:420px;overflow:auto}
+.dbtable table{border-collapse:collapse;font-size:11.5px;font-family:var(--f-mono);width:max-content;min-width:100%}
+.dbtable th,.dbtable td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top;max-width:320px;white-space:pre-wrap;word-break:break-word}
+.dbtable th{position:sticky;top:0;background:var(--bg);font-family:var(--f-body);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.dbtable td.null{color:#b9c0cc}
+.log{background:var(--log-bg);color:var(--log-ink);font-family:var(--f-mono);font-size:12px;max-height:420px;overflow-y:auto;padding:8px 0}
+.entry{padding:5px 14px;border-left:3px solid transparent}
 .entry .h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .entry time{color:var(--log-muted)}
 .entry .src{font-weight:700}
-.entry pre{margin:4px 0 0;white-space:pre-wrap;word-break:break-all;color:#aeb8c7;font-size:11.5px}
+.entry pre{margin:3px 0 0;white-space:pre-wrap;word-break:break-all;color:#aeb8c7;font-size:11.5px}
 .entry.ok{border-left-color:#4cc98a}.entry.ok .src{color:#4cc98a}
 .entry.warn{border-left-color:#e0a640}.entry.warn .src{color:#e0a640}
 .entry.bad{border-left-color:#ff6b6b}.entry.bad .src{color:#ff6b6b}
-.entry.info .src{color:#7fb0f0}
-.entry.step .src{color:#c3a6ff}
-.toggle{display:flex;align-items:center;gap:6px;font-size:12px}
-.tabs{display:flex;gap:4px;text-transform:none;letter-spacing:0}
-.tab{border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted)}
-.tab[aria-selected="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
-.dbview{display:flex;flex-direction:column;height:614px;min-height:0}
-.dbbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
-.tchip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px;font-size:12px;font-family:var(--f-mono)}
-.tchip b{font-family:var(--f-body);color:var(--muted);margin-left:4px}
-.tchip[aria-pressed="true"]{border-color:var(--info);background:var(--info-soft);color:var(--info)}
-.dbbar input{border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:12px;min-width:0;flex:1 1 140px}
-.dbtable{flex:1;overflow:auto;min-height:0}
-.dbtable table{border-collapse:collapse;font-size:11.5px;font-family:var(--f-mono);width:max-content;min-width:100%}
-.dbtable th,.dbtable td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top;max-width:340px;white-space:pre-wrap;word-break:break-word}
-.dbtable th{position:sticky;top:0;background:var(--bg);font-family:var(--f-body);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);z-index:1}
-.dbtable td.null{color:var(--line)}
-.dbtable .lv-bad{color:var(--bad);font-weight:700}.dbtable .lv-warn{color:var(--warn);font-weight:700}.dbtable .lv-ok{color:var(--ok);font-weight:700}
-.dbfoot{padding:8px 14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line)}
-.stats div{background:var(--surface);padding:8px 10px;text-align:center}
-.stats b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
-.stats span{font-size:11px;color:var(--muted)}
+.entry.info .src{color:#7fb0f0}.entry.step .src{color:#c3a6ff}
+.toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
+.toolbar input{border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:12px;min-width:0;flex:1 1 160px}
 </style>
 </head>
 <body>
 
-<header class="topbar">
+<header class="topbar wrapx">
   <div class="brand">L2R <span>×</span> WhatsApp</div>
-  <div class="sub">After-hours lead qualifier, working prototype</div>
+  <div class="sub">After-hours lead qualifier · working prototype</div>
   <nav class="links">
-    <span class="store" id="storeBadge" title="Where the prototype's tables are stored">Storage: checking…</span>
+    <span class="store" id="storeBadge" title="Where the prototype's data is stored">Storage: checking…</span>
     <a href="design.html">System design</a>
     <a href="https://github.com/prakharagarwal2906-lab/nwh-whatsapp-lead-qualifier" target="_blank" rel="noopener">Code</a>
   </nav>
 </header>
 
-<div class="app">
-  <!-- ============ L2R console ============ -->
-  <div class="col">
-    <section class="panel">
-      <h2>1 · New lead in L2R</h2>
-      <form class="pad form" id="leadForm" autocomplete="off">
-        <label>Customer name<input id="fName" value="Prakhar" required></label>
-        <label>Mobile<input id="fMobile" value="919876543210" required pattern="\d{11,13}"></label>
-        <label class="full">Model
-          <select id="fModel">
-            <option>Maruti Suzuki Brezza</option>
-            <option>Tata Harrier EV Adventure 2WD 65.0 kWh</option>
-            <option>Hyundai Creta SX(O)</option>
-            <option>Mahindra XUV 3XO AX7</option>
-          </select>
-        </label>
-        <label class="full">Lead created at (dealer time, IST)
-          <input id="fTime" type="datetime-local" required>
-        </label>
-        <div class="full presets">
-          <button type="button" class="chip" data-preset="fri-0026">Fri 12:26 AM</button>
-          <button type="button" class="chip" data-preset="thu-2200">Thu 10:00 PM</button>
-          <button type="button" class="chip" data-preset="sat-2100">Sat 9:00 PM (Sun off)</button>
-          <button type="button" class="chip" data-preset="fri-1720">Fri 5:20 PM (near close)</button>
-          <button type="button" class="chip" data-preset="fri-1100">Fri 11:00 AM (open)</button>
-        </div>
-        <label class="full check"><input type="checkbox" id="fConsent" checked> Customer consented to WhatsApp updates</label>
-        <div class="full row">
-          <button class="btn primary" type="submit">Create lead</button>
-          <span class="hint" id="formHint"></span>
-        </div>
-      </form>
-      <details class="cfg">
-        <summary>Dealer settings · <span id="cfgSummary"></span></summary>
-        <div class="pad form">
-          <label>Dealer name<input id="cDealer" value="Vishnu Cars TN"></label>
-          <label>Representative<input id="cRep" value="Sathya"></label>
-          <label>Opens<input id="cOpen" type="time" value="09:30"></label>
-          <label>Closes<input id="cClose" type="time" value="17:30"></label>
-          <label>Weekly off
-            <select id="cOff"><option value="0" selected>Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="-1">None</option></select>
-          </label>
-          <label>Pre-close buffer (min)<input id="cBuffer" type="number" min="0" max="120" value="15"></label>
-          <label>Qualify if timeline ≤ (days)
-            <select id="cMax"><option value="30">30 (1 month)</option><option value="60" selected>60 (2 months)</option><option value="90">90 (3 months)</option></select>
-          </label>
-          <label>Holdout %<input id="cHoldout" type="number" min="0" max="100" value="0"></label>
-          <label class="full check"><input type="checkbox" id="cEnabled" checked> Bot enabled for this dealer</label>
-        </div>
-      </details>
-    </section>
-
-    <section class="panel">
-      <h2>2 · Leads <span class="right"><button class="btn ghost small" id="clearAll" type="button">Reset</button></span></h2>
-      <div class="leads" id="leads"><div class="empty">No leads yet. Create one above. Pick an after-hours time to see the bot fire.</div></div>
-      <div class="stats" id="stats"></div>
-    </section>
+<nav class="journey wrapx" aria-label="Journey">
+  <div class="steps">
+    <a href="#website" data-step="website"><span class="n">1</span><span><b>Customer website</b><small>Customer submits an enquiry</small></span></a>
+    <a href="#lms" data-step="lms"><span class="n">2</span><span><b>Lead management (L2R)</b><small>Lead lands, Gupshup API fires</small></span></a>
+    <a href="#whatsapp" data-step="whatsapp"><span class="n">3</span><span><b>Customer's WhatsApp</b><small>Customer replies, books a visit</small></span></a>
+    <a href="#tracking" data-step="tracking"><span class="n">4</span><span><b>Tracking &amp; engagement</b><small>Every click, per template</small></span></a>
   </div>
+</nav>
 
-  <!-- ============ phone ============ -->
-  <div class="col">
+<!-- ================= 1. WEBSITE ================= -->
+<main class="screen wrapx" id="s-website" hidden>
+  <div class="screen-head">
+    <div><h1>1 · The customer fills an enquiry on the website</h1>
+      <p>This is what the customer sees. After hours nobody at the dealership can call back, so the lead is handed to WhatsApp automatically.</p></div>
+  </div>
+  <div class="site">
+    <div class="site-nav"><b>VehicleWale</b><span>New vehicles</span><span>Compare</span><span>Dealers near you</span></div>
+    <div class="site-body">
+      <section class="vehicle">
+        <div class="crumbs" id="vCrumbs"></div>
+        <h2 id="vTitle"></h2>
+        <div class="price" id="vPrice"></div>
+        <div class="hero" aria-hidden="true"><svg viewBox="0 0 400 200" fill="none"><g id="vArt"></g></svg></div>
+        <div class="specs" id="vSpecs"></div>
+      </section>
+      <section class="enquiry">
+        <h3>Get the best offer from a dealer</h3>
+        <form class="form" id="leadForm" autocomplete="off">
+          <label>Your name<input id="fName" value="Prakhar" required></label>
+          <label>Mobile number<input id="fMobile" value="919876543210" required pattern="\d{11,13}" inputmode="numeric"></label>
+          <label>Make<select id="fMake"></select></label>
+          <label>Model<select id="fModel"></select></label>
+          <label>City<select id="fCity"><option>Chennai</option><option>Pune</option></select></label>
+          <label>Dealer<select id="fDealer"></select></label>
+          <label class="full check"><input type="checkbox" id="fConsent" checked> I agree to be contacted by the dealer on WhatsApp and phone.</label>
+          <div class="full"><button class="btn site" type="submit" id="submitBtn">Get offer</button></div>
+        </form>
+        <div class="thanks" id="thanks" hidden></div>
+      </section>
+    </div>
+  </div>
+  <div class="democtl">
+    <b>Demo control</b>
+    <span class="hint">Enquiry time (dealer's local time):</span>
+    <span id="timeChips"></span>
+    <span class="hint" id="timeVerdict"></span>
+  </div>
+</main>
+
+<!-- ================= 2. LMS ================= -->
+<main class="screen wrapx" id="s-lms" hidden>
+  <div class="screen-head">
+    <div><h1>2 · The lead lands in L2R and the WhatsApp event fires</h1>
+      <p>L2R emits <code>LeadCreated</code>. The qualifier checks the dealer's working hours and, if the dealer is closed, calls Gupshup's template API.</p></div>
+    <div class="next"><a class="btn primary" href="#whatsapp">Open the customer's WhatsApp →</a></div>
+  </div>
+  <div class="lms">
+    <section class="panel">
+      <h2>Leads <span class="right"><button class="btn ghost small" id="resetAll" type="button">Reset demo</button></span></h2>
+      <div class="leadlist" id="leadList"></div>
+    </section>
+    <section class="panel" id="leadDetail"></section>
+  </div>
+</main>
+
+<!-- ================= 3. WHATSAPP ================= -->
+<main class="screen wrapx" id="s-whatsapp" hidden>
+  <div class="screen-head">
+    <div><h1>3 · The customer replies on WhatsApp</h1>
+      <p>Tap the options as the customer. Every tap reaches our webhook (Customer → Meta → Gupshup → webhook) with the IDs that tell us which lead, template, flow and step it belongs to.</p></div>
+    <div class="next"><a class="btn primary" href="#tracking">See tracking →</a></div>
+  </div>
+  <div class="wa">
     <div class="phone">
-      <div class="screen">
+      <div class="screenp">
         <div class="chathead">
-          <div class="avatar" id="chatAvatar">V</div>
-          <div class="who"><span id="chatTitle">Vishnu Cars TN</span><small id="chatSub">Customer's phone</small></div>
+          <div class="avatar" id="waAvatar">B</div>
+          <div class="who"><span id="waName">BikeWale</span><span class="verified">✓</span><small id="waSub">Business account</small></div>
         </div>
-        <div class="msgs" id="msgs"><div class="phone-empty">The customer's WhatsApp appears here when the bot sends a template to the selected lead.</div></div>
+        <div class="msgs" id="msgs"></div>
         <form class="compose" id="compose">
-          <input id="composeInput" placeholder="Type a reply (e.g. next week, STOP)" aria-label="Customer reply">
+          <input id="composeInput" placeholder="Message" aria-label="Customer message">
           <button type="submit" aria-label="Send">➤</button>
         </form>
+        <div class="sheet" id="sheet" hidden></div>
       </div>
     </div>
-    <p class="hint" style="margin:0">Tap a button as the customer. Typed replies go through the keyword classifier.</p>
+    <div class="side">
+      <section class="panel">
+        <h2>Where this customer is in the flow</h2>
+        <div class="pad" id="flowMap"></div>
+      </section>
+      <section class="panel">
+        <h2>What our webhook received for the last tap</h2>
+        <div class="pad" id="lastHook"></div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<!-- ================= 4. TRACKING ================= -->
+<main class="screen wrapx" id="s-tracking" hidden>
+  <div class="screen-head">
+    <div><h1>4 · Tracking every click and engagement per template</h1>
+      <p>One template ID goes to many customers. Each send gets its own <b>message ID</b>, so every reply is traced back to the lead, template, flow and step.</p></div>
+    <div class="next"><button class="btn ghost" id="simBtn" type="button">Simulate 25 customers</button></div>
   </div>
 
-  <!-- ============ system log ============ -->
-  <div class="col logcol">
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid2" style="margin-top:14px">
     <section class="panel">
-      <h2>3 · Backend <span class="right tabs" role="tablist">
-        <button class="tab" role="tab" id="tabLog" aria-selected="true" type="button">Live log</button>
-        <button class="tab" role="tab" id="tabDb" aria-selected="false" type="button">Database</button>
-      </span></h2>
-      <div class="tools">
-        <button class="btn ghost small" id="tReplay" type="button" title="Gupshup re-delivers the last inbound event">Replay last webhook</button>
-        <button class="btn ghost small" id="tForged" type="button" title="Call webhook with a wrong token">Forged token</button>
-        <button class="btn ghost small" id="tSpoof" type="button" title="Valid token, but sender mobile differs from the lead">Spoofed sender</button>
-        <button class="btn ghost small" id="tExpire" type="button" title="Jump 24 hours and run the maintenance job">Fast-forward 24h</button>
-        <button class="btn ghost small" id="tHuman" type="button" title="Sales exec moves the selected lead to Visits">Exec moves lead to Visits</button>
-        <label class="toggle"><input type="checkbox" id="tDown"> L2R API down</label>
-      </div>
-      <div id="logview">
-        <div class="log" id="log" aria-live="polite"></div>
-        <div class="dbfoot"><button class="btn ghost small" id="clearLog" type="button">Clear screen</button><span>Every line is also kept in the <code>audit_log</code> table (Database tab).</span></div>
-      </div>
-      <div id="dbview" class="dbview" hidden>
-        <div class="dbbar" id="dbChips"></div>
-        <div class="dbbar">
-          <input id="dbFilter" placeholder="Filter rows (lead id, mobile, status, text…)" aria-label="Filter rows">
-          <button class="btn ghost small" id="exportCsv" type="button">Export table CSV</button>
-          <button class="btn ghost small" id="exportJson" type="button">Export full DB JSON</button>
-        </div>
-        <div class="dbtable" id="dbTable"></div>
-        <div class="dbfoot" id="dbFoot"></div>
+      <h2>Flow funnel · NWH_QUALIFIER</h2>
+      <div class="pad"><div class="funnel" id="funnel"></div></div>
+    </section>
+    <section class="panel">
+      <h2>When do we get the message ID?</h2>
+      <div class="pad" style="display:grid;gap:10px;font-size:13.5px">
+        <div><span class="tag t-info">1 · On send</span> Gupshup's send API returns <code>messageId</code> straight away (HTTP 202). Unlike the template ID it is unique to this customer and this send. We save <code>messageId → lead, dealer, template, flow, step</code> right then.</div>
+        <div><span class="tag t-info">2 · First status callback</span> The <code>enqueued</code> event brings WhatsApp's own ID (<code>wamid…</code>). We save it on the same row.</div>
+        <div><span class="tag t-info">3 · On every tap</span> The reply carries <code>context.gsId</code> (our messageId) and <code>context.id</code> (wamid) of the message it answers, plus our <code>postbackText</code>. One lookup gives lead, template, flow and step.</div>
+        <div class="hint">Engagement % per template = replies ÷ delivered, grouping sends by <code>template_id</code>. The date and time questions are session messages in the same flow, linked back to the template that started it.</div>
       </div>
     </section>
   </div>
-</div>
+
+  <section class="panel" style="margin-top:14px">
+    <h2>Engagement by template</h2>
+    <div class="tablewrap" id="tplTable"></div>
+    <div class="pad legend" id="optLegend"></div>
+  </section>
+
+  <section class="panel" style="margin-top:14px">
+    <h2>Every click (wa_interaction) <span class="right hint" id="clickCount"></span></h2>
+    <div class="tablewrap scroll" id="clicks"></div>
+  </section>
+
+  <section class="panel" style="margin-top:14px">
+    <h2>Database &amp; logs <span class="right tabs" id="dbTabs"></span></h2>
+    <div class="toolbar">
+      <input id="dbFilter" placeholder="Filter rows (lead id, message id, option…)" aria-label="Filter rows">
+      <button class="btn ghost small" id="exportCsv" type="button">Export table CSV</button>
+      <button class="btn ghost small" id="exportJson" type="button">Export full DB JSON</button>
+    </div>
+    <div id="dbBody"></div>
+    <div class="pad hint" id="dbFoot"></div>
+  </section>
+</main>
 
 <script>
 "use strict";
-/* ================================================================
-   Same logic as app/ (Python): calendar, rules, webhook pipeline,
-   L2R sync. Gupshup, Meta and L2R are simulated in the browser.
-   ================================================================ */
-
+/* =====================================================================
+   Simulated: the website, L2R, Gupshup and Meta.
+   Real logic: working-hours check, template send with the 6 fields,
+   message-id mapping, webhook dedupe, flow engine, engagement tracking.
+   ===================================================================== */
 const $ = s => document.querySelector(s);
 const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-const WEBHOOK_TOKEN = "gs-webhook-secret-v2";
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const STORE_KEY = "nwh-qualifier-v2";
+const FLOW = "NWH_QUALIFIER";
+const RANK = {SUBMITTED:0,SENT:1,DELIVERED:2,READ:3,REPLIED:4,FAILED:5};
+const QUALIFY = ["15D","1M","1_2M"];
 
-const BUTTONS = [
-  ["TIMELINE_15D","15 Days",15],
-  ["TIMELINE_1M","1 Month",30],
-  ["TIMELINE_1_2M","1 - 2 Months",60],
-  ["TIMELINE_GT2M","More than 2 Months",90],
-  ["RESEARCHING","Still Researching",null],
-];
-const LABEL = {TIMELINE_15D:"15_DAYS",TIMELINE_1M:"1_MONTH",TIMELINE_1_2M:"1_2_MONTHS",TIMELINE_GT2M:"GT_2_MONTHS",RESEARCHING:"RESEARCHING",HANDOFF_SE:"HANDOFF",STOP:"OPT_OUT"};
-const RANK = {PENDING:0,SENT:1,DELIVERED:2,READ:3,REPLIED:4,FAILED:5,EXPIRED:5};
-const TERMINAL = new Set(["REPLIED","FAILED","EXPIRED"]);
+const VEHICLES = {
+  "Royal Enfield": {type:"Bikes", models:{"Classic 350":["₹ 1.93 Lakh","349 cc","36 kmpl","195 kg","13 L"],"Hunter 350":["₹ 1.50 Lakh","349 cc","36 kmpl","181 kg","13 L"]}},
+  "Bajaj": {type:"Bikes", models:{"Pulsar NS200":["₹ 1.43 Lakh","199.5 cc","36 kmpl","159 kg","12 L"],"Pulsar N160":["₹ 1.31 Lakh","164.8 cc","45 kmpl","152 kg","14 L"]}},
+  "TVS": {type:"Bikes", models:{"Apache RTR 160 4V":["₹ 1.25 Lakh","159.7 cc","47 kmpl","146 kg","12 L"],"Jupiter 125":["₹ 0.84 Lakh","124.8 cc","50 kmpl","108 kg","5.1 L"]}},
+  "Maruti Suzuki": {type:"Cars", models:{"Brezza":["₹ 8.34 Lakh","1462 cc","19.8 kmpl","5 seats","48 L"]}},
+};
+const DEALERS = {
+  D101: {id:"D101", name:"Vishnu Motors TN", city:"Chennai", exec:"Sathya", virtual:"919403897047", open:"09:30", close:"17:30", off:0, template:"tpl_nwh_timeline_v1"},
+  D102: {id:"D102", name:"Sai Auto Pune", city:"Pune", exec:"Rohan", virtual:"919898989898", open:"10:00", close:"19:00", off:2, template:"tpl_nwh_timeline_v2"},
+};
+const WABA = {number:"918047104444", name:"BikeWale"};
+const TEMPLATES = {
+  tpl_nwh_timeline_v1: v =>
+`Hi ${v.name},
+
+Thank you for your interest in the ${v.make} ${v.model} from ${v.dealer}.
+
+We are currently closed. Our sales executive ${v.exec} will contact you during working hours (${v.hours}) from ${v.virtual}.
+
+In the meantime, could you please tell us how soon you are planning to buy?`,
+  tpl_nwh_timeline_v2: v =>
+`Hi ${v.name} 👋 Thanks for checking out the ${v.make} ${v.model}!
+
+${v.dealer} is closed right now (open ${v.hours}). ${v.exec} will call you from ${v.virtual}.
+
+Quick question so we can help faster: when are you planning to buy?`,
+};
+const TIMELINE = [["15D","15 Days",15],["1M","1 Month",30],["1_2M","1 - 2 Months",60],["GT2M","More than 2 Months",90],["RESEARCH","Still Researching",null]];
+const OPT_COLORS = {"15D":"#147a4a","1M":"#2f9d6a","1_2M":"#7cc49b","GT2M":"#e0a640","RESEARCH":"#9aa4b5"};
 
 /* ---------------- state ---------------- */
-const S = {
-  leads: [],            // {id,name,mobile,model,createdAt(wall Date as UTC),consent,stage,priority,closed,feed[],msgId}
-  msgs: {},             // id -> {id,leadId,mobile,gsId,wamid,status,sentAt,replyCode,outcome,sync,chat[]}
-  events: new Set(),    // dedupe log (wa_event)
-  optOut: new Set(),
-  selected: null,
-  lastWebhook: null,
-  seq: 1, gsSeq: 100, inSeq: 1,
-  clockOffsetH: 0,
-  eventRows: [],        // wa_event table
-  optRows: [],          // opt_out table
-  audit: [],            // audit_log table
-  leadSeq: 12345,
-};
-const STORE_KEY = "nwh-qualifier-v1";
+const fresh = () => ({schema:2, leads:[], messages:{}, interactions:[], events:[], eventRows:[], audit:[],
+  selected:null, lastHook:null, seq:{lead:12345, gs:40960, wamid:1, inbound:1, audit:1}, timePreset:"fri-0026"});
+let S = fresh();
+let FAST = false;
+const wait = ms => FAST ? Promise.resolve() : new Promise(r=>setTimeout(r,ms));
 
-/* ---------------- dealer config ---------------- */
-function cfg(){
-  const off = +$("#cOff").value;
-  return {
-    enabled: $("#cEnabled").checked,
-    dealer: $("#cDealer").value || "Dealer",
-    rep: $("#cRep").value || "our representative",
-    repPhone: "9403897047",
-    open: $("#cOpen").value || "09:30",
-    close: $("#cClose").value || "17:30",
-    off, buffer: +$("#cBuffer").value || 0,
-    maxDays: +$("#cMax").value, holdout: +$("#cHoldout").value || 0,
-  };
-}
+/* ---------------- time helpers (dealer wall clock kept in UTC fields) ---------------- */
 const toMin = t => { const [h,m]=t.split(":").map(Number); return h*60+m; };
 const fmtMin = m => { let h=Math.floor(m/60), mm=m%60, ap=h>=12?"PM":"AM"; h=h%12||12; return `${h}:${String(mm).padStart(2,"0")} ${ap}`; };
-
-/* Wall-clock times are stored as UTC Dates so browser timezone never interferes. */
-function windowsFor(dayIdx, c){ return dayIdx===c.off ? [] : [[toMin(c.open), toMin(c.close)]]; }
-function isNonWorking(wall, c){
-  const m = wall.getUTCHours()*60 + wall.getUTCMinutes();
-  return !windowsFor(wall.getUTCDay(), c).some(([s,e]) => s <= m && m < e - c.buffer);
-}
-function callbackPhrase(wall, c){
-  const m = wall.getUTCHours()*60 + wall.getUTCMinutes();
-  for (let d=0; d<15; d++){
-    const day = (wall.getUTCDay()+d)%7;
-    for (const [s,e] of windowsFor(day,c)){
-      if (d>0 || s>m){
-        const word = d===0 ? "today" : d===1 ? "tomorrow" : "on " + DAYS[day];
-        return [word, fmtMin(s), fmtMin(e)];
-      }
-    }
-  }
-  return ["soon","",""];
-}
-
-/* ---------------- rules ---------------- */
-function decide(code, c){
-  if (code==="STOP") return {outcome:"OPT_OUT", reply:"You won't get further messages from us here."};
-  if (code==="HANDOFF_SE") return {outcome:"HANDOFF", priority:"P1", reply:`Sure! ${c.rep} will call you as soon as we open.`};
-  if (code==="RESEARCHING") return {outcome:"NURTURE", follow:7, reply:"No problem. We'll share details to help you compare and check in next week."};
-  const days = BUTTONS.find(b=>b[0]===code)[2];
-  if (days <= c.maxDays) return {outcome:"QUALIFIED", priority: days<=30?"P1":"P2", reply:`Thanks! ${c.rep} will call you first thing when we open.`};
-  return {outcome:"NURTURE", follow:60, reply:"Thanks, we'll check in closer to your timeline.\nNeed help before that? Tap below to reach a sales executive.", handoffButton:true};
-}
-function classify(text){
-  const t = text.trim().toLowerCase();
-  if (["stop","unsubscribe","opt out","optout"].includes(t)) return "STOP";
-  if (/more than\s*(2|two)\s*months?/.test(t)) return "TIMELINE_GT2M";
-  if (/\b(15|fifteen)\s*days?\b|\bthis week\b|\bnext week\b|\bimmediate/.test(t)) return "TIMELINE_15D";
-  if (/\b(1|one|a)\s*months?\b/.test(t)) return "TIMELINE_1M";
-  if (/\b(1\s*-\s*2|2|two)\s*months?\b/.test(t)) return "TIMELINE_1_2M";
-  if (/\b([3-9]|three|four|six)\s*months?\b|\bnext year\b/.test(t)) return "TIMELINE_GT2M";
-  if (/research|just looking|not sure/.test(t)) return "RESEARCHING";
-  return null;
-}
-function parsePostback(pb){
-  if (!pb) return [null,null];
-  const [code, lead] = pb.split("|");
-  const known = BUTTONS.some(b=>b[0]===code) || code==="HANDOFF_SE";
-  return [known?code:null, lead||null];
-}
-function hashPct(id){ let h=0; for (const ch of id) h=(h*31+ch.charCodeAt(0))>>>0; return h%100; }
-
-/* ---------------- log ---------------- */
-function now(){ return new Date(Date.now() + S.clockOffsetH*3600e3); }
-function ts(){ return now().toTimeString().slice(0,8); }
-function log(kind, src, text, obj){
-  const row = {id:S.audit.length+1, ts:now().toISOString(), level:{ok:"INFO",info:"INFO",step:"INFO",warn:"WARN",bad:"ERROR"}[kind]||"INFO",
-    kind, source:src, lead_id:(text.match(/\bL\d{4,}\b/)||[S.selected||""])[0]||null, message:text, detail: obj===undefined?null:obj};
-  S.audit.push(row);
-  drawLog(row);
-  save();
-}
-function drawLog(row){
-  const kind=row.kind, src=row.source, text=row.message, obj=row.detail===null?undefined:row.detail;
-  const el = document.createElement("div");
-  el.className = "entry " + kind;
-  el.innerHTML = `<div class="h"><time>${new Date(row.ts).toTimeString().slice(0,8)}</time><span class="src"></span><span class="txt"></span></div>`;
-  el.querySelector(".src").textContent = src;
-  el.querySelector(".txt").textContent = text;
-  if (obj!==undefined){ const pre=document.createElement("pre"); pre.textContent = typeof obj==="string"?obj:JSON.stringify(obj,null,2); el.appendChild(pre); }
-  const box = $("#log"); box.appendChild(el); box.scrollTop = box.scrollHeight;
-}
-const wait = ms => new Promise(r=>setTimeout(r,ms));
-
-/* ---------------- L2R (simulated) ---------------- */
-function leadById(id){ return S.leads.find(l=>l.id===id); }
-function feed(lead, text){ lead.feed.unshift({t: ts(), text}); }
-const L2R = {
-  getLead(id){ if ($("#tDown").checked) throw new Error("L2R 503 Service Unavailable"); return leadById(id); },
-  dispose(id, body, key){
-    if ($("#tDown").checked) throw new Error("L2R 503 Service Unavailable");
-    log("info","L2R API",`POST /api/v1/leads/${id}/dispositions  (Idempotency-Key: ${key})`, body);
-    const l = leadById(id);
-    l.callStatus = "Connected · WhatsApp Bot";
-    if (body.targetStage==="QUALIFICATION") l.stage = "QUALIFICATION";
-    l.priority = body.priority || l.priority;
-    l.timeline = body.purchaseTimeline;
-    if (body.followUpInDays) l.followUp = `Follow-up in ${body.followUpInDays} days`;
-    feed(l, body.comment + (body.targetStage==="QUALIFICATION" ? " → moved to Qualification" : ""));
-  },
-  comment(id, text, key){
-    if ($("#tDown").checked) throw new Error("L2R 503 Service Unavailable");
-    log("info","L2R API",`POST /api/v1/leads/${id}/comments  (Idempotency-Key: ${key})`, {comment:text, actor:"system:whatsapp-bot"});
-    feed(leadById(id), text);
-  },
+const minsOf = d => d.getUTCHours()*60+d.getUTCMinutes();
+const fmtWall = d => `${DAYS[d.getUTCDay()].slice(0,3)} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}, ${fmtMin(minsOf(d))}`;
+const dayLabel = d => `${DAYS[d.getUTCDay()].slice(0,3)}, ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+const isoDay = d => d.toISOString().slice(0,10);
+const PRESETS = {
+  "fri-0026":["Fri 12:26 AM", Date.UTC(2026,10,6,0,26)],
+  "thu-2200":["Thu 10:00 PM", Date.UTC(2026,10,5,22,0)],
+  "sat-2130":["Sat 9:30 PM", Date.UTC(2026,10,7,21,30)],
+  "fri-1100":["Fri 11:00 AM (open)", Date.UTC(2026,10,6,11,0)],
+  "now":["Right now (IST)", null],
 };
+const enquiryTime = () => new Date(PRESETS[S.timePreset][1] ?? (Date.now() + 5.5*3600e3));
+const hoursShort = d => `${fmtMin(toMin(d.open))} – ${fmtMin(toMin(d.close))}`;
+const hoursText = d => `${hoursShort(d)}, ${d.off>=0?DAYS[d.off]+" closed":"open all days"}`;
+function isOpen(dealer, wall){
+  if (wall.getUTCDay()===dealer.off) return false;
+  const m = minsOf(wall); return m >= toMin(dealer.open) && m < toMin(dealer.close) - 15;
+}
+function nextOpenDays(dealer, wall, n=7){
+  const out=[]; const start=Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate());
+  for (let i=0; out.length<n && i<21; i++){
+    const d = new Date(start + i*86400e3);
+    if (d.getUTCDay()===dealer.off) continue;
+    if (i===0 && minsOf(wall) > toMin(dealer.close) - 120) continue;   // too late for a same-day visit
+    out.push(d);
+  }
+  return out;
+}
+function slots(dealer){ const out=[]; for (let m=toMin(dealer.open); m+60<=toMin(dealer.close); m+=60) out.push([m,m+60]); return out.slice(0,10); }
+const hhmm = m => String(Math.floor(m/60)).padStart(2,"0") + String(m%60).padStart(2,"0");
+const clock = () => new Date().toTimeString().slice(0,5);
 
-/* ---------------- Gupshup + Meta (simulated) ---------------- */
-async function gupshupSendTemplate(req, lead){
-  log("info","Gupshup API",`POST /partner/app/app-vishnu/template/msg`, {
-    source:"919403897047", destination:req.destination,
-    template:{id:"tpl_nwh_timeline_v1", params:req.params},
-    postbackTexts:req.postbacks.map((t,i)=>({index:i,text:t})),
-  });
-  await wait(250);
-  const gsId = "gs-" + (S.gsSeq++);
-  log("ok","Gupshup API",`202 Accepted`, {status:"submitted", messageId:gsId});
-  return gsId;
+/* ---------------- audit log ---------------- */
+function log(kind, src, text, detail, leadId){
+  S.audit.push({id:S.seq.audit++, ts:new Date().toISOString(), level:{bad:"ERROR",warn:"WARN"}[kind]||"INFO", kind, source:src,
+    lead_id: leadId || (text.match(/\bL\d{5}\b/)||[null])[0], message:text, detail: detail===undefined?null:detail});
+}
+function feed(lead, text){ lead.feed.unshift({t:clock(), text}); }
+const leadById = id => S.leads.find(l=>l.id===id);
+const firstMsgId = lead => (lead.chat.find(c=>c.kind==="template")||{}).messageId;
+
+/* =====================================================================
+   SEND: lead created → working-hours check → Gupshup template API
+   ===================================================================== */
+async function onLeadCreated(lead){
+  const dealer = DEALERS[lead.dealerId];
+  const step = (state, title, detail, api) => { lead.pipeline.push({state, title, detail, api}); render(); };
+  log("step","L2R",`LeadCreated ${lead.id} · ${lead.name} · ${lead.make} ${lead.model} · ${fmtWall(lead.createdAt)}`, undefined, lead.id);
+  step("ok","Lead created in L2R", `${lead.source} · ${fmtWall(lead.createdAt)} · assigned to ${dealer.exec}`);
+  await wait(500);
+  if (!lead.consent){
+    step("warn","No WhatsApp consent","Bot skipped. Normal callback during working hours.");
+    lead.botState="Skipped: no consent"; log("warn","Eligibility","no consent → skip",undefined,lead.id); render(); return;
+  }
+  if (isOpen(dealer, lead.createdAt)){
+    step("warn","Dealer is open", `${hoursText(dealer)}. ${dealer.exec} will call; no WhatsApp sent.`);
+    lead.botState = "Human callback"; feed(lead, "Created during working hours: normal call flow");
+    log("warn","Eligibility",`dealer open (${hoursText(dealer)}) → no WhatsApp`,undefined,lead.id); render(); return;
+  }
+  step("ok","Non-working hours detected", `${dealer.name}: ${hoursText(dealer)}`);
+  log("ok","Eligibility",`non-working hours for ${dealer.id} → send template`,undefined,lead.id);
+  await wait(500);
+  const vars = {name:lead.name, make:lead.make, model:lead.model, hours:hoursShort(dealer), virtual:dealer.virtual, exec:dealer.exec, dealer:dealer.name};
+  const request = {
+    dealer_id: dealer.id, lead_id: lead.id, template_id: dealer.template, destination: lead.mobile, source: WABA.number,
+    variables: {customer_name:vars.name, vehicle_make:vars.make, vehicle_model:vars.model, working_hours:vars.hours, virtual_number:vars.virtual, sales_executive:vars.exec, dealer_name:vars.dealer},
+  };
+  const gupshupPayload = {
+    source: WABA.number, destination: lead.mobile,
+    template: {id: dealer.template, params:[vars.name, vars.make, vars.model, vars.hours, vars.virtual, vars.exec, vars.dealer]},
+    postbackTexts: TIMELINE.map((t,i)=>({index:i, text:`${FLOW}|TIMELINE|${t[0]}|${lead.id}`})),
+  };
+  const messageId = await sendMessage(lead, {kind:"template", templateId:dealer.template, step:"TIMELINE",
+    text: TEMPLATES[dealer.template](vars), buttons: TIMELINE.map(t=>({code:t[0], label:t[1]})), payload: gupshupPayload});
+  step("ok","Gupshup template API called", "", {request, gupshupPayload, messageId});
+  lead.botState = "Template sent"; feed(lead, `WhatsApp template ${dealer.template} sent · messageId ${messageId}`);
+  render();
+  await deliver(messageId);
+}
+
+/* Every outbound message (template or session) goes through here. */
+async function sendMessage(lead, m){
+  const dealer = DEALERS[lead.dealerId];
+  const path = m.kind==="template" ? "/partner/app/{appId}/template/msg" : "/partner/app/{appId}/v3/message";
+  log("info","Gupshup API",`POST ${path}  (${m.kind}, step ${m.step})`, m.payload, lead.id);
+  await wait(300);
+  const messageId = "gs-" + (S.seq.gs++).toString(16) + "-" + Math.random().toString(16).slice(2,6);
+  S.messages[messageId] = {
+    message_id: messageId, wamid: null, lead_id: lead.id, dealer_id: dealer.id,
+    template_id: m.templateId || null, started_by_template: dealer.template,
+    flow: FLOW, step: m.step, msg_type: m.kind, to_mobile: lead.mobile, from_waba: WABA.number, status:"SUBMITTED",
+    sent_at: new Date().toISOString(), delivered_at:null, read_at:null, replied_at:null, reply_option:null,
+  };
+  log("ok","Gupshup API",`202 Accepted → messageId ${messageId}`, {status:"submitted", messageId}, lead.id);
+  log("info","DB",`INSERT wa_message ${messageId} → ${lead.id} · ${m.templateId||"session"} · ${FLOW}/${m.step}`, undefined, lead.id);
+  lead.chat.push({dir:"in", messageId, kind:m.kind, text:m.text, title:m.title, footer:m.footer, buttons:m.buttons, list:m.list, listButton:m.listButton, at:clock()});
+  return messageId;
+}
+async function deliver(messageId, readNow){
+  const msg = S.messages[messageId]; if (!msg) return;
+  await wait(400); await webhook(statusEvent(msg,"enqueued"));
+  await wait(400); await webhook(statusEvent(msg,"delivered"));
+  if (readNow || (location.hash==="#whatsapp" && S.selected===msg.lead_id)){ await wait(500); await webhook(statusEvent(msg,"read")); }
 }
 function statusEvent(msg, type){
-  return {app:"VishnuCarsTN", timestamp:now().getTime(), version:2, type:"message-event",
-          payload:{id:msg.wamid, gsId:msg.gsId, type, destination:msg.mobile}};
-}
-function inboundEvent(msg, inner, mobile){
-  return {app:"VishnuCarsTN", timestamp:now().getTime(), version:2, type:"message",
-          payload:{id:"wamid.in" + (S.inSeq++), source:mobile||msg.mobile, ...inner,
-                   context: inner.type==="quick_reply" ? {id:msg.wamid, gsId:msg.gsId} : undefined}};
+  const p = {id: msg.wamid || ("wamid.HBgM" + (S.seq.wamid++)), gsId: msg.message_id, type, destination: msg.to_mobile};
+  if (type==="enqueued") p.payload = {whatsappMessageId: p.id, type:"session"};
+  return {app:"BikeWaleNWH", timestamp: Date.now(), version:2, type:"message-event", payload:p};
 }
 
-/* ---------------- 1. Lead created → eligibility → send ---------------- */
-async function onLeadCreated(lead){
-  const c = cfg();
-  log("step","Qualifier",`LeadCreated ${lead.id} · ${lead.name} · created ${fmtWall(lead.createdAt)}`);
-  const checks = [
-    ["Bot enabled for dealer", c.enabled, "dealer_not_enabled"],
-    ["WhatsApp consent", lead.consent, "no_consent"],
-    ["Valid mobile", /^\d{11,13}$/.test(lead.mobile), "invalid_mobile"],
-    [`Non-working hours (${c.open}–${c.close}, ${c.buffer}m buffer${c.off>=0?", "+DAYS[c.off]+" off":""})`, isNonWorking(lead.createdAt,c), "working_hours"],
-    ["Not opted out", !S.optOut.has(lead.mobile), "opted_out"],
-    ["Not messaged in last 24h", !Object.values(S.msgs).some(m=>m.mobile===lead.mobile && m.sentAt && now()-m.sentAt < 24*3600e3), "recently_messaged"],
-    [`Not in ${c.holdout}% holdout`, hashPct(lead.id) >= c.holdout, "holdout"],
-  ];
-  for (const [name, ok, reason] of checks){
-    if (!ok){
-      log("warn","Eligibility",`✗ ${name} → skip (${reason})`);
-      lead.botState = reason==="working_hours" ? "Human callback (open hours)" : "Skipped: " + reason;
-      feed(lead, reason==="working_hours" ? "Created during working hours: normal call flow" : `WhatsApp bot skipped (${reason})`);
-      render(); return;
-    }
-    log("ok","Eligibility",`✓ ${name}`);
-  }
-  const [day, s, e] = callbackPhrase(lead.createdAt, c);
-  const msg = {id:S.seq++, leadId:lead.id, mobile:lead.mobile, status:"PENDING", chat:[], sync:"NONE"};
-  S.msgs[msg.id] = msg; lead.msgId = msg.id;
-  log("info","DB","INSERT wa_message (status=PENDING)", {id:msg.id, lead_id:lead.id, template_id:"tpl_nwh_timeline_v1"});
-  const params = [lead.name, lead.model, c.dealer, c.rep, day, s, e, c.repPhone];
-  const gsId = await gupshupSendTemplate({destination:lead.mobile, params, postbacks: BUTTONS.map(b=>`${b[0]}|${lead.id}`)}, lead);
-  msg.gsId = gsId; msg.wamid = "wamid.out" + msg.id; msg.status = "SENT"; msg.sentAt = now();
-  log("info","DB",`UPDATE wa_message SET gs_message_id='${gsId}' (written before any reply can arrive)`);
-  msg.chat.push({dir:"in", template:true, text:
-`Hi ${lead.name},
-
-Thank you for your interest in ${lead.model} from ${c.dealer}.
-
-We are currently closed, but our representative ${c.rep} will contact you ${day} between ${s} to ${e} from the number ${c.repPhone}.
-
-In the meantime, could you please tell how soon you are planning to buy a car?`, buttons: BUTTONS.map(b=>({code:b[0], label:b[1]}))});
-  lead.botState = "Template sent";
-  feed(lead, "WhatsApp qualifier template sent");
-  render();
-  // Meta → Gupshup → webhook delivery receipts
-  await wait(500); await webhook(statusEvent(msg,"sent"));
-  await wait(500); await webhook(statusEvent(msg,"delivered"));
-  if (S.selected===lead.id){ await wait(600); await webhook(statusEvent(msg,"read")); }
-}
-
-/* ---------------- 2. Webhook: auth → accept → process ---------------- */
-async function webhook(evt, token=WEBHOOK_TOKEN, quiet=false){
+/* =====================================================================
+   RECEIVE: webhook → dedupe → status update or reply → flow engine
+   ===================================================================== */
+async function webhook(evt){
   const isStatus = evt.type==="message-event";
-  if (!isStatus) S.lastWebhook = evt;
-  log("info","Webhook ←",`POST /v1/webhooks/gupshup  type=${evt.type}${isStatus?" ("+evt.payload.type+")":""}`, isStatus ? undefined : evt);
-  if (token !== WEBHOOK_TOKEN){ log("bad","Webhook","401 Unauthorized: X-Webhook-Token mismatch (constant-time compare)"); return; }
   const p = evt.payload;
   const eid = isStatus ? `${p.gsId}:${p.type}` : p.id;
-  if (now().getTime() - evt.timestamp > 24*3600e3){ log("warn","Webhook","200 OK · ignored: stale event"); return; }
-  if (S.events.has(eid)){ log("warn","Webhook",`200 OK · duplicate event ${eid} ignored (dedupe on wa_event)`); return; }
-  S.events.add(eid);
-  S.eventRows.push({event_id:eid, type:evt.type, received_at:now().toISOString(), lead_id: isStatus ? (Object.values(S.msgs).find(m=>m.gsId===p.gsId)||{}).leadId||null : ((p.payload||{}).postbackText||"").split("|")[1]||null, payload:evt});
-  log("ok","Webhook",`200 OK · stored ${eid}, processing async`);
-  await wait(150);
-  if (isStatus) handleStatus(p); else await handleMessage(p);
-  render();
+  if (S.events.includes(eid)){ log("warn","Webhook",`duplicate ${eid} ignored`); return; }
+  S.events.push(eid);
+  const ctx = isStatus ? S.messages[p.gsId] : (p.context && S.messages[p.context.gsId]);
+  S.eventRows.push({event_id:eid, type: isStatus ? `message-event:${p.type}` : `message:${p.type}`, received_at:new Date().toISOString(), lead_id: ctx ? ctx.lead_id : null, payload: evt});
+  if (isStatus) return handleStatus(p);
+  log("info","Webhook ←",`POST /v1/webhooks/gupshup  ${p.type}`, evt, ctx && ctx.lead_id);
+  await handleReply(p);
 }
 function handleStatus(p){
-  const msg = Object.values(S.msgs).find(m=>m.gsId===p.gsId);
-  if (!msg) return log("warn","Processor","unmapped status event");
-  const next = p.type.toUpperCase();
-  if (TERMINAL.has(msg.status) || RANK[next] <= RANK[msg.status]) return log("warn","Processor",`status ${next} ignored (already ${msg.status}, forward-only)`);
-  msg.status = next;
-  log("ok","Processor",`wa_message ${msg.id}: status → ${next}`);
+  const msg = S.messages[p.gsId]; if (!msg) return;
+  if (p.type==="enqueued"){
+    msg.wamid = p.payload.whatsappMessageId; if (msg.status==="SUBMITTED") msg.status="SENT";
+    log("ok","Webhook",`enqueued · wamid ${msg.wamid} saved on ${msg.message_id}`, undefined, msg.lead_id);
+  }
+  const next = {sent:"SENT", delivered:"DELIVERED", read:"READ", failed:"FAILED"}[p.type];
+  if (next && RANK[next] > RANK[msg.status] && msg.status!=="REPLIED"){
+    msg.status = next; const col = {DELIVERED:"delivered_at", READ:"read_at"}[next]; if (col) msg[col] = new Date().toISOString();
+    log("ok","Webhook",`${msg.message_id} · status → ${next}`, undefined, msg.lead_id);
+  }
+  render();
 }
-async function handleMessage(p){
-  const c = cfg();
+
+async function handleReply(p){
+  const msg = p.context && S.messages[p.context.gsId];
+  if (!msg){ log("bad","Processor","reply has no matching messageId → cannot map to a lead"); return; }
+  const lead = leadById(msg.lead_id);
+  if (msg.to_mobile !== p.source){ log("bad","Processor","sender ≠ lead mobile → rejected", undefined, lead.id); return; }
   const inner = p.payload || {};
-  const [pbCode, pbLead] = parsePostback(inner.postbackText);
-  let code = p.type==="quick_reply" ? (pbCode || classify(inner.text||"")) : classify(inner.text||"");
-  if (p.type==="text") log("step","Classifier",`"${inner.text}" → ${code || "no match"}`);
+  const postback = inner.postbackText || "";
+  const [flow, step, option] = postback.split("|");
+  const title = inner.title || inner.text || option;
+  const row = {
+    inbound_id: p.id, context_message_id: msg.message_id, context_wamid: msg.wamid, lead_id: lead.id, dealer_id: msg.dealer_id,
+    template_id: msg.started_by_template, flow, step, option_code: option, option_title: title,
+    postback, received_at: new Date().toISOString(),
+  };
+  S.interactions.push(row);
+  S.lastHook = {raw: p, row};
+  if (msg.status!=="REPLIED"){ msg.status="REPLIED"; msg.replied_at=row.received_at; msg.reply_option=option; }
+  log("ok","Processor",`mapped ${msg.message_id} → ${lead.id} · ${row.template_id} · ${flow}/${step} · ${option}`, row, lead.id);
+  log("info","DB","INSERT wa_interaction", undefined, lead.id);
+  const dealer = DEALERS[lead.dealerId];
 
-  let msg = null;
-  if (p.context) msg = Object.values(S.msgs).find(m=>m.gsId===p.context.gsId) || Object.values(S.msgs).find(m=>m.wamid===p.context.id);
-  if (!msg && pbLead) msg = Object.values(S.msgs).find(m=>m.leadId===pbLead);
-  if (!msg && p.type==="text") msg = Object.values(S.msgs).filter(m=>m.mobile===p.source && ["SENT","DELIVERED","READ"].includes(m.status)).pop();
-  if (!msg) return log("bad","Processor","unmapped reply: no template we sent matches context.gsId");
-  log("ok","Processor",`mapped via ${p.context?"context.gsId "+p.context.gsId:"latest open conversation"} → lead ${msg.leadId}`);
-  if (msg.mobile !== p.source) return log("bad","Processor",`REJECTED: sender ${p.source} ≠ lead mobile ${msg.mobile}. A valid token alone can't qualify a lead.`);
-  if (pbLead && pbLead !== msg.leadId) return log("bad","Processor","REJECTED: postback lead id mismatch");
-  if (!code){
-    const lead = leadById(msg.leadId);
-    msg.chat.push({dir:"in", text:"Sorry, I didn't catch that. Please pick one of the options above, or reply STOP to opt out."});
-    return log("warn","Processor","unclassified reply → re-prompted customer");
-  }
-  const d = decide(code, c);
-  log("step","Rules",`${code} → ${d.outcome}${d.priority?" · "+d.priority:""}${d.follow?" · follow-up "+d.follow+"d":""}  (threshold ≤ ${c.maxDays} days)`);
-  if (d.outcome==="OPT_OUT"){ if (!S.optOut.has(msg.mobile)) S.optRows.push({mobile:msg.mobile, dealer_id:"D1", created_at:now().toISOString(), source:"WhatsApp STOP"}); S.optOut.add(msg.mobile); log("info","DB","INSERT opt_out"); }
-  if (msg.status==="EXPIRED" || msg.status==="FAILED") return log("warn","Processor","conversation closed, reply logged only");
-  if (msg.status==="REPLIED" && msg.sync==="DONE" && !(code==="HANDOFF_SE" && msg.allowHandoff)){
-    try { L2R.comment(msg.leadId, `Later WhatsApp reply: ${inner.text||code}`, "wa-"+p.id); } catch(e){ log("bad","L2R API",e.message); }
-    return log("warn","Processor","lead already updated by bot; later reply recorded as comment only");
-  }
-  if (code==="HANDOFF_SE") msg.allowHandoff = false;
-  msg.status = "REPLIED"; msg.replyCode = code; msg.outcome = d.outcome; msg.sync = "PENDING";
-  log("info","DB",`UPDATE wa_message SET status=REPLIED, reply_code=${code}, outcome=${d.outcome}`);
-  await syncToL2R(msg, "wa-"+p.id);
-  await wait(300);
-  msg.chat.push({dir:"in", text:d.reply, buttons: d.handoffButton ? [{code:"HANDOFF_SE", label:"Chat-Sales Executive"}] : null});
-  log("info","Gupshup API","POST /partner/app/app-vishnu/v3/message (session message, free inside 24h window)", {type:"text", text:d.reply});
-  if (d.handoffButton) msg.allowHandoff = true;
-}
-
-/* ---------------- 3. L2R sync ---------------- */
-async function syncToL2R(msg, key){
-  const c = cfg();
-  try{
-    const lead = L2R.getLead(msg.leadId);
-    if (!lead || lead.closed){ msg.sync="SKIPPED"; return log("warn","Sync","lead missing or closed, skipped"); }
-    const label = LABEL[msg.replyCode] || msg.replyCode;
-    const note = msg.replyCode ? `Customer answered '${label}' on WhatsApp` : "No reply to WhatsApp qualifier within 24h";
-    if (lead.stage !== "FIRST_CALL"){
-      log("warn","Sync",`lead is already in ${lead.stage}: never downgrade, add comment only`);
-      L2R.comment(lead.id, note, key);
-    } else if (msg.outcome==="QUALIFIED"){
-      const d = decide(msg.replyCode, c);
-      L2R.dispose(lead.id, {callStatus:"CONNECTED", disposition:"WHATSAPP_BOT", targetStage:"QUALIFICATION", purchaseTimeline:label, priority:d.priority, comment:note, actor:"system:whatsapp-bot"}, key);
-    } else if (msg.outcome==="NURTURE" || msg.outcome==="HANDOFF"){
-      const d = decide(msg.replyCode, c);
-      L2R.dispose(lead.id, {callStatus:"CONNECTED", disposition:"WHATSAPP_BOT", targetStage:"FIRST_CALL", purchaseTimeline:label, followUpInDays:d.follow, priority:d.priority, comment: msg.outcome==="HANDOFF" ? "Customer asked to talk to a sales executive: priority callback" : note, actor:"system:whatsapp-bot"}, key);
+  if (step==="TIMELINE"){
+    const t = TIMELINE.find(x=>x[0]===option);
+    lead.timeline = t[1];
+    if (QUALIFY.includes(option)){
+      lead.stage = "QUALIFICATION"; lead.priority = t[2] <= 30 ? "P1" : "P2"; lead.botState = "Qualified by bot";
+      l2r(lead, "dispose", {callStatus:"CONNECTED", disposition:"WHATSAPP_BOT", targetStage:"QUALIFICATION", purchaseTimeline:option, priority:lead.priority});
+      feed(lead, `Customer chose '${t[1]}' on WhatsApp → moved to Qualification (${lead.priority})`);
+      await wait(500);
+      const days = nextOpenDays(dealer, lead.createdAt);
+      const rows = days.map(d=>({id:`${FLOW}|VISIT_DATE|${isoDay(d)}|${lead.id}`, title:dayLabel(d), desc: isoDay(d)===isoDay(lead.createdAt) ? "Today" : ""}));
+      await sendMessage(lead, {kind:"list", step:"VISIT_DATE", title:"Plan your visit",
+        text:`Great! When would you like to visit ${dealer.name} to see the ${lead.model}?`, footer:"Choose your preferred date", listButton:"Choose date", list: rows,
+        payload:{type:"list", title:"Plan your visit", body:"Choose your preferred date", items:[{title:"Next 7 days", options: rows.map(r=>({title:r.title, postbackText:r.id}))}]}});
+    } else if (option==="GT2M"){
+      lead.botState = "Nurture"; lead.followUp = "Follow-up in 60 days";
+      l2r(lead, "dispose", {callStatus:"CONNECTED", disposition:"WHATSAPP_BOT", targetStage:"FIRST_CALL", purchaseTimeline:option, followUpInDays:60});
+      feed(lead, "Customer chose 'More than 2 Months' → nurture, follow-up task in 60 days");
+      await wait(500);
+      await sendMessage(lead, {kind:"text", step:"GT2M_ACK", text:`Thanks, ${lead.name}!\nWe'll check in closer to your timeline.\nNeed help before that? Call us anytime at ${dealer.virtual}.`, payload:{type:"text"}});
     } else {
-      L2R.comment(lead.id, msg.outcome==="NO_RESPONSE" ? note : "Customer opted out of WhatsApp messages", key);
+      lead.botState = "Researching"; lead.followUp = "Follow-up in 7 days";
+      l2r(lead, "dispose", {callStatus:"CONNECTED", disposition:"WHATSAPP_BOT", targetStage:"FIRST_CALL", purchaseTimeline:option, followUpInDays:7});
+      feed(lead, "Customer is still researching → follow-up task in 7 days");
+      await wait(500);
+      await sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Please feel free to reach us at ${dealer.virtual} for any queries you might have.`, payload:{type:"text"}});
     }
-    msg.sync = "DONE";
-    lead.botState = {QUALIFIED:"Qualified by bot", NURTURE:"Nurture", HANDOFF:"Wants sales exec", NO_RESPONSE:"No response", OPT_OUT:"Opted out"}[msg.outcome];
-    log("ok","Sync",`L2R updated for ${lead.id}`);
-  } catch(e){
-    msg.sync = "FAILED";
-    log("bad","Sync",`${e.message} → will retry from maintenance job (idempotency key ${key})`);
-    const lead = leadById(msg.leadId); if (lead) lead.botState = "Reply saved, L2R sync pending";
+  } else if (step==="VISIT_DATE"){
+    lead.visitDate = option; lead.visitDateLabel = title;
+    feed(lead, `Customer picked visit date ${title}`);
+    l2r(lead, "comment", {comment:`Preferred visit date: ${title}`});
+    await wait(400);
+    const rows = slots(dealer).map(([a,b])=>({id:`${FLOW}|VISIT_TIME|${hhmm(a)}|${lead.id}`, title:`${fmtMin(a)} – ${fmtMin(b)}`, desc:""}));
+    await sendMessage(lead, {kind:"list", step:"VISIT_TIME", title,
+      text:`${title} it is. What time suits you?`, footer:"Choose your preferred time", listButton:"Choose time", list: rows,
+      payload:{type:"list", title, body:"Choose your preferred time", items:[{title:"Working hours", options: rows.map(r=>({title:r.title, postbackText:r.id}))}]}});
+  } else if (step==="VISIT_TIME"){
+    lead.visitSlot = title; lead.botState = "Visit booked";
+    feed(lead, `Visit booked: ${lead.visitDateLabel}, ${title}`);
+    l2r(lead, "visit", {type:"SHOWROOM_VISIT", date:lead.visitDate, slot:title, assignee:dealer.exec});
+    await wait(400);
+    await sendMessage(lead, {kind:"text", step:"VISIT_CONFIRM",
+      text:`✅ Your visit is booked\n\n📍 ${dealer.name}, ${dealer.city}\n📅 ${lead.visitDateLabel}\n🕒 ${title}\n\n${dealer.exec} will call you to confirm. Need help? Call ${dealer.virtual}.`, payload:{type:"text"}});
   }
   render();
+  const last = lead.chat[lead.chat.length-1];
+  if (last && last.messageId && S.messages[last.messageId].status==="SUBMITTED") await deliver(last.messageId, true);
+}
+function l2r(lead, kind, body){
+  const path = kind==="dispose" ? `/api/v1/leads/${lead.id}/dispositions` : kind==="visit" ? `/api/v1/leads/${lead.id}/visits` : `/api/v1/leads/${lead.id}/comments`;
+  log("info","L2R API",`POST ${path}`, {...body, actor:"system:whatsapp-bot"}, lead.id);
 }
 
-/* ---------------- maintenance job ---------------- */
-async function maintenance(){
-  log("step","Scheduler","maintenance job: expire 24h conversations, retry failed syncs");
-  for (const m of Object.values(S.msgs)){
-    if (["SENT","DELIVERED","READ"].includes(m.status) && now()-m.sentAt >= 24*3600e3){
-      m.status="EXPIRED"; m.outcome="NO_RESPONSE"; m.sync="PENDING";
-      log("warn","Scheduler",`wa_message ${m.id} expired → NO_RESPONSE`);
-    }
-  }
-  for (const m of Object.values(S.msgs)) if (m.sync==="PENDING" || m.sync==="FAILED") await syncToL2R(m, `wa-msg-${m.id}-${m.outcome}`);
+/* ---------------- customer actions on the phone ---------------- */
+function inbound(lead, msg, type, payload){
+  return {app:"BikeWaleNWH", timestamp:Date.now(), version:2, type:"message", payload:{
+    id:"wamid.IN" + (S.seq.inbound++), source: lead.mobile, type, payload,
+    context:{id: msg.wamid, gsId: msg.message_id}, sender:{phone: lead.mobile, name: lead.name}}};
+}
+async function tapButton(messageId, code, label){
+  const msg = S.messages[messageId], lead = leadById(msg.lead_id);
+  const bubble = lead.chat.find(c=>c.messageId===messageId); bubble.used = code;
+  lead.chat.push({dir:"out", text:label, quote: bubble.text.split("\n")[0], at:clock()});
   render();
+  await wait(350);
+  await webhook(inbound(lead, msg, "quick_reply", {text:label, postbackText:`${FLOW}|TIMELINE|${code}|${lead.id}`}));
+}
+async function pickListRow(messageId, row){
+  const msg = S.messages[messageId], lead = leadById(msg.lead_id);
+  const bubble = lead.chat.find(c=>c.messageId===messageId); bubble.used = row.id;
+  lead.chat.push({dir:"out", text:row.title, quote: bubble.footer, at:clock()});
+  render();
+  await wait(350);
+  await webhook(inbound(lead, msg, "list_reply", {title:row.title, id:row.id, reply:row.title, postbackText:row.id}));
 }
 
-/* ---------------- customer actions ---------------- */
-async function tap(msgId, code, label){
-  const msg = S.msgs[msgId];
-  msg.chat.forEach(x=>{ if (x.buttons && x.buttons.some(b=>b.code===code)) x.used = code; });
-  msg.chat.push({dir:"out", text:label, quote:true});
-  render();
-  await wait(400);
-  await webhook(inboundEvent(msg, {type:"quick_reply", payload:{text:label, postbackText:`${code}|${msg.leadId}`}}));
-}
-async function typed(text){
-  const lead = leadById(S.selected); if (!lead || !lead.msgId) return;
-  const msg = S.msgs[lead.msgId];
-  msg.chat.push({dir:"out", text});
-  render();
-  await wait(400);
-  await webhook(inboundEvent(msg, {type:"text", payload:{text}}));
-}
-
-/* ---------------- render ---------------- */
-function fmtWall(d){ return `${DAYS[d.getUTCDay()].slice(0,3)} ${fmtMin(d.getUTCHours()*60+d.getUTCMinutes())}`; }
-function botTag(l){
-  const s = l.botState || "";
-  if (s.startsWith("Qualified")) return `<span class="tag t-ok">${s}</span>`;
-  if (s.startsWith("Nurture")||s.startsWith("No response")||s.includes("pending")) return `<span class="tag t-warn">${s}</span>`;
-  if (s.startsWith("Wants")) return `<span class="tag t-info">${s}</span>`;
-  if (s.startsWith("Skipped")||s.startsWith("Opted")) return `<span class="tag t-bad">${s}</span>`;
-  return `<span class="tag t-mute">${s||"New"}</span>`;
-}
-function esc(s){ return String(s).replace(/[&<>"]/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch])); }
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+const esc = s => String(s ?? "").replace(/[&<>"]/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
+const SCREENS = ["website","lms","whatsapp","tracking"];
+function route(){ const h=(location.hash||"#website").slice(1); return SCREENS.includes(h) ? h : "website"; }
 function render(){
-  renderDb(); save();
-  const c = cfg();
-  $("#cfgSummary").textContent = `${c.open}–${c.close}, ${c.off>=0?DAYS[c.off]+" off":"no weekly off"}, qualify ≤ ${c.maxDays}d${c.enabled?"":", bot OFF"}`;
-  const box = $("#leads");
-  if (!S.leads.length){ box.innerHTML = `<div class="empty">No leads yet. Create one above. Pick an after-hours time to see the bot fire.</div>`; }
-  else box.innerHTML = S.leads.map(l=>{
-    const st = ["FIRST_CALL","QUALIFICATION","VISITS","BOOKING"]; const idx = st.indexOf(l.stage);
-    const msg = l.msgId ? S.msgs[l.msgId] : null;
-    return `<div class="lead ${S.selected===l.id?"sel":""}" data-id="${l.id}" tabindex="0" role="button">
-      <div class="l1"><span class="name">${esc(l.name)}</span><span class="mob">${esc(l.mobile)}</span>${botTag(l)}${l.priority?`<span class="tag t-bad">${l.priority}</span>`:""}${msg?`<span class="tag t-mute">WA: ${msg.status}</span>`:""}</div>
-      <div class="hint">${l.id} · ${esc(l.model)} · created ${fmtWall(l.createdAt)}${l.followUp?" · "+l.followUp:""}</div>
-      <div class="stepper">${["First Call","Qualification","Visits","Booking"].map((n,i)=>`<span class="step ${i<=idx?"on":""}"><i></i>${n}</span>`).join("")}</div>
-      <ul class="feed">${l.feed.slice(0,4).map(f=>`<li><time>${f.t}</time><span>${esc(f.text)}</span></li>`).join("")}</ul>
-    </div>`;
-  }).join("");
-
-  const ms = Object.values(S.msgs);
-  const n = k => ms.filter(k).length;
-  $("#stats").innerHTML = [
-    ["Sent", n(m=>m.sentAt)], ["Delivered", n(m=>RANK[m.status]>=2 && m.status!=="FAILED")],
-    ["Replied", n(m=>m.replyCode)], ["Qualified", n(m=>m.outcome==="QUALIFIED")],
-    ["Nurture", n(m=>m.outcome==="NURTURE")],
-  ].map(([k,v])=>`<div><b>${v}</b><span>${k}</span></div>`).join("");
-
-  // phone
+  if (FAST) return;
+  const r = route();
+  for (const id of SCREENS) $("#s-"+id).hidden = id!==r;
   const lead = leadById(S.selected);
-  $("#chatTitle").textContent = c.dealer;
-  $("#chatAvatar").textContent = (c.dealer[0]||"D").toUpperCase();
-  const msgsEl = $("#msgs");
-  if (!lead || !lead.msgId){
-    $("#chatSub").textContent = lead ? `${lead.name}'s phone · no message sent` : "Customer's phone";
-    msgsEl.innerHTML = `<div class="phone-empty">${lead ? "No WhatsApp message for this lead.<br><br>" + esc(lead.botState||"") : "The customer's WhatsApp appears here when the bot sends a template to the selected lead."}</div>`;
+  const done = {website:!!lead, lms:!!(lead && firstMsgId(lead)), whatsapp:!!(lead && S.interactions.some(i=>i.lead_id===lead.id)), tracking:false};
+  document.querySelectorAll(".steps a").forEach(a=>{
+    const k=a.dataset.step;
+    if (k===r) a.setAttribute("aria-current","step"); else a.removeAttribute("aria-current");
+    a.classList.toggle("done", done[k] && k!==r);
+  });
+  if (r==="website") renderWebsite();
+  if (r==="lms") renderLms();
+  if (r==="whatsapp") renderWa();
+  if (r==="tracking") renderTracking();
+  save();
+}
+
+/* ---------- 1. website ---------- */
+function fillSelects(){
+  const mk=$("#fMake"), md=$("#fModel");
+  if (!mk.options.length){
+    const groups={}; for (const [make,v] of Object.entries(VEHICLES)) (groups[v.type] ||= []).push(make);
+    mk.innerHTML = Object.entries(groups).map(([g,ms])=>`<optgroup label="${g}">${ms.map(m=>`<option>${esc(m)}</option>`).join("")}</optgroup>`).join("");
+  }
+  if (md.dataset.make!==mk.value){ md.innerHTML = Object.keys(VEHICLES[mk.value].models).map(m=>`<option>${esc(m)}</option>`).join(""); md.dataset.make=mk.value; }
+  const fd=$("#fDealer"), city=$("#fCity").value;
+  if (fd.dataset.city!==city){ fd.innerHTML = Object.values(DEALERS).filter(d=>d.city===city).map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join(""); fd.dataset.city=city; }
+}
+function renderWebsite(){
+  fillSelects();
+  const make=$("#fMake").value, model=$("#fModel").value, v=VEHICLES[make];
+  const [price,a,b,c,d] = v.models[model];
+  $("#vCrumbs").textContent = `Home › ${v.type} › ${make} › ${model}`;
+  $("#vTitle").textContent = `${make} ${model}`;
+  $("#vPrice").innerHTML = `${price} <small>avg. ex-showroom price</small>`;
+  const labels = v.type==="Cars" ? ["Engine","Mileage","Seating","Fuel tank"] : ["Engine","Mileage","Kerb weight","Fuel tank"];
+  $("#vSpecs").innerHTML = [a,b,c,d].map((x,i)=>`<div><b>${esc(x)}</b><span>${labels[i]}</span></div>`).join("");
+  $("#vArt").innerHTML = v.type==="Cars"
+    ? `<path d="M40 140 L70 95 Q85 75 120 72 L270 72 Q300 74 320 95 L360 120 Q375 125 375 140 L375 150 L40 150 Z" fill="#0f4c81" opacity=".85"/><path d="M95 98 L125 80 L190 80 L190 100 Z M200 80 L265 80 Q285 82 300 100 L200 100 Z" fill="#cfe3f5"/><circle cx="110" cy="152" r="24" fill="#1b2230"/><circle cx="110" cy="152" r="10" fill="#9aa4b5"/><circle cx="300" cy="152" r="24" fill="#1b2230"/><circle cx="300" cy="152" r="10" fill="#9aa4b5"/>`
+    : `<circle cx="95" cy="140" r="42" stroke="#1b2230" stroke-width="12"/><circle cx="305" cy="140" r="42" stroke="#1b2230" stroke-width="12"/><circle cx="95" cy="140" r="8" fill="#9aa4b5"/><circle cx="305" cy="140" r="8" fill="#9aa4b5"/><path d="M95 140 L160 90 L250 90 L305 140" stroke="#0f4c81" stroke-width="10" stroke-linejoin="round"/><path d="M150 82 Q200 58 255 80 L245 100 L165 100 Z" fill="#0f4c81"/><path d="M250 90 L268 55 L292 52" stroke="#1b2230" stroke-width="8" stroke-linecap="round"/><rect x="120" y="70" width="55" height="14" rx="7" fill="#1b2230"/>`;
+  $("#timeChips").innerHTML = Object.entries(PRESETS).map(([k,[l]])=>`<button type="button" class="chip" data-time="${k}" aria-pressed="${k===S.timePreset}">${l}</button>`).join(" ");
+  const dealer=DEALERS[$("#fDealer").value], t=enquiryTime(), open=isOpen(dealer,t);
+  $("#timeVerdict").innerHTML = `${esc(fmtWall(t))} · ${esc(dealer.name)} is <b style="color:var(${open?"--ok":"--accent"})">${open?"open, so no WhatsApp":"closed, so WhatsApp flow runs"}</b> · ${esc(hoursText(dealer))}`;
+}
+
+/* ---------- 2. LMS ---------- */
+function stageStepper(l){
+  const st=["FIRST_CALL","QUALIFICATION","VISITS","BOOKING"], idx=st.indexOf(l.stage);
+  return `<div class="stepper">${["First Call","Qualification","Visits","Booking"].map((n,i)=>`<span class="step ${i<=idx?"on":""}"><i></i>${n}</span>`).join("")}</div>`;
+}
+function botTag(l){
+  const s=l.botState||"New";
+  const cls = /Qualified|booked/.test(s) ? "t-ok" : /Nurture|Research/.test(s) ? "t-warn" : /Skipped/.test(s) ? "t-bad" : /sent/.test(s) ? "t-info" : "t-mute";
+  return `<span class="tag ${cls}">${esc(s)}</span>`;
+}
+function renderLms(){
+  $("#leadList").innerHTML = !S.leads.length ? `<div class="empty">No leads yet. Submit an enquiry on the <a href="#website">customer website</a>.</div>` :
+    S.leads.map(l=>`<div class="leadrow ${l.id===S.selected?"sel":""}" data-id="${l.id}" tabindex="0" role="button">
+      <div class="l1"><span class="name">${esc(l.name)}</span><span class="mobtxt">${esc(l.mobile)}</span>${botTag(l)}${l.priority?`<span class="tag t-bad">${l.priority}</span>`:""}</div>
+      <div class="hint">${l.id} · ${esc(l.make)} ${esc(l.model)} · ${esc(DEALERS[l.dealerId].name)} · ${esc(fmtWall(l.createdAt))}</div>
+      ${stageStepper(l)}</div>`).join("");
+  const l=leadById(S.selected), box=$("#leadDetail");
+  if (!l){ box.innerHTML = `<h2>Lead</h2><div class="empty">Select a lead.</div>`; return; }
+  const dealer=DEALERS[l.dealerId];
+  const pipe = l.pipeline.map((p,i)=>{
+    let extra="";
+    if (p.api){
+      const r=p.api.request, v=r.variables, m=S.messages[p.api.messageId]||{};
+      extra = `<div class="apibox">
+        <div class="bar"><span class="method">POST</span><span class="mono">Gupshup · /partner/app/{appId}/template/msg</span><span class="tag t-ok" style="margin-left:auto">202 Accepted</span></div>
+        <table class="fields">
+          <tr><td><span class="num1">1</span>Dealer ID</td><td>${esc(r.dealer_id)}</td></tr>
+          <tr><td><span class="num1">2</span>Lead ID</td><td>${esc(r.lead_id)}</td></tr>
+          <tr><td><span class="num1">3</span>Template ID</td><td>${esc(r.template_id)}</td></tr>
+          <tr><td><span class="num1">4</span>Customer mobile</td><td>${esc(r.destination)}</td></tr>
+          <tr><td><span class="num1">5</span>WABA number (sender)</td><td>${esc(r.source)} · ${esc(WABA.name)}</td></tr>
+          <tr><td><span class="num1">6</span>Variables</td><td>customer_name: ${esc(v.customer_name)}<br>vehicle_make: ${esc(v.vehicle_make)}<br>vehicle_model: ${esc(v.vehicle_model)}<br>working_hours: ${esc(v.working_hours)}<br>virtual_number: ${esc(v.virtual_number)}<br>sales_executive: ${esc(v.sales_executive)}<br>dealer_name: ${esc(v.dealer_name)}</td></tr>
+          <tr><td>Response</td><td>messageId: <b>${esc(p.api.messageId)}</b><br>wamid: ${esc(m.wamid || "arrives with the first status callback")}<br>status: ${esc(m.status)}</td></tr>
+        </table>
+        <details><summary>Raw Gupshup request body</summary><pre class="json">${esc(JSON.stringify(p.api.gupshupPayload,null,2))}</pre></details>
+      </div>
+      <div class="callout" style="margin-top:8px">Template <b>${esc(r.template_id)}</b> is shared by every customer. The <b>messageId</b> is unique to this send, so it is saved against ${esc(l.id)} at once and used to map every reply.</div>`;
+    }
+    return `<li><span class="dot ${p.state}">${p.state==="ok"?"✓":p.state==="warn"?"!":i+1}</span><div><b>${esc(p.title)}</b>${p.detail?`<div class="d">${esc(p.detail)}</div>`:""}${extra}</div></li>`;
+  }).join("");
+  box.innerHTML = `<h2>${esc(l.id)} · ${esc(l.name)} <span class="right">${botTag(l)}</span></h2>
+    <div class="pad" style="display:grid;gap:16px">
+      ${stageStepper(l)}
+      <div class="leadcard">
+        <div class="kv"><span>Mobile</span><b class="mono">${esc(l.mobile)}</b></div>
+        <div class="kv"><span>Vehicle</span><b>${esc(l.make)} ${esc(l.model)}</b></div>
+        <div class="kv"><span>Dealer</span><b>${esc(dealer.name)} (${dealer.id})</b></div>
+        <div class="kv"><span>Created</span><b>${esc(fmtWall(l.createdAt))}</b></div>
+        <div class="kv"><span>Purchase timeline</span><b>${esc(l.timeline||"—")}</b></div>
+        <div class="kv"><span>Showroom visit</span><b>${l.visitSlot?esc(l.visitDateLabel+", "+l.visitSlot):l.visitDateLabel?esc(l.visitDateLabel)+" (time pending)":"—"}</b></div>
+      </div>
+      <div><div class="label">Automation</div><ul class="pipeline">${pipe || `<li><span class="dot run">…</span><div><b>Waiting</b></div></li>`}</ul></div>
+      <div><div class="label">Activity feed</div><ul class="feed">${l.feed.map(f=>`<li><time>${f.t}</time><span>${esc(f.text)}</span></li>`).join("")}</ul></div>
+    </div>`;
+}
+
+/* ---------- 3. WhatsApp ---------- */
+function renderWa(){
+  const lead=leadById(S.selected), el=$("#msgs");
+  $("#waName").textContent=WABA.name; $("#waAvatar").textContent=WABA.name[0];
+  if (!lead || !lead.chat.length){
+    $("#waSub").textContent = lead ? `${lead.name}'s phone` : "Business account";
+    el.innerHTML = `<div class="phone-empty">${lead ? "No WhatsApp message for this lead (" + esc(lead.botState||"") + ")." : "Submit an after-hours enquiry on the customer website and the message arrives here."}</div>`;
+    $("#flowMap").innerHTML = `<div class="hint">No conversation yet.</div>`;
+    $("#lastHook").innerHTML = `<div class="hint">Tap an option on the phone. The metadata Gupshup sends us appears here.</div>`;
     return;
   }
-  const msg = S.msgs[lead.msgId];
-  $("#chatSub").textContent = `${lead.name}'s phone · +${lead.mobile}`;
-  const tick = {SENT:"✓",DELIVERED:"✓✓",READ:"✓✓ read",REPLIED:"✓✓ read",EXPIRED:"✓✓",FAILED:"!"}[msg.status]||"";
-  msgsEl.innerHTML = `<div class="daychip">Today</div>` + msg.chat.map((x,i)=>{
-    const bub = `<div class="bubble ${x.dir}">${x.quote?`<span class="quote">${esc(c.dealer)}<br>Hi ${esc(lead.name)}, …</span>`:""}${esc(x.text)}<span class="meta">${x.dir==="in"&&x.template?tick:""}</span></div>`;
-    const btns = x.buttons ? `<div class="qr">${x.buttons.map(b=>`<button type="button" data-msg="${msg.id}" data-code="${b.code}" data-label="${esc(b.label)}" ${x.used||TERMINAL.has(msg.status)&&msg.status!=="REPLIED"?"disabled":""}>${esc(b.label)}</button>`).join("")}</div>` : "";
-    return bub + btns;
+  $("#waSub").textContent = `${lead.name}'s phone · +${lead.mobile}`;
+  el.innerHTML = `<div class="daychip">Today</div>` + lead.chat.map(c=>{
+    if (c.dir==="out") return `<div class="bubble out">${c.quote?`<span class="quote">${esc(c.quote)}</span>`:""}${esc(c.text)}<span class="meta">${c.at} <span style="color:#53bdeb">✓✓</span></span></div>`;
+    let h = `<div class="bubble in">${c.title?`<span class="ttl">${esc(c.title)}</span>`:""}${esc(c.text)}${c.footer?`<span class="foot">${esc(c.footer)}</span>`:""}<span class="meta">${c.at}</span>`;
+    if (c.kind==="list") h += `<button type="button" class="listbtn" data-list="${c.messageId}" ${c.used?"disabled":""}>☰ ${esc(c.used ? (c.list.find(r=>r.id===c.used)||{}).title : c.listButton)}</button>`;
+    h += `</div>`;
+    if (c.buttons) h += `<div class="qr">${c.buttons.map(b=>`<button type="button" data-msg="${c.messageId}" data-code="${b.code}" data-label="${esc(b.label)}" class="${c.used===b.code?"picked":""}" ${c.used?"disabled":""}>${esc(b.label)}</button>`).join("")}</div>`;
+    return h;
   }).join("");
-  msgsEl.scrollTop = msgsEl.scrollHeight;
+  el.scrollTop = el.scrollHeight;
+  const mine=S.interactions.filter(i=>i.lead_id===lead.id), has=s=>mine.some(i=>i.step===s);
+  const opt=(mine.find(i=>i.step==="TIMELINE")||{}).option_code;
+  const node=(label,on,cur)=>`<span class="node ${on?"on":cur?"cur":""}">${label}</span>`, arr=`<span class="arr">→</span>`;
+  let path = node("Template sent",true) + arr + node("Purchase timeline"+(opt?`: ${esc(TIMELINE.find(t=>t[0]===opt)[1])}`:""), has("TIMELINE"), !has("TIMELINE"));
+  if (!opt || QUALIFY.includes(opt)) path += arr + node("Visit date",has("VISIT_DATE"),has("TIMELINE")&&!has("VISIT_DATE")) + arr + node("Visit time",has("VISIT_TIME"),has("VISIT_DATE")&&!has("VISIT_TIME")) + arr + node("Visit booked",has("VISIT_TIME"));
+  else path += arr + node(opt==="GT2M" ? "Check-in message · follow-up in 60 days" : "Help message · follow-up in 7 days", true);
+  $("#flowMap").innerHTML = `<div class="flowmap">${path}</div><div class="hint" style="margin-top:10px">Lead ${esc(lead.id)} · dealer ${esc(lead.dealerId)} · template ${esc(DEALERS[lead.dealerId].template)} · flow ${FLOW}</div>`;
+  const h = S.lastHook && S.lastHook.row.lead_id===lead.id ? S.lastHook : null;
+  $("#lastHook").innerHTML = !h ? `<div class="hint">Tap an option on the phone. The metadata Gupshup sends us appears here.</div>` :
+    `<div class="hookcard"><div class="bar"><span class="tag t-ok">mapped</span><b>${esc(h.row.flow)} / ${esc(h.row.step)} / ${esc(h.row.option_code)}</b></div>
+     <table class="fields">
+       <tr><td>Option selected</td><td>${esc(h.row.option_title)}</td></tr>
+       <tr><td>Inbound message ID</td><td>${esc(h.row.inbound_id)}</td></tr>
+       <tr><td>Replied to · context.gsId</td><td>${esc(h.row.context_message_id)}</td></tr>
+       <tr><td>Replied to · context.id</td><td>${esc(h.row.context_wamid)}</td></tr>
+       <tr><td>→ Lead / dealer</td><td>${esc(h.row.lead_id)} / ${esc(h.row.dealer_id)}</td></tr>
+       <tr><td>→ Template</td><td>${esc(h.row.template_id)}</td></tr>
+       <tr><td>postbackText</td><td>${esc(h.row.postback)}</td></tr>
+     </table>
+     <details><summary>Raw webhook payload</summary><pre class="json">${esc(JSON.stringify({type:"message", payload:h.raw},null,2))}</pre></details></div>`;
+}
+function openSheet(messageId){
+  const lead=leadById(S.messages[messageId].lead_id), c=lead.chat.find(x=>x.messageId===messageId), sh=$("#sheet");
+  sh.innerHTML = `<div class="card" role="dialog" aria-label="${esc(c.footer)}"><h4><button type="button" id="sheetClose" aria-label="Close">×</button>${esc(c.footer)}</h4>
+    <div class="opts">${c.list.map((r,i)=>`<label><span>${esc(r.title)}${r.desc?`<small>${esc(r.desc)}</small>`:""}</span><input type="radio" name="lrow" value="${i}"></label>`).join("")}</div>
+    <button type="button" class="send" id="sheetSend" disabled>Send</button></div>`;
+  sh.hidden=false;
+  sh.querySelectorAll("input[name=lrow]").forEach(x=>x.addEventListener("change",()=>{ $("#sheetSend").disabled=false; }));
+  $("#sheetClose").onclick=()=>{ sh.hidden=true; };
+  sh.onclick=e=>{ if (e.target===sh) sh.hidden=true; };
+  $("#sheetSend").onclick=()=>{ const i=+sh.querySelector("input[name=lrow]:checked").value; sh.hidden=true; pickListRow(messageId, c.list[i]); };
 }
 
-/* ---------------- wiring ---------------- */
-function presetDate(key){
-  // Week of Mon 2 Nov 2026 … Sun 8 Nov 2026
-  const map = {"fri-0026":[6,0,26],"thu-2200":[5,22,0],"sat-2100":[7,21,0],"fri-1720":[6,17,20],"fri-1100":[6,11,0]};
-  const [d,h,m] = map[key];
-  return `2026-11-${String(d).padStart(2,"0")}T${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
-}
-$("#fTime").value = presetDate("fri-0026");
-document.querySelectorAll("[data-preset]").forEach(b=>b.addEventListener("click",()=>{ $("#fTime").value = presetDate(b.dataset.preset); }));
-document.querySelectorAll(".cfg input,.cfg select").forEach(el=>el.addEventListener("change",render));
-
-$("#leadForm").addEventListener("submit", async e=>{
-  e.preventDefault();
-  const v = $("#fTime").value; if (!v) return;
-  const [d,t] = v.split("T"); const [Y,M,D] = d.split("-").map(Number); const [h,m] = t.split(":").map(Number);
-  const lead = {id:"L"+(S.leadSeq++), name:$("#fName").value.trim()||"Customer", mobile:$("#fMobile").value.trim(),
-    model:$("#fModel").value, createdAt:new Date(Date.UTC(Y,M-1,D,h,m)), consent:$("#fConsent").checked,
-    stage:"FIRST_CALL", feed:[], closed:false};
-  feed(lead, "Inquiry created and assigned to Akshay");
-  S.leads.unshift(lead); S.selected = lead.id;
-  $("#formHint").textContent = `${lead.id} created`;
-  render();
-  await onLeadCreated(lead);
-});
-$("#leads").addEventListener("click", async e=>{
-  const el = e.target.closest(".lead"); if (!el) return;
-  S.selected = el.dataset.id; render();
-  const l = leadById(S.selected), m = l && l.msgId && S.msgs[l.msgId];
-  if (m && (m.status==="DELIVERED" || m.status==="SENT")){ await wait(400); await webhook(statusEvent(m,"read")); }
-});
-$("#leads").addEventListener("keydown", e=>{ if (e.key==="Enter") e.target.click(); });
-$("#msgs").addEventListener("click", e=>{
-  const b = e.target.closest("button[data-code]"); if (!b || b.disabled) return;
-  tap(+b.dataset.msg, b.dataset.code, b.dataset.label);
-});
-$("#compose").addEventListener("submit", e=>{
-  e.preventDefault(); const t = $("#composeInput").value.trim(); if (!t) return;
-  $("#composeInput").value = ""; typed(t);
-});
-$("#tReplay").addEventListener("click", ()=>{
-  if (!S.lastWebhook) return log("warn","Simulator","no inbound webhook yet: tap a button on the phone first");
-  log("step","Simulator","Gupshup retries the last inbound event");
-  webhook(S.lastWebhook);
-});
-$("#tForged").addEventListener("click", ()=>{
-  const l = leadById(S.selected); const m = l && l.msgId && S.msgs[l.msgId];
-  log("step","Simulator","Attacker posts a fake '15 Days' reply with a guessed token");
-  const evt = m ? inboundEvent(m,{type:"quick_reply",payload:{text:"15 Days",postbackText:`TIMELINE_15D|${m.leadId}`}}) : {type:"message",timestamp:Date.now(),payload:{id:"x",source:"910000000000",type:"quick_reply",payload:{}}};
-  webhook(evt, "guessed-token");
-});
-$("#tSpoof").addEventListener("click", ()=>{
-  const l = leadById(S.selected); const m = l && l.msgId && S.msgs[l.msgId];
-  if (!m) return log("warn","Simulator","select a lead that received a template first");
-  log("step","Simulator","Leaked token used to qualify this lead from another number");
-  webhook(inboundEvent(m,{type:"quick_reply",payload:{text:"15 Days",postbackText:`TIMELINE_15D|${m.leadId}`}}, "919111111111"));
-});
-$("#tExpire").addEventListener("click", ()=>{ S.clockOffsetH += 24; log("step","Simulator","clock moved forward 24 hours"); maintenance(); });
-$("#tHuman").addEventListener("click", ()=>{
-  const l = leadById(S.selected); if (!l) return log("warn","Simulator","select a lead first");
-  l.stage = "VISITS"; feed(l, "Akshay called the customer and scheduled a visit"); l.botState = l.botState || "Worked by sales exec";
-  log("step","Simulator",`sales exec moved ${l.id} to Visits. Now tap a WhatsApp button: the bot will not downgrade it.`);
-  render();
-});
-$("#tDown").addEventListener("change", e=>{
-  log(e.target.checked?"bad":"ok","Simulator", e.target.checked ? "L2R API is now returning 503" : "L2R API is back. Running maintenance to retry failed syncs.");
-  if (!e.target.checked) maintenance();
-});
-$("#clearLog").addEventListener("click", ()=>{ $("#log").innerHTML=""; });
-$("#clearAll").addEventListener("click", ()=>{
-  Object.assign(S,{leads:[],msgs:{},events:new Set(),optOut:new Set(),selected:null,lastWebhook:null,clockOffsetH:0,
-    eventRows:[],optRows:[],audit:[],seq:1,gsSeq:100,inSeq:1,leadSeq:12345});
-  try{ localStorage.removeItem(STORE_KEY); }catch(e){}
-  $("#log").innerHTML="";
-  if (REMOTE.on) fetch("/api/db/reset",{method:"POST"}).then(r=>r.json()).then(j=>{ REMOTE.version=j.version||0; REMOTE.lastPushed=""; setBadge(); boot(); render(); });
-  else { boot(); render(); }
-});
-function resetLocal(){
-  Object.assign(S,{leads:[],msgs:{},events:new Set(),optOut:new Set(),selected:null,lastWebhook:null,clockOffsetH:0,
-    eventRows:[],optRows:[],audit:[],seq:1,gsSeq:100,inSeq:1,leadSeq:12345});
-  $("#log").innerHTML=""; render();
-}
-
-/* ---------------- persistence: shared Postgres (via /api/db) or this browser ---------------- */
-const REMOTE = {on:false, version:0, lastPushed:"", pushTimer:null, applying:false, lastLocal:0};
-let saveTimer = null;
-function snapshot(){ return {...S, events:[...S.events], optOut:[...S.optOut], cfg:cfg()}; }
-function save(){
-  if (REMOTE.applying) return;
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(()=>{
-    const snap = snapshot();
-    try{ localStorage.setItem(STORE_KEY, JSON.stringify(snap)); }catch(e){}
-    if (REMOTE.on) pushRemote(snap);
-  }, 150);
-}
-function pushRemote(snap){
-  const body = JSON.stringify({state:snap, tables:tables()});
-  if (body === REMOTE.lastPushed) return;          // nothing changed
-  REMOTE.lastLocal = Date.now();
-  clearTimeout(REMOTE.pushTimer);
-  REMOTE.pushTimer = setTimeout(async ()=>{
-    try{
-      const r = await fetch("/api/db", {method:"POST", headers:{"content-type":"application/json"}, body});
-      const j = await r.json();
-      if (!r.ok || !j.ok) throw new Error(j.error || r.status);
-      REMOTE.version = j.version; REMOTE.lastPushed = body;
-      setBadge();
-    }catch(e){ setBadge("Postgres: save failed, retrying"); setTimeout(()=>pushRemote(snapshot()), 3000); }
-  }, 500);
-}
-function applyState(d){
-  REMOTE.applying = true;
-  Object.assign(S, d, {events:new Set(d.events||[]), optOut:new Set(d.optOut||[])});
-  S.eventRows = S.eventRows||[]; S.optRows = S.optRows||[]; S.audit = S.audit||[];
-  S.leads.forEach(l=>{ l.createdAt = new Date(l.createdAt); });
-  Object.values(S.msgs).forEach(m=>{ if (m.sentAt) m.sentAt = new Date(m.sentAt); });
-  if (d.cfg){
-    const c=d.cfg; $("#cDealer").value=c.dealer; $("#cRep").value=c.rep; $("#cOpen").value=c.open; $("#cClose").value=c.close;
-    $("#cOff").value=String(c.off); $("#cBuffer").value=c.buffer; $("#cMax").value=String(c.maxDays); $("#cHoldout").value=c.holdout; $("#cEnabled").checked=c.enabled;
+/* ---------- 4. tracking ---------- */
+const pct = (a,b) => b ? Math.round(a*100/b) : 0;
+function stats(){
+  const by={};
+  for (const m of Object.values(S.messages).filter(m=>m.msg_type==="template")){
+    const t = by[m.template_id] ||= {template:m.template_id, sent:0, delivered:0, read:0, replied:0, qualified:0, date:0, time:0, opts:{}};
+    t.sent++;
+    if (["DELIVERED","READ","REPLIED"].includes(m.status)) t.delivered++;
+    if (m.read_at || m.status==="REPLIED") t.read++;
+    if (m.status==="REPLIED"){ t.replied++; t.opts[m.reply_option]=(t.opts[m.reply_option]||0)+1; if (QUALIFY.includes(m.reply_option)) t.qualified++; }
   }
-  $("#log").innerHTML = ""; S.audit.forEach(drawLog);
-  render();
-  REMOTE.applying = false;
+  for (const i of S.interactions){ const t=by[i.template_id]; if (!t) continue; if (i.step==="VISIT_DATE") t.date++; if (i.step==="VISIT_TIME") t.time++; }
+  return Object.values(by).sort((a,b)=>a.template.localeCompare(b.template));
 }
-function loadLocal(){
-  let d; try{ d = JSON.parse(localStorage.getItem(STORE_KEY)||"null"); }catch(e){ d=null; }
-  if (!d) return false;
-  applyState(d); return true;
-}
-function setBadge(text){
-  const b = $("#storeBadge");
-  b.className = "store" + (REMOTE.on ? " pg" : "");
-  b.textContent = text || (REMOTE.on ? `Storage: Postgres (shared) · v${REMOTE.version}` : "Storage: this browser only");
-}
-async function fetchRemote(){
-  const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 4000);
-  try{
-    const r = await fetch("/api/db", {signal:ctl.signal, cache:"no-store"});
-    if (!r.ok) return null;
-    const j = await r.json();
-    return j && j.ok ? j : null;
-  }catch(e){ return null; } finally { clearTimeout(t); }
-}
-async function startStorage(){
-  const remote = location.protocol.startsWith("http") ? await fetchRemote() : null;
-  if (remote){
-    REMOTE.on = true; REMOTE.version = remote.version;
-    if (remote.state){
-      applyState(remote.state);
-      REMOTE.lastPushed = JSON.stringify({state:snapshot(), tables:tables()});
-      log("info","Prototype",`Loaded ${S.leads.length} lead(s) and ${S.audit.length-0} log entries from shared Postgres (v${remote.version})`);
-    } else {
-      if (!loadLocal()) boot();
-      log("info","Prototype","Connected to shared Postgres. Your data is now saved there for everyone who opens this site.");
-    }
-    setInterval(pollRemote, 8000);
-  } else {
-    if (loadLocal()) log("info","Prototype",`Restored ${S.leads.length} lead(s) from browser storage`);
-    else boot();
-  }
-  setBadge(); render();
-}
-async function pollRemote(){
-  if (Date.now() - REMOTE.lastLocal < 4000) return;   // don't overwrite your own in-flight work
-  const j = await fetchRemote();
-  if (j && j.version > REMOTE.version){
-    REMOTE.version = j.version;
-    if (j.state){ applyState(j.state); REMOTE.lastPushed = JSON.stringify({state:snapshot(), tables:tables()}); }
-    else { resetLocal(); }
-    setBadge();
-  }
+function renderTracking(){
+  const by=stats();
+  const tot=by.reduce((a,t)=>{ for (const k of ["sent","delivered","read","replied","qualified","date","time"]) a[k]+=t[k]; return a; }, {sent:0,delivered:0,read:0,replied:0,qualified:0,date:0,time:0});
+  $("#kpis").innerHTML = [
+    ["Templates sent",tot.sent,""],["Delivered",tot.delivered,pct(tot.delivered,tot.sent)+"%"],["Read",tot.read,pct(tot.read,tot.delivered)+"%"],
+    ["Replied (engagement)",tot.replied,pct(tot.replied,tot.delivered)+"%"],["Qualified ≤ 2 months",tot.qualified,pct(tot.qualified,tot.replied)+"%"],["Visits booked",tot.time,pct(tot.time,tot.qualified)+"%"],
+  ].map(([k,v,p])=>`<div><b>${v}${p?`<em>${p}</em>`:""}</b><span>${k}</span></div>`).join("");
+  const f=[["Template sent",tot.sent],["Delivered",tot.delivered],["Read",tot.read],["Answered timeline",tot.replied],["Qualified (≤ 2 months)",tot.qualified],["Chose visit date",tot.date],["Chose visit time",tot.time]];
+  $("#funnel").innerHTML = f.map(([k,v])=>`<div class="frow"><span>${k}</span><div class="fbar"><i style="width:${tot.sent?v*100/tot.sent:0}%"></i></div><span class="v">${v} <small>${pct(v,tot.sent)}%</small></span></div>`).join("");
+  $("#tplTable").innerHTML = !by.length ? `<div class="empty">No templates sent yet. Submit an after-hours enquiry, or click “Simulate 25 customers”.</div>` :
+    `<table class="data"><thead><tr><th>Template ID</th><th class="num">Sent</th><th class="num">Delivered</th><th class="num">Read</th><th class="num">Replied</th><th class="num">Engagement</th><th>Option split</th><th class="num">Qualified</th><th class="num">Date chosen</th><th class="num">Visit booked</th></tr></thead><tbody>${
+      by.map(t=>`<tr><td class="mono">${esc(t.template)}</td><td class="num">${t.sent}</td><td class="num">${t.delivered}</td><td class="num">${t.read}</td><td class="num">${t.replied}</td><td class="num"><b>${pct(t.replied,t.delivered)}%</b></td>
+        <td><div class="opts-bar" title="${esc(TIMELINE.map(o=>`${o[1]}: ${t.opts[o[0]]||0}`).join(", "))}">${TIMELINE.map(o=>t.opts[o[0]]?`<i style="width:${t.opts[o[0]]*100/t.replied}%;background:${OPT_COLORS[o[0]]}"></i>`:"").join("")}</div></td>
+        <td class="num">${t.qualified}</td><td class="num">${t.date} <span class="hint">${pct(t.date,t.qualified)}%</span></td><td class="num">${t.time} <span class="hint">${pct(t.time,t.qualified)}%</span></td></tr>`).join("")}</tbody></table>`;
+  $("#optLegend").innerHTML = TIMELINE.map(o=>`<span><i style="background:${OPT_COLORS[o[0]]}"></i>${o[1]}</span>`).join("");
+  $("#clickCount").textContent = `${S.interactions.length} click(s)`;
+  $("#clicks").innerHTML = !S.interactions.length ? `<div class="empty">No clicks yet.</div>` :
+    `<table class="data"><thead><tr><th>Received</th><th>Lead</th><th>Dealer</th><th>Template</th><th>Flow / step</th><th>Option</th><th>Inbound msg ID</th><th>Replied to messageId</th></tr></thead><tbody>${
+      S.interactions.slice().reverse().map(i=>`<tr><td class="mono">${esc(i.received_at.slice(11,19))}</td><td class="mono">${esc(i.lead_id)}</td><td class="mono">${esc(i.dealer_id)}</td><td class="mono">${esc(i.template_id)}</td><td class="mono">${esc(i.flow)} / ${esc(i.step)}</td><td>${esc(i.option_title)} <span class="hint mono">${esc(i.option_code)}</span></td><td class="mono">${esc(i.inbound_id)}</td><td class="mono">${esc(i.context_message_id)}</td></tr>`).join("")}</tbody></table>`;
+  renderDb();
 }
 
-/* ---------------- database viewer ---------------- */
+/* ---------- database & logs ---------- */
 let dbTable = "wa_message";
 function tables(){
-  const c = cfg();
-  const iso = d => d ? new Date(d).toISOString() : null;
   return {
-    leads_l2r: S.leads.map(l=>({lead_id:l.id, customer_name:l.name, mobile:l.mobile, model:l.model, created_at_ist:fmtWall(l.createdAt), consent:l.consent, stage:l.stage, priority:l.priority||null, call_status:l.callStatus||null, purchase_timeline:l.timeline||null, follow_up:l.followUp||null, bot_state:l.botState||null})),
-    dealer_config: [{dealer_id:"D1", enabled:c.enabled, dealer_name:c.dealer, rep_name:c.rep, rep_phone:c.repPhone, working_hours:`${c.open}-${c.close}`, weekly_off:c.off>=0?DAYS[c.off]:null, pre_close_buffer_min:c.buffer, qualify_max_days:c.maxDays, holdout_pct:c.holdout, template_id:"tpl_nwh_timeline_v1"}],
-    wa_message: Object.values(S.msgs).map(m=>({id:m.id, lead_id:m.leadId, mobile:m.mobile, template_id:"tpl_nwh_timeline_v1", gs_message_id:m.gsId||null, wamid:m.wamid||null, status:m.status, sent_at:iso(m.sentAt), reply_code:m.replyCode||null, outcome:m.outcome||null, l2r_sync_status:m.sync})),
-    wa_event: S.eventRows.map(r=>({...r, payload:JSON.stringify(r.payload)})),
-    opt_out: S.optRows,
+    leads_l2r: S.leads.map(l=>({lead_id:l.id, customer_name:l.name, mobile:l.mobile, make:l.make, model:l.model, city:l.city, dealer_id:l.dealerId, source:l.source, created_at_local:fmtWall(l.createdAt), stage:l.stage, priority:l.priority||null, purchase_timeline:l.timeline||null, visit_date:l.visitDate||null, visit_slot:l.visitSlot||null, bot_state:l.botState||null})),
+    dealer_config: Object.values(DEALERS).map(d=>({dealer_id:d.id, dealer_name:d.name, city:d.city, waba_number:WABA.number, virtual_number:d.virtual, sales_executive:d.exec, working_hours:`${d.open}-${d.close}`, weekly_off:d.off>=0?DAYS[d.off]:null, template_id:d.template})),
+    wa_message: Object.values(S.messages),
+    wa_interaction: S.interactions,
+    wa_event: S.eventRows.map(r=>({...r, payload: JSON.stringify(r.payload)})),
     audit_log: S.audit.map(a=>({id:a.id, ts:a.ts, level:a.level, source:a.source, lead_id:a.lead_id, message:a.message, detail:a.detail===null?null:JSON.stringify(a.detail)})),
   };
 }
 function renderDb(){
-  if ($("#dbview").hidden) return;
-  const T = tables();
-  $("#dbChips").innerHTML = Object.keys(T).map(k=>`<button type="button" class="tchip" data-t="${k}" aria-pressed="${k===dbTable}">${k}<b>${T[k].length}</b></button>`).join("");
-  const q = $("#dbFilter").value.trim().toLowerCase();
-  let rows = T[dbTable];
-  if (q) rows = rows.filter(r=>JSON.stringify(r).toLowerCase().includes(q));
-  if (dbTable==="audit_log") rows = rows.slice().reverse();
-  const cols = rows.length ? Object.keys(rows[0]) : (Object.keys((T[dbTable][0])||{}));
-  $("#dbTable").innerHTML = !rows.length ? `<div class="empty">No rows in <code>${dbTable}</code>${q?" match the filter":" yet"}.</div>` :
-    `<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>{
-      const v=r[c]; if (v===null||v===undefined) return `<td class="null">NULL</td>`;
-      const cls = c==="level" ? (v==="ERROR"?"lv-bad":v==="WARN"?"lv-warn":"lv-ok") : "";
-      const sv = String(v); return `<td class="${cls}" title="${esc(sv)}">${esc(sv.length>300?sv.slice(0,300)+"…":sv)}</td>`;}).join("")}</tr>`).join("")}</tbody></table>`;
-  $("#dbFoot").textContent = `${rows.length} row(s) in ${dbTable}. ` + (REMOTE.on
-    ? `Saved to shared Postgres (schema proto, table ${dbTable}); everyone opening this site sees the same data. Reset clears it.`
-    : "Stored in this browser only; refresh keeps it, Reset clears it.");
+  const T=tables();
+  $("#dbTabs").innerHTML = [...Object.keys(T),"live_log"].map(k=>`<button type="button" class="chip" data-t="${k}" aria-pressed="${k===dbTable}">${k}${T[k]?` · ${T[k].length}`:""}</button>`).join("");
+  if (dbTable==="live_log"){
+    $("#dbBody").innerHTML = `<div class="log">${S.audit.slice(-300).map(a=>`<div class="entry ${a.kind}"><div class="h"><time>${a.ts.slice(11,19)}</time><span class="src">${esc(a.source)}</span><span>${esc(a.message)}</span></div>${a.detail!==null?`<pre>${esc(JSON.stringify(a.detail,null,2))}</pre>`:""}</div>`).join("")}</div>`;
+    const lg=$("#dbBody .log"); lg.scrollTop=lg.scrollHeight;
+    $("#dbFoot").textContent = `${S.audit.length} log entries, also stored as the audit_log table.`;
+    return;
+  }
+  const q=$("#dbFilter").value.trim().toLowerCase();
+  let rows=T[dbTable]; if (q) rows=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(q));
+  rows=rows.slice().reverse();
+  const cols=rows.length?Object.keys(rows[0]):[];
+  $("#dbBody").innerHTML = !rows.length ? `<div class="empty">No rows in <code>${dbTable}</code>${q?" match the filter":" yet"}.</div>` :
+    `<div class="dbtable"><table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>${cols.map(c=>{const v=r[c]; if (v===null||v===undefined) return `<td class="null">NULL</td>`; const sv=String(v); return `<td title="${esc(sv)}">${esc(sv.length>240?sv.slice(0,240)+"…":sv)}</td>`;}).join("")}</tr>`).join("")}</tbody></table></div>`;
+  $("#dbFoot").textContent = `${rows.length} row(s) in ${dbTable}. ` + (REMOTE.on ? "Saved to shared Postgres (schema nwh)." : "Stored in this browser only.");
 }
-function setTab(db){
-  $("#tabLog").setAttribute("aria-selected", String(!db)); $("#tabDb").setAttribute("aria-selected", String(db));
-  $("#logview").hidden = db; $("#dbview").hidden = !db;
-  renderDb();
-}
-$("#tabLog").addEventListener("click", ()=>setTab(false));
-$("#tabDb").addEventListener("click", ()=>setTab(true));
-$("#dbChips").addEventListener("click", e=>{ const b=e.target.closest("[data-t]"); if (!b) return; dbTable=b.dataset.t; renderDb(); });
-$("#dbFilter").addEventListener("input", renderDb);
 function download(name, text, type){
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text],{type})); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
-$("#exportCsv").addEventListener("click", ()=>{
-  const rows = tables()[dbTable]; if (!rows.length) return;
-  const cols = Object.keys(rows[0]);
-  const cell = v => v===null||v===undefined ? "" : `"${String(v).replace(/"/g,'""')}"`;
-  download(`${dbTable}.csv`, [cols.join(","), ...rows.map(r=>cols.map(c=>cell(r[c])).join(","))].join("\n"), "text/csv");
-});
-$("#exportJson").addEventListener("click", ()=>download("qualifier-db.json", JSON.stringify(tables(), null, 2), "application/json"));
 
-function boot(){
-  log("step","Prototype","Simulated: L2R, Gupshup, Meta. Real logic: eligibility, calendar, webhook auth, dedupe, mapping, rules, L2R sync.");
-  log("info","Try","Create a lead at 'Fri 12:26 AM', then tap '1 Month' on the phone.");
+/* ---------------- lead creation + simulation ---------------- */
+function newLead(o){
+  const lead = {id:"L"+(S.seq.lead++), name:o.name, mobile:o.mobile, make:o.make, model:o.model, city:o.city, dealerId:o.dealerId, consent:o.consent,
+    createdAt:o.createdAt, source:"Website enquiry", stage:"FIRST_CALL", feed:[], chat:[], pipeline:[]};
+  feed(lead, `Enquiry from website, assigned to ${DEALERS[o.dealerId].exec}`);
+  S.leads.unshift(lead);
+  if (!FAST) S.selected = lead.id;
+  return lead;
 }
+async function simulate(n){
+  FAST = true;
+  const names=["Aarav","Diya","Kabir","Meera","Rohit","Sneha","Arjun","Isha","Vikram","Ananya","Karan","Pooja","Nikhil","Riya","Sahil"];
+  const rnd=a=>a[Math.floor(Math.random()*a.length)];
+  for (let i=0;i<n;i++){
+    const dealer=rnd(Object.values(DEALERS)), make=rnd(Object.keys(VEHICLES)), model=rnd(Object.keys(VEHICLES[make].models));
+    const lead=newLead({name:rnd(names), mobile:"9198"+String(10000000+Math.floor(Math.random()*89999999)), make, model, city:dealer.city, dealerId:dealer.id, consent:true,
+      createdAt:new Date(Date.UTC(2026,10,5+(i%3),20+Math.floor(Math.random()*4),Math.floor(Math.random()*60)))});
+    await onLeadCreated(lead);
+    const m=S.messages[firstMsgId(lead)]; if (!m) continue;
+    if (Math.random()<.2) continue;                                       // delivered, never read
+    await webhook(statusEvent(m,"read"));
+    const replyRate = dealer.template==="tpl_nwh_timeline_v2" ? .68 : .52; // v2 copy engages better
+    if (Math.random()>replyRate) continue;
+    const r=Math.random(), code=r<.18?"15D":r<.40?"1M":r<.58?"1_2M":r<.80?"GT2M":"RESEARCH";
+    await tapButton(m.message_id, code, TIMELINE.find(t=>t[0]===code)[1]);
+    if (!QUALIFY.includes(code) || Math.random()<.25) continue;
+    const dateMsg=lead.chat.filter(c=>c.kind==="list").pop(); if (!dateMsg) continue;
+    await pickListRow(dateMsg.messageId, rnd(dateMsg.list));
+    if (Math.random()<.15) continue;
+    const timeMsg=lead.chat.filter(c=>c.kind==="list").pop();
+    await pickListRow(timeMsg.messageId, rnd(timeMsg.list));
+  }
+  FAST = false; render();
+}
+
+/* ---------------- persistence: shared Postgres (/api/db) or browser ---------------- */
+const REMOTE = {on:false, version:0, lastPushed:"", pushTimer:null, applying:false, lastLocal:0};
+let saveTimer=null;
+const snapshot = () => JSON.parse(JSON.stringify(S));
+function save(){
+  if (REMOTE.applying) return;
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    const snap=snapshot();
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(snap)); }catch(e){}
+    if (REMOTE.on) pushRemote(snap);
+  }, 250);
+}
+function pushRemote(snap){
+  const body=JSON.stringify({state:snap, tables:tables()});
+  if (body===REMOTE.lastPushed) return;
+  REMOTE.lastLocal=Date.now();
+  clearTimeout(REMOTE.pushTimer);
+  REMOTE.pushTimer=setTimeout(async ()=>{
+    try{
+      const r=await fetch("/api/db",{method:"POST",headers:{"content-type":"application/json"},body});
+      const j=await r.json(); if (!r.ok||!j.ok) throw new Error(j.error||r.status);
+      REMOTE.version=j.version; REMOTE.lastPushed=body; setBadge();
+    }catch(e){ setBadge("Postgres: save failed, retrying"); setTimeout(()=>pushRemote(snapshot()),3000); }
+  }, 600);
+}
+function applyState(d){
+  if (!d || d.schema!==2) return false;
+  REMOTE.applying=true;
+  S=Object.assign(fresh(), d);
+  S.leads.forEach(l=>{ l.createdAt=new Date(l.createdAt); });
+  render(); REMOTE.applying=false; return true;
+}
+function setBadge(text){
+  const b=$("#storeBadge"); b.className="store"+(REMOTE.on?" pg":"");
+  b.textContent = text || (REMOTE.on ? `Storage: Postgres (shared) · v${REMOTE.version}` : "Storage: this browser only");
+}
+async function fetchRemote(){
+  const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),4000);
+  try{ const r=await fetch("/api/db",{signal:ctl.signal,cache:"no-store"}); if (!r.ok) return null; const j=await r.json(); return j&&j.ok?j:null; }
+  catch(e){ return null; } finally{ clearTimeout(t); }
+}
+async function startStorage(){
+  const remote = location.protocol.startsWith("http") ? await fetchRemote() : null;
+  let local=null; try{ local=JSON.parse(localStorage.getItem(STORE_KEY)||"null"); }catch(e){}
+  if (remote){
+    REMOTE.on=true; REMOTE.version=remote.version;
+    if (applyState(remote.state)) REMOTE.lastPushed=JSON.stringify({state:snapshot(),tables:tables()});
+    else applyState(local);
+    setInterval(async ()=>{
+      if (Date.now()-REMOTE.lastLocal<4000 || FAST) return;
+      const j=await fetchRemote();
+      if (j && j.version>REMOTE.version){
+        REMOTE.version=j.version;
+        if (!applyState(j.state)){ S=fresh(); render(); }
+        REMOTE.lastPushed=JSON.stringify({state:snapshot(),tables:tables()}); setBadge();
+      }
+    }, 8000);
+  } else applyState(local);
+  setBadge(); render();
+}
+
+/* ---------------- wiring ---------------- */
+window.addEventListener("hashchange", ()=>{
+  window.scrollTo(0,0); render();
+  if (route()==="whatsapp"){ const l=leadById(S.selected); if (l) Object.values(S.messages).filter(m=>m.lead_id===l.id && ["SENT","DELIVERED"].includes(m.status)).forEach(m=>webhook(statusEvent(m,"read"))); }
+});
+for (const id of ["#fMake","#fModel","#fCity","#fDealer"]) $(id).addEventListener("change", render);
+$("#timeChips").addEventListener("click", e=>{ const b=e.target.closest("[data-time]"); if (!b) return; S.timePreset=b.dataset.time; render(); });
+$("#leadForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  const lead=newLead({name:$("#fName").value.trim()||"Customer", mobile:$("#fMobile").value.trim(), make:$("#fMake").value, model:$("#fModel").value,
+    city:$("#fCity").value, dealerId:$("#fDealer").value, consent:$("#fConsent").checked, createdAt:enquiryTime()});
+  const th=$("#thanks"); th.hidden=false;
+  th.innerHTML = `Thanks, ${esc(lead.name)}! Your enquiry for the ${esc(lead.make)} ${esc(lead.model)} has been sent to ${esc(DEALERS[lead.dealerId].name)}.<br><span style="font-weight:400">Reference ${lead.id}. Opening the dealer's lead management system…</span>`;
+  $("#submitBtn").disabled=true;
+  setTimeout(()=>{ $("#submitBtn").disabled=false; th.hidden=true; location.hash="#lms"; onLeadCreated(lead); }, 1400);
+});
+$("#leadList").addEventListener("click", e=>{ const r=e.target.closest(".leadrow"); if (!r) return; S.selected=r.dataset.id; render(); });
+$("#leadList").addEventListener("keydown", e=>{ if (e.key==="Enter" && e.target.classList.contains("leadrow")) e.target.click(); });
+$("#msgs").addEventListener("click", e=>{
+  const b=e.target.closest("button[data-code]"); if (b && !b.disabled) return tapButton(b.dataset.msg, b.dataset.code, b.dataset.label);
+  const l=e.target.closest("button[data-list]"); if (l && !l.disabled) openSheet(l.dataset.list);
+});
+$("#compose").addEventListener("submit", e=>{
+  e.preventDefault(); const t=$("#composeInput").value.trim(), lead=leadById(S.selected); if (!t||!lead) return;
+  $("#composeInput").value=""; lead.chat.push({dir:"out", text:t, at:clock()});
+  log("warn","Processor",`free text "${t}" from ${lead.id}: not a button tap, asked to use the options`, undefined, lead.id);
+  lead.chat.push({dir:"in", text:"Please tap one of the options above so we can help you faster 🙂", at:clock()});
+  render();
+});
+$("#simBtn").addEventListener("click", async e=>{ const b=e.currentTarget; b.disabled=true; b.textContent="Simulating…"; await simulate(25); b.disabled=false; b.textContent="Simulate 25 customers"; });
+$("#dbTabs").addEventListener("click", e=>{ const b=e.target.closest("[data-t]"); if (!b) return; dbTable=b.dataset.t; renderDb(); });
+$("#dbFilter").addEventListener("input", renderDb);
+$("#exportCsv").addEventListener("click", ()=>{
+  const rows=tables()[dbTable]||[]; if (!rows.length) return; const cols=Object.keys(rows[0]);
+  const cell=v=>v===null||v===undefined?"":`"${String(typeof v==="object"?JSON.stringify(v):v).replace(/"/g,'""')}"`;
+  download(`${dbTable}.csv`, [cols.join(","),...rows.map(r=>cols.map(c=>cell(r[c])).join(","))].join("\n"), "text/csv");
+});
+$("#exportJson").addEventListener("click", ()=>download("qualifier-db.json", JSON.stringify(tables(),null,2), "application/json"));
+$("#resetAll").addEventListener("click", ()=>{
+  S=fresh(); try{ localStorage.removeItem(STORE_KEY); }catch(e){}
+  if (REMOTE.on) fetch("/api/db/reset",{method:"POST"}).then(r=>r.json()).then(j=>{ REMOTE.version=j.version||0; REMOTE.lastPushed=""; setBadge(); });
+  location.hash="#website"; render();
+});
+
 render();
 startStorage();
 </script>

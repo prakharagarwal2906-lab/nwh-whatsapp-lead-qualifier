@@ -6,35 +6,39 @@
 //   GET  /api/db/tables/:name  -> rows of one table
 //
 // Connection string: NETLIFY_DATABASE_URL (Netlify DB / Neon) or DATABASE_URL
-// (any Postgres: Neon, Supabase, RDS ...). Tables live in schema "proto" so they
+// (any Postgres: Neon, Supabase, RDS ...). Tables live in schema "nwh" so they
 // never collide with the Python service's tables in the same database.
 import pg from "pg";
 
-const SCHEMA = "proto";
+const SCHEMA = "nwh";
 const MAX_BODY = 2_000_000;
 
 // name -> [primary key columns, column definitions]
 export const TABLES = {
   leads_l2r: [["lead_id"], {
-    lead_id: "text", customer_name: "text", mobile: "text", model: "text", created_at_ist: "text",
-    consent: "boolean", stage: "text", priority: "text", call_status: "text",
-    purchase_timeline: "text", follow_up: "text", bot_state: "text",
+    lead_id: "text", customer_name: "text", mobile: "text", make: "text", model: "text", city: "text",
+    dealer_id: "text", source: "text", created_at_local: "text", stage: "text", priority: "text",
+    purchase_timeline: "text", visit_date: "text", visit_slot: "text", bot_state: "text",
   }],
   dealer_config: [["dealer_id"], {
-    dealer_id: "text", enabled: "boolean", dealer_name: "text", rep_name: "text", rep_phone: "text",
-    working_hours: "text", weekly_off: "text", pre_close_buffer_min: "integer",
-    qualify_max_days: "integer", holdout_pct: "integer", template_id: "text",
+    dealer_id: "text", dealer_name: "text", city: "text", waba_number: "text", virtual_number: "text",
+    sales_executive: "text", working_hours: "text", weekly_off: "text", template_id: "text",
   }],
-  wa_message: [["id"], {
-    id: "integer", lead_id: "text", mobile: "text", template_id: "text", gs_message_id: "text",
-    wamid: "text", status: "text", sent_at: "text", reply_code: "text", outcome: "text",
-    l2r_sync_status: "text",
+  // One row per outbound message. message_id is Gupshup's id from the send response.
+  wa_message: [["message_id"], {
+    message_id: "text", wamid: "text", lead_id: "text", dealer_id: "text", template_id: "text",
+    started_by_template: "text", flow: "text", step: "text", msg_type: "text", to_mobile: "text",
+    from_waba: "text", status: "text", sent_at: "text", delivered_at: "text", read_at: "text",
+    replied_at: "text", reply_option: "text",
+  }],
+  // One row per customer tap, linked to the message it answered.
+  wa_interaction: [["inbound_id"], {
+    inbound_id: "text", context_message_id: "text", context_wamid: "text", lead_id: "text",
+    dealer_id: "text", template_id: "text", flow: "text", step: "text", option_code: "text",
+    option_title: "text", postback: "text", received_at: "text",
   }],
   wa_event: [["event_id"], {
     event_id: "text", type: "text", received_at: "text", lead_id: "text", payload: "jsonb",
-  }],
-  opt_out: [["mobile", "dealer_id"], {
-    mobile: "text", dealer_id: "text", created_at: "text", source: "text",
   }],
   audit_log: [["id"], {
     id: "integer", ts: "text", level: "text", source: "text", lead_id: "text",
