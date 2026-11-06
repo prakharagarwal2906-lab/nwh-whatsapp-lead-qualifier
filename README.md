@@ -11,7 +11,7 @@ The full styled version, with all sections, is in [`docs/design.html`](docs/desi
 A clickable, four-step journey hosted on Netlify:
 
 1. **Customer website** — the customer enquires about a vehicle with a dealer. A demo control sets the enquiry time so you can try after-hours and open-hours cases.
-2. **Lead management (L2R)** — the lead lands, the working-hours check runs, and the Gupshup template call is shown with its six inputs: dealer ID, lead ID, template ID, customer mobile, WABA number, and variables (customer name, make, model, working hours, virtual number, sales executive, dealer name). The response `messageId` is saved against the lead.
+2. **Lead management (L2R)** — built on the L2R lead page design (lead card, inquiries, stage tracker, Follow Up form, activity feed). Every lead has one open **call**; whoever tags it first, the telecaller or the WhatsApp bot, disposes it and the next call is created. The telecaller form has Follow-up status (Spoke to customer / Customer was busy), then Interested / Not interested, expected buying span, TD required with date and time, next call date and comments; busy needs only a comment. **Next call = 7 days before the buying span ends, or 1 day after the visit/TD, whichever is earlier** (moved off the dealer's weekly off). Lead status is one of New, Qualified, Not qualified · open, Qualified · closed, Booked, Not qualified · closed. The Gupshup template call (dealer ID, lead ID, template ID, mobile, WABA number, variables) and its `messageId` appear in the activity feed.
 3. **Customer's WhatsApp** — the template offers 15 Days / 1 Month / 1–2 Months / More than 2 Months / Still Researching. The first three qualify the lead and ask for a visit date (next 7 open days) and then a time slot (working hours). More than 2 Months and Still Researching each get their own message and a follow-up task.
 4. **Tracking & engagement** — every tap is stored in `wa_interaction` with the inbound message ID, the `messageId` it replied to, and the flow, step and option. Engagement % is shown per template ID, with a funnel from sent to visit booked.
 
@@ -83,7 +83,7 @@ Or open the database directly: `sqlite3 qualifier.db "SELECT * FROM audit_log OR
 
 **Shared Postgres for the prototype**
 
-The Netlify site includes a function (`netlify/functions/db.mjs`) that saves the prototype's tables to Postgres in a schema called `nwh` (`leads_l2r`, `dealer_config`, `wa_message`, `wa_interaction`, `wa_event`, `audit_log`, plus a `snapshot` of the full page state). When a database is connected, everyone who opens the site sees the same data, and the header shows **Storage: Postgres (shared)**. Without one, it falls back to **Storage: this browser only**.
+The Netlify site includes a function (`netlify/functions/db.mjs`) that saves the prototype's tables to Postgres in a schema called `nwh` (`leads_l2r`, `lead_calls`, `dealer_config`, `wa_message`, `wa_interaction`, `wa_event`, `audit_log`, plus a `snapshot` of the full page state). When a database is connected, everyone who opens the site sees the same data, and the header shows **Storage: Postgres (shared)**. Without one, it falls back to **Storage: this browser only**.
 
 To connect one:
 1. Create a free Postgres database (for example on neon.tech or supabase.com) and copy its connection string (`postgresql://user:pass@host/db?sslmode=require`).

@@ -17,8 +17,15 @@ const MAX_BODY = 2_000_000;
 export const TABLES = {
   leads_l2r: [["lead_id"], {
     lead_id: "text", customer_name: "text", mobile: "text", make: "text", model: "text", city: "text",
-    dealer_id: "text", source: "text", created_at_local: "text", stage: "text", priority: "text",
-    purchase_timeline: "text", visit_date: "text", visit_slot: "text", bot_state: "text",
+    dealer_id: "text", source: "text", created_at_local: "text", lead_status: "text", stage: "text",
+    eagerness: "text", priority: "text", purchase_timeline: "text", visit_date: "text", visit_slot: "text",
+    open_call_due: "text", bot_state: "text",
+  }],
+  // One row per call. A lead always has at most one OPEN call; disposing it schedules the next.
+  lead_calls: [["call_id"], {
+    call_id: "text", lead_id: "text", seq: "integer", status: "text", created_at: "text", due_at: "text",
+    due_reason: "text", disposed_at: "text", disposed_by: "text", call_status: "text", followup_status: "text",
+    interest: "text", buying_span: "text", td_required: "text", td_at: "text", comment: "text", next_call_at: "text",
   }],
   dealer_config: [["dealer_id"], {
     dealer_id: "text", dealer_name: "text", city: "text", waba_number: "text", virtual_number: "text",
@@ -68,6 +75,10 @@ async function ensureSchema(db) {
         const defs = Object.entries(cols).map(([c, t]) => `${c} ${t}`).join(", ");
         await db.query(`CREATE TABLE IF NOT EXISTS ${SCHEMA}.${name} (${defs},
           updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (${pk.join(", ")}))`);
+        // Add columns introduced after the table was first created.
+        for (const [col, type] of Object.entries(cols)) {
+          await db.query(`ALTER TABLE ${SCHEMA}.${name} ADD COLUMN IF NOT EXISTS ${col} ${type}`);
+        }
       }
     })().catch(e => { ready = null; throw e; });
   }

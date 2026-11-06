@@ -19,9 +19,11 @@ before(async () => {
 after(async () => { if (!skip) await getPool().end(); });
 
 const sample = (status = "SENT") => ({
-  state: { schema: 2, leads: [{ id: "L1" }], note: "full client state" },
+  state: { schema: 3, leads: [{ id: "L1" }], note: "full client state" },
   tables: {
     leads_l2r: [{ lead_id: "L1", customer_name: "Prakhar", mobile: "919876543210", make: "Royal Enfield", model: "Classic 350", dealer_id: "D101", stage: "FIRST_CALL" }],
+    lead_calls: [{ call_id: "CALL-5001", lead_id: "L1", seq: 1, status: "DISPOSED", disposed_by: "WhatsApp Bot", buying_span: "1 Month", next_call_at: "2026-11-07T10:30:00.000Z" },
+                 { call_id: "CALL-5002", lead_id: "L1", seq: 2, status: "OPEN", due_at: "2026-11-07T10:30:00.000Z" }],
     dealer_config: [{ dealer_id: "D101", dealer_name: "Vishnu Motors TN", waba_number: "918047104444", template_id: "tpl_nwh_timeline_v1" }],
     wa_message: [{ message_id: "gs-a000", lead_id: "L1", dealer_id: "D101", template_id: "tpl_nwh_timeline_v1", flow: "NWH_QUALIFIER", step: "TIMELINE", status }],
     wa_interaction: [{ inbound_id: "wamid.IN1", context_message_id: "gs-a000", lead_id: "L1", template_id: "tpl_nwh_timeline_v1", flow: "NWH_QUALIFIER", step: "TIMELINE", option_code: "1M", option_title: "1 Month" }],
@@ -44,6 +46,7 @@ test("save then load round-trips state and fills tables", { skip }, async () => 
   assert.equal(r.body.state.note, "full client state");
   assert.equal(r.body.counts.wa_message, 1);
   assert.equal(r.body.counts.wa_interaction, 1);
+  assert.equal(r.body.counts.lead_calls, 2);
   const ev = await call("GET", "/api/db/tables/wa_event");
   assert.deepEqual(ev.body.rows[0].payload, { a: 1 });
 });
