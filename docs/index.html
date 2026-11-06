@@ -209,6 +209,16 @@ main.screen{max-width:1240px;margin:0 auto;padding-block:18px 40px}
 pre.json{margin:0;padding:10px;background:var(--log-bg);color:#c9d2df;font-family:var(--f-mono);font-size:11.5px;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto}
 details summary{padding:6px 10px;cursor:pointer;font-size:12px;color:var(--muted)}
 
+/* combined L2R + WhatsApp screen */
+main.screen.wide{max-width:1600px}
+.combo{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;align-items:start}
+@media (max-width:1100px){.combo{grid-template-columns:minmax(0,1fr)}}
+.combo-side{position:sticky;top:76px;display:flex;flex-direction:column;gap:12px;min-width:0}
+@media (max-width:1100px){.combo-side{position:static}}
+.combo .l2rbody{grid-template-columns:minmax(240px,320px) minmax(0,1fr)}
+@media (max-width:1280px){.combo .l2rbody{grid-template-columns:minmax(0,1fr)}}
+.combo .screenp{height:660px}
+.hookpanel summary{padding:12px 14px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;cursor:pointer}
 /* WhatsApp */
 .wa{display:grid;grid-template-columns:380px minmax(0,1fr);gap:18px;align-items:start}
 @media (max-width:900px){.wa{grid-template-columns:minmax(0,1fr)}}
@@ -322,9 +332,8 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
 <nav class="journey wrapx" aria-label="Journey">
   <div class="steps">
     <a href="#website" data-step="website"><span class="n">1</span><span><b>Customer website</b><small>Customer submits an enquiry</small></span></a>
-    <a href="#lms" data-step="lms"><span class="n">2</span><span><b>Lead management (L2R)</b><small>Lead lands, Gupshup API fires</small></span></a>
-    <a href="#whatsapp" data-step="whatsapp"><span class="n">3</span><span><b>Customer's WhatsApp</b><small>Customer replies, books a visit</small></span></a>
-    <a href="#tracking" data-step="tracking"><span class="n">4</span><span><b>Tracking &amp; engagement</b><small>Every click, per template</small></span></a>
+    <a href="#lms" data-step="lms"><span class="n">2</span><span><b>L2R + customer's WhatsApp</b><small>Customer replies, L2R updates</small></span></a>
+    <a href="#tracking" data-step="tracking"><span class="n">3</span><span><b>Tracking &amp; engagement</b><small>Every click, per template</small></span></a>
   </div>
 </nav>
 
@@ -368,60 +377,47 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
   </div>
 </main>
 
-<!-- ================= 2. LMS ================= -->
-<main class="screen wrapx" id="s-lms" hidden>
+<!-- ================= 2. L2R + WHATSAPP ================= -->
+<main class="screen wrapx wide" id="s-lms" hidden>
   <div class="screen-head">
-    <div><h1>2 · The lead lands in L2R, the internal calling team's tool</h1>
-      <p>Every lead gets a call. Our telecaller, or the WhatsApp bot through the L2R API, tags the follow-up form, which disposes the call. When a lead becomes <b>qualified</b>, L2R's event sends it to the <b>dealer panel</b> automatically. Our team keeps calling until the customer books, since the OEM contract pays on conversion.</p></div>
+    <div><h1>2 · L2R and the customer's WhatsApp, side by side</h1>
+      <p>Tap the options on the phone as the customer and watch L2R update. Our telecaller, or the WhatsApp bot through the L2R API, tags the follow-up form; when the lead is <b>qualified</b>, L2R sends it to the <b>dealer panel</b>. Our team keeps calling until the customer books.</p></div>
     <div class="next">
       <span class="l2rpick"><label for="leadPick" class="hint">Lead</label><select id="leadPick"></select></span>
       <button class="btn ghost" id="resetAll" type="button">Reset demo</button>
-      <a class="btn primary" href="#whatsapp">Customer's WhatsApp →</a>
+      <a class="btn primary" href="#tracking">See tracking →</a>
     </div>
   </div>
-  <div class="l2r">
-    <div class="l2rnav">
-      <div class="l2rlogo"><b>L2R</b><span>LEAD TO RETAIL</span></div>
-      <div class="menu"><span>Dashboard</span><span class="on">My Leads</span><span>Reports</span><span>More ▾</span></div>
-      <div class="srch">Name, Mobile No.</div>
-      <span class="unav">Unavailable ▾</span>
-      <span class="av" aria-hidden="true"></span>
-    </div>
-    <div id="l2rBody" class="l2rbody"></div>
-  </div>
-</main>
-
-<!-- ================= 3. WHATSAPP ================= -->
-<main class="screen wrapx" id="s-whatsapp" hidden>
-  <div class="screen-head">
-    <div><h1>3 · The customer replies on WhatsApp</h1>
-      <p>Tap the options as the customer. Every tap reaches our webhook (Customer → Meta → Gupshup → webhook) with the IDs that tell us which lead, template, flow and step it belongs to.</p></div>
-    <div class="next"><a class="btn primary" href="#tracking">See tracking →</a></div>
-  </div>
-  <div class="wa">
-    <div class="phone">
-      <div class="screenp">
-        <div class="chathead">
-          <div class="avatar" id="waAvatar">B</div>
-          <div class="who"><span id="waName">BikeWale</span><span class="verified">✓</span><small id="waSub">Business account</small></div>
-        </div>
-        <div class="msgs" id="msgs"></div>
-        <form class="compose" id="compose">
-          <input id="composeInput" placeholder="Message" aria-label="Customer message">
-          <button type="submit" aria-label="Send">➤</button>
-        </form>
-        <div class="sheet" id="sheet" hidden></div>
+  <div class="combo">
+    <div class="l2r">
+      <div class="l2rnav">
+        <div class="l2rlogo"><b>L2R</b><span>LEAD TO RETAIL</span></div>
+        <div class="menu"><span>Dashboard</span><span class="on">My Leads</span><span>Reports</span><span>More ▾</span></div>
+        <div class="srch">Name, Mobile No.</div>
+        <span class="unav">Unavailable ▾</span>
+        <span class="av" aria-hidden="true"></span>
       </div>
+      <div id="l2rBody" class="l2rbody"></div>
     </div>
-    <div class="side">
-      <section class="panel">
-        <h2>Where this customer is in the flow</h2>
-        <div class="pad" id="flowMap"></div>
-      </section>
-      <section class="panel">
-        <h2>What our webhook received for the last tap</h2>
+    <div class="combo-side">
+      <div class="phone">
+        <div class="screenp">
+          <div class="chathead">
+            <div class="avatar" id="waAvatar">B</div>
+            <div class="who"><span id="waName">BikeWale</span><span class="verified">✓</span><small id="waSub">Business account</small></div>
+          </div>
+          <div class="msgs" id="msgs"></div>
+          <form class="compose" id="compose">
+            <input id="composeInput" placeholder="Message" aria-label="Customer message">
+            <button type="submit" aria-label="Send">➤</button>
+          </form>
+          <div class="sheet" id="sheet" hidden></div>
+        </div>
+      </div>
+      <details class="panel hookpanel">
+        <summary>What our webhook received for the last tap</summary>
         <div class="pad" id="lastHook"></div>
-      </section>
+      </details>
     </div>
   </div>
 </main>
@@ -429,7 +425,7 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
 <!-- ================= 4. TRACKING ================= -->
 <main class="screen wrapx" id="s-tracking" hidden>
   <div class="screen-head">
-    <div><h1>4 · Tracking every click and engagement per template</h1>
+    <div><h1>3 · Tracking every click and engagement per template</h1>
       <p>One template ID goes to many customers. Each send gets its own <b>message ID</b>, so every reply is traced back to the lead, template, flow and step.</p></div>
     <div class="next"><button class="btn ghost" id="simBtn" type="button">Simulate 25 customers</button></div>
   </div>
@@ -719,7 +715,7 @@ async function deliver(messageId, readNow){
   const msg = S.messages[messageId]; if (!msg) return;
   await wait(400); await webhook(statusEvent(msg,"enqueued"));
   await wait(400); await webhook(statusEvent(msg,"delivered"));
-  if (readNow || (location.hash==="#whatsapp" && S.selected===msg.lead_id)){ await wait(500); await webhook(statusEvent(msg,"read")); }
+  if (readNow || (route()==="lms" && S.selected===msg.lead_id)){ await wait(500); await webhook(statusEvent(msg,"read")); }
 }
 function statusEvent(msg, type){
   const p = {id: msg.wamid || ("wamid.HBgM" + (S.seq.wamid++)), gsId: msg.message_id, type, destination: msg.to_mobile};
@@ -979,22 +975,21 @@ async function pickListRow(messageId, row){
    RENDER
    ===================================================================== */
 const esc = s => String(s ?? "").replace(/[&<>"]/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
-const SCREENS = ["website","lms","whatsapp","tracking"];
-function route(){ const h=(location.hash||"#website").slice(1); return SCREENS.includes(h) ? h : "website"; }
+const SCREENS = ["website","lms","tracking"];
+function route(){ let h=(location.hash||"#website").slice(1); if (h==="whatsapp") h="lms"; return SCREENS.includes(h) ? h : "website"; }
 function render(){
   if (FAST) return;
   const r = route();
   for (const id of SCREENS) $("#s-"+id).hidden = id!==r;
   const lead = leadById(S.selected);
-  const done = {website:!!lead, lms:!!(lead && firstMsgId(lead)), whatsapp:!!(lead && S.interactions.some(i=>i.lead_id===lead.id)), tracking:false};
+  const done = {website:!!lead, lms:!!(lead && S.interactions.some(i=>i.lead_id===lead.id)), tracking:false};
   document.querySelectorAll(".steps a").forEach(a=>{
     const k=a.dataset.step;
     if (k===r) a.setAttribute("aria-current","step"); else a.removeAttribute("aria-current");
     a.classList.toggle("done", done[k] && k!==r);
   });
   if (r==="website") renderWebsite();
-  if (r==="lms") renderLms();
-  if (r==="whatsapp") renderWa();
+  if (r==="lms"){ renderLms(); renderWa(); }
   if (r==="tracking") renderTracking();
   save();
 }
@@ -1232,7 +1227,6 @@ function renderWa(){
   if (!lead || !lead.chat.length){
     $("#waSub").textContent = lead ? `${lead.name}'s phone` : "Business account";
     el.innerHTML = `<div class="phone-empty">${lead ? "No WhatsApp message for this lead (" + esc(lead.botState||"") + ")." : "Submit an after-hours enquiry on the customer website and the message arrives here."}</div>`;
-    $("#flowMap").innerHTML = `<div class="hint">No conversation yet.</div>`;
     $("#lastHook").innerHTML = `<div class="hint">Tap an option on the phone. The metadata Gupshup sends us appears here.</div>`;
     return;
   }
@@ -1246,13 +1240,6 @@ function renderWa(){
     return h;
   }).join("");
   el.scrollTop = el.scrollHeight;
-  const mine=S.interactions.filter(i=>i.lead_id===lead.id), has=s=>mine.some(i=>i.step===s);
-  const opt=lead.waAnswer || (mine.filter(i=>i.step==="TIMELINE").pop()||{}).option_code;
-  const node=(label,on,cur)=>`<span class="node ${on?"on":cur?"cur":""}">${label}</span>`, arr=`<span class="arr">→</span>`;
-  let path = node("Template sent",true) + arr + node("Purchase timeline"+(opt?`: ${esc(TIMELINE.find(t=>t[0]===opt)[1])}`:""), has("TIMELINE"), !has("TIMELINE"));
-  if (!opt || QUALIFY.includes(opt)) path += arr + node("Visit date",has("VISIT_DATE"),has("TIMELINE")&&!has("VISIT_DATE")) + arr + node("Visit time",has("VISIT_TIME"),has("VISIT_DATE")&&!has("VISIT_TIME")) + arr + node("Visit booked",has("VISIT_TIME"));
-  else path += arr + node(opt==="GT2M" ? "Check-in message · follow-up in 60 days" : "Help message · follow-up in 7 days", true);
-  $("#flowMap").innerHTML = `<div class="flowmap">${path}</div><div class="hint" style="margin-top:10px">Lead ${esc(lead.id)} · dealer ${esc(lead.dealerId)} · template ${esc(DEALERS[lead.dealerId].template)} · flow ${FLOW}</div>`;
   const h = S.lastHook && S.lastHook.row.lead_id===lead.id ? S.lastHook : null;
   $("#lastHook").innerHTML = !h ? `<div class="hint">Tap an option on the phone. The metadata Gupshup sends us appears here.</div>` :
     `<div class="hookcard"><div class="bar"><span class="tag t-ok">mapped</span><b>${esc(h.row.flow)} / ${esc(h.row.step)} / ${esc(h.row.option_code)}</b></div>
@@ -1458,7 +1445,7 @@ async function startStorage(){
 /* ---------------- wiring ---------------- */
 window.addEventListener("hashchange", ()=>{
   window.scrollTo(0,0); render();
-  if (route()==="whatsapp"){ const l=leadById(S.selected); if (l) Object.values(S.messages).filter(m=>m.lead_id===l.id && ["SENT","DELIVERED"].includes(m.status)).forEach(m=>webhook(statusEvent(m,"read"))); }
+  if (route()==="lms"){ const l=leadById(S.selected); if (l) Object.values(S.messages).filter(m=>m.lead_id===l.id && ["SENT","DELIVERED"].includes(m.status)).forEach(m=>webhook(statusEvent(m,"read"))); }
 });
 for (const id of ["#fMake","#fModel","#fCity","#fDealer"]) $(id).addEventListener("change", render);
 $("#timeChips").addEventListener("click", e=>{ const b=e.target.closest("[data-time]"); if (!b) return; S.timePreset=b.dataset.time; render(); });
