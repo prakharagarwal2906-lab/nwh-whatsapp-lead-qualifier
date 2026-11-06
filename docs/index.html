@@ -604,6 +604,7 @@ function createCall(lead, at, why){
 }
 function disposeCall(lead, by, d){
   const c = openCall(lead) || createCall(lead, simNow(lead), "ad-hoc call");
+  lead.firstCallDone = true;
   const span = SPAN.find(s=>s[0]===d.span);
   Object.assign(c, {status:"DISPOSED", disposed_at:simNow(lead).toISOString(), disposed_by:by, call_status:d.callStatus||"Connected",
     followup_status:d.followup||null, interest:d.interest||null, buying_span:span?span[1]:(d.spanLabel||null),
@@ -756,6 +757,7 @@ async function handleReply(p){
   const msg = p.context && S.messages[p.context.gsId];
   if (!msg){ log("bad","Processor","reply has no matching messageId → cannot map to a lead"); return; }
   const lead = leadById(msg.lead_id);
+  lead.firstCallDone = true;   // the customer replied on WhatsApp
   if (msg.to_mobile !== p.source){ log("bad","Processor","sender ≠ lead mobile → rejected", undefined, lead.id); return; }
   const inner = p.payload || {};
   const postback = inner.postbackText || "";
@@ -1033,7 +1035,7 @@ const ICONS = {
   td:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M12 3v7M5 15l5-2M19 15l-5-2"/></svg>',
 };
 let F = null;   // follow-up form state (not persisted)
-function resetForm(lead){ F = {lead: lead && lead.id, followup:"SPOKE", interest:"INTERESTED", span:"", td:"", tdDate:"", tdTime:"", nextDate:"", nextTime:"", nextTouched:false, callStatus:"", reason:"", subReason:"", comment:"", err:""}; }
+function resetForm(lead){ F = {lead: lead && lead.id, followup:"", interest:"", span:"", td:"", tdDate:"", tdTime:"", nextDate:"", nextTime:"", nextTouched:false, callStatus:"", reason:"", subReason:"", comment:"", err:""}; }
 const isoOf = d => d.toISOString().slice(0,10);
 const hhmmOf = d => d.toISOString().slice(11,16);
 const at = (dateIso, time) => new Date(Date.parse(`${dateIso}T${time||"00:00"}:00Z`));
@@ -1061,7 +1063,9 @@ function renderLms(){
   if (!F || F.lead!==l.id) resetForm(l);
   const dealer = DEALERS[l.dealerId];
   const st = ["FIRST_CALL","QUALIFICATION","VISITS","BOOKING"], idx = st.indexOf(l.stage);
-  const stepper = `<div class="lstep">${["First Call","Qualification","Visits","Booking"].map((n,i)=>`${i?`<span class="bar ${i<=idx?"on":""}"></span>`:""}<span class="s ${i<=idx?"on":""}">${n}<i>${i<=idx?"✓":""}</i></span>`).join("")}</div>`;
+  // First Call is done only once the customer replied on WhatsApp or a call was tagged (connected or busy).
+  const done = i => i===0 ? !!l.firstCallDone : i<=idx;
+  const stepper = `<div class="lstep">${["First Call","Qualification","Visits","Booking"].map((n,i)=>`${i?`<span class="bar ${done(i)?"on":""}"></span>`:""}<span class="s ${done(i)?"on":""}">${n}<i>${done(i)?"✓":""}</i></span>`).join("")}</div>`;
   const created = new Date(l.createdAt);
   const left = `
     <div class="lcard"><div class="lead-top">
@@ -1126,7 +1130,7 @@ function formHtml(l, c){
       suggestNext(l);
       h += `<div class="frow2"><label>Next Call Date<sup>*</sup></label><div class="opts2"><input type="date" id="fNextDate" class="ldate" value="${F.nextDate}"><input type="time" id="fNextTime" class="ldate" value="${F.nextTime}"><span class="lhint">${F.nextTouched?"Set manually":`Suggested: ${esc(F.nextWhy||"")}`}</span></div></div>`;
     }
-  } else {
+  } else if (F.followup==="BUSY") {
     h += `<div class="frow2"><span></span><span class="lhint">Customer picked up but couldn't talk. The call is disposed and a new call is scheduled for the next working day.</span></div>`;
   }
   return h + comments + submit + `</div>`;
@@ -1167,6 +1171,10 @@ function submitForm(){
     if (connected && (!F.nextDate || !F.nextTime)) return fail("Choose the next call date and time.");
     disposeCall(l, by, {callStatus: connected?"Connected":"Not connected", comment:F.comment,
       next: connected ? {at: at(F.nextDate, F.nextTime), why:"set by telecaller"} : nextCallAt(l, null, null, 1)});
+  } else if (!F.followup){
+    return fail("Choose the follow-up status.");
+  } else if (F.followup==="SPOKE" && !F.interest){
+    return fail("Choose the lead status.");
   } else if (F.followup==="BUSY"){
     if (!F.comment) return fail("Add a comment.");
     if (l.leadStatus==="NEW") setLeadStatus(l, "NOT_QUALIFIED_OPEN");
