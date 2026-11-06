@@ -778,20 +778,26 @@ async function handleReply(p){
       await sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Please feel free to reach us at ${dealer.virtual} for any queries you might have.`, payload:{type:"text"}});
     }
   } else if (step==="CONFIRM_CHANGE"){
-    const target = lead.pendingChange;
+    const target = lead.pendingChange; lead.pendingChange = null;
     if (option==="YES" && target){
-      const t = TIMELINE.find(x=>x[0]===target), wasClosed = !OPEN_STATUSES.includes(lead.leadStatus);
-      lead.pendingChange = null; lead.waAnswer = target; lead.timeline = t[1]; lead.priority = t[2]<=30 ? "P1" : "P2"; lead.botState = "Qualified by bot";
-      setLeadStatus(lead, "QUALIFIED", target);
-      addFeed(lead, {icon:"wa", tone:"waf", title: wasClosed ? "Lead reopened via WhatsApp" : "Buying timeline changed via WhatsApp",
-        lines:[`Customer confirmed the change to '${t[1]}'`, `Lead Status: Qualified · Eagerness: ${lead.eagerness}`]});
-      l2r(lead, "dispose", {source:"WHATSAPP_BOT", reopen:wasClosed, leadStatus:"QUALIFIED", expectedBuyingSpan:t[1]});
-      scheduleNext(lead, nextCallAt(lead, target, lead.visitDate));
-      await wait(400);
-      await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text:`Thank you for confirming! We've updated your buying timeline to ${t[1]}.`, payload:{type:"text"}});
-      if (!lead.visitSlot) await sendDateList(lead, dealer);
+      const P = lead.timeline, t = TIMELINE.find(x=>x[0]===target);
+      lead.waAnswer = target; lead.timeline = t[1]; lead.priority = null;
+      if (target==="GT2M"){
+        setLeadStatus(lead, "NOT_QUALIFIED_OPEN", "GT2M"); lead.botState = "Nurture";
+        addFeed(lead, {icon:"wa", tone:"waf", title:"Buying timeline changed via WhatsApp", lines:[`Customer confirmed the change from '${P}' to '${t[1]}'`, "Lead Status: Not qualified · open · Eagerness: Normal"]});
+        l2r(lead, "dispose", {source:"WHATSAPP_BOT", leadStatus:"NOT_QUALIFIED_OPEN", expectedBuyingSpan:t[1]});
+        scheduleNext(lead, nextCallAt(lead, "GT2M", null));
+        await wait(400);
+        await sendMessage(lead, {kind:"text", step:"GT2M_ACK", text:`Thanks, ${lead.name}!\nWe'll check in closer to your timeline.\nNeed help before that? Call us anytime at ${dealer.virtual}.`, payload:{type:"text"}});
+      } else {
+        setLeadStatus(lead, "NOT_QUALIFIED_CLOSED"); lead.eagerness = null; lead.botState = "Closed · just researching";
+        addFeed(lead, {icon:"wa", tone:"waf", title:"Buying timeline changed via WhatsApp", lines:[`Customer confirmed the change from '${P}' to '${t[1]}'`]});
+        disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected (WhatsApp)", followup:"Spoke to customer (WhatsApp)", interest:"Not interested",
+          reason:"Not interested in buying", subReason:"Just researching", comment:`Customer changed the answer to '${t[1]}' on WhatsApp`, next:null});
+        await wait(400);
+        await sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Please feel free to reach us at ${dealer.virtual} for any queries you might have.`, payload:{type:"text"}});
+      }
     } else {
-      lead.pendingChange = null;
       addFeed(lead, {icon:"wa", tone:"waf", title:"WhatsApp: customer kept the earlier answer", lines:[`Buying timeline stays '${lead.timeline}'`]});
       await wait(400);
       await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text:"No problem, we've kept your earlier answer.", payload:{type:"text"}});
@@ -841,48 +847,49 @@ function immediateCall(lead, why){
   scheduleNext(lead, {at, why});
 }
 /* Customer taps the timeline template again (WhatsApp keeps the buttons active).
-   Rules (from the Excel):
-   - new answer 15 Days / 1 Month / 1-2 Months:
-       earlier answer was one of these three -> thank-you message confirming the update
-       earlier answer was More than 2 Months / Still Researching -> ask for confirmation first, then handle
-   - new answer More than 2 Months -> thanks for confirming + immediate call
-   - new answer Still Researching (not interested) -> reopen the lead, schedule a call, thanks message */
+   Rules (from the Excel), keyed by the answer the customer ALREADY gave:
+   - earlier 15 Days / 1 Month / 1-2 Months:
+       new tap is another of these three -> thank-you message confirming the update
+       new tap is More than 2 Months / Still Researching -> ask for confirmation first, then handle it
+   - earlier More than 2 Months -> any other tap: thanks for confirming + immediate call
+   - earlier Still Researching (lead closed as Not interested) -> any other tap: reopen the lead,
+       schedule a call, thanks message */
 async function timelineChanged(lead, option, dealer){
   const prev = lead.waAnswer, P = TIMELINE.find(x=>x[0]===prev)[1], t = TIMELINE.find(x=>x[0]===option), N = t[1];
-  const reopen = () => { if (!OPEN_STATUSES.includes(lead.leadStatus)){ setLeadStatus(lead, "NOT_QUALIFIED_OPEN"); return true; } return false; };
+  const say = async text => { await wait(300); await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text, payload:{type:"text"}}); };
   if (prev===option){
     addFeed(lead, {icon:"wa", tone:"waf", title:"WhatsApp: same answer tapped again", lines:[`'${N}' was already recorded`]});
-    await wait(300);
-    await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text:`Got it, '${N}' is already noted. Thank you!`, payload:{type:"text"}});
-    return;
+    return say(`Got it, '${N}' is already noted. Thank you!`);
   }
-  if (QUALIFY.includes(option) && QUALIFY.includes(prev)){
-    lead.waAnswer = option; lead.timeline = N; lead.priority = t[2]<=30 ? "P1" : "P2";
-    setLeadStatus(lead, "QUALIFIED", option);
-    addFeed(lead, {icon:"wa", tone:"waf", title:"Buying timeline updated via WhatsApp", lines:[`From '${P}' to '${N}'`, `Eagerness: ${lead.eagerness}`]});
-    l2r(lead, "dispose", {source:"WHATSAPP_BOT", expectedBuyingSpan:N});
-    scheduleNext(lead, nextCallAt(lead, option, lead.visitDate));
-    await wait(300);
-    await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text:`Thank you for confirming! We've updated your buying timeline to ${N}.`, payload:{type:"text"}});
-  } else if (QUALIFY.includes(option)){
+  if (QUALIFY.includes(prev)){
+    if (QUALIFY.includes(option)){
+      lead.waAnswer = option; lead.timeline = N; lead.priority = t[2]<=30 ? "P1" : "P2";
+      setLeadStatus(lead, "QUALIFIED", option);
+      addFeed(lead, {icon:"wa", tone:"waf", title:"Buying timeline updated via WhatsApp", lines:[`From '${P}' to '${N}'`, `Eagerness: ${lead.eagerness}`]});
+      l2r(lead, "dispose", {source:"WHATSAPP_BOT", expectedBuyingSpan:N});
+      scheduleNext(lead, nextCallAt(lead, option, lead.visitDate));
+      return say(`Thank you for confirming! We've updated your buying timeline to ${N}.`);
+    }
     lead.pendingChange = option;
     addFeed(lead, {icon:"wa", tone:"waf", title:"WhatsApp: customer wants to change the answer", lines:[`From '${P}' to '${N}'`, "Waiting for the customer to confirm"]});
     await wait(300);
-    await sendMessage(lead, {kind:"buttons", step:"CONFIRM_CHANGE", text:`You earlier told us "${P}". Do you want to change it to "${N}"?`,
+    return sendMessage(lead, {kind:"buttons", step:"CONFIRM_CHANGE", text:`You earlier told us "${P}". Do you want to change it to "${N}"?`,
       buttons:[{code:"YES", label:"Yes, change it"}, {code:"NO", label:"No, keep earlier answer"}], payload:{type:"quick_reply", options:["Yes, change it","No, keep earlier answer"]}});
-  } else if (option==="GT2M"){
-    const reopened = reopen(); lead.waAnswer = option; lead.timeline = N;
-    addFeed(lead, {icon:"wa", tone:"waf", title: reopened ? "Lead reopened via WhatsApp" : "WhatsApp: answer changed", lines:[`From '${P}' to '${N}'`, "Immediate call scheduled"]});
-    immediateCall(lead, `customer changed the answer to '${N}' on WhatsApp`);
-    await wait(300);
-    await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text:"Thanks for confirming. Our team will call you shortly.", payload:{type:"text"}});
-  } else {
-    const reopened = reopen(); lead.waAnswer = option; lead.timeline = N;
-    addFeed(lead, {icon:"wa", tone:"waf", title: reopened ? "Lead reopened via WhatsApp" : "WhatsApp: answer changed", lines:[`From '${P}' to '${N}'`, "Call scheduled to help the customer"]});
-    immediateCall(lead, `customer changed the answer to '${N}' on WhatsApp`);
-    await wait(300);
-    await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text:"Thanks for letting us know. Our team will call you shortly to help.", payload:{type:"text"}});
   }
+  if (prev==="GT2M"){
+    lead.waAnswer = option; lead.timeline = N;
+    const reopened = !OPEN_STATUSES.includes(lead.leadStatus); if (reopened) setLeadStatus(lead, "NOT_QUALIFIED_OPEN");
+    addFeed(lead, {icon:"wa", tone:"waf", title: reopened ? "Lead reopened via WhatsApp" : "WhatsApp: answer changed", lines:[`From '${P}' to '${N}'`, "Immediate call scheduled so the telecaller can confirm"]});
+    immediateCall(lead, `customer changed the answer from '${P}' to '${N}' on WhatsApp`);
+    return say("Thanks for confirming! Our team will call you shortly.");
+  }
+  // prev === "RESEARCH": the lead was closed as Not interested
+  lead.waAnswer = option; lead.timeline = N;
+  setLeadStatus(lead, "NOT_QUALIFIED_OPEN");
+  addFeed(lead, {icon:"wa", tone:"waf", title:"Lead reopened via WhatsApp", lines:[`From '${P}' to '${N}'`, "Lead Status: Not qualified · open"]});
+  l2r(lead, "dispose", {source:"WHATSAPP_BOT", reopen:true, expectedBuyingSpan:N});
+  immediateCall(lead, `lead reopened: customer chose '${N}' on WhatsApp`);
+  return say("Thanks for getting back to us! Our team will call you shortly.");
 }
 
 /* The bot disposes the open call only if no telecaller has spoken to the customer yet. */

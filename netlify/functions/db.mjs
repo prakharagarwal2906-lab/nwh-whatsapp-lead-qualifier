@@ -59,6 +59,8 @@ export function getPool(url = process.env.NETLIFY_DATABASE_URL || process.env.DA
   if (!url) return null;
   const local = /localhost|127\.0\.0\.1/.test(url);
   pool = new pg.Pool({ connectionString: url, max: 3, ssl: local ? false : { rejectUnauthorized: false } });
+  // A dropped idle connection (e.g. a serverless database scaling to zero) must not crash the function.
+  pool.on("error", (err) => console.error("idle database connection error:", err.message));
   return pool;
 }
 export function setPool(p) { pool = p; }

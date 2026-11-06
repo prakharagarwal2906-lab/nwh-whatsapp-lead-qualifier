@@ -127,7 +127,14 @@ flowchart TD
 | Visit date | Date chosen | Comment · ask time slot |
 | Visit time | Visit booked | Schedule showroom visit · confirmation |
 
-**When the customer taps again** (WhatsApp keeps buttons active): first-three → first-three sends a thank-you confirming the update; More than 2 Months / Still Researching → first-three asks for confirmation first, then qualifies (reopening a closed lead) and continues to the visit date; a new More than 2 Months tap sends thanks and schedules an immediate call; a new Still Researching tap reopens the lead if closed, schedules a call and sends thanks.
+**When the customer taps again** (WhatsApp keeps buttons active), based on the answer already given:
+
+| Already selected | Then taps | What happens |
+|---|---|---|
+| 15 Days / 1 Month / 1–2 Months | another of these three | Thank-you confirming the update |
+| 15 Days / 1 Month / 1–2 Months | More than 2 Months / Still Researching | Confirmation first, then handle the new answer |
+| More than 2 Months | any other | Thanks + immediate call |
+| Still Researching (closed) | any other | Reopen the lead, schedule a call, thanks |
 
 **Tracking and message IDs.** The template ID is shared by every customer. Gupshup's send API returns a unique `messageId` immediately (HTTP 202), saved against the lead, dealer, template, flow and step before any reply can arrive. WhatsApp's `wamid` arrives with the first status callback. Every tap carries `context.gsId` (the `messageId` it answers) plus the postback, and is stored in `wa_interaction`. Date and time lists are session messages that keep a pointer to the template that started the flow, so engagement for every step rolls up per template (`GET /internal/engagement`).
 
