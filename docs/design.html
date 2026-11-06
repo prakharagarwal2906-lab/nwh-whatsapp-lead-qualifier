@@ -192,6 +192,20 @@ flowchart TD
     </tbody>
   </table></div>
   <p>The two-month threshold and the priority mapping live in dealer config, not code. Date and time lists come from the dealer's calendar: weekly offs and holidays are skipped, today is offered only if there are at least two working hours left, and WhatsApp lists hold at most 10 rows.</p>
+
+  <h3>When the customer taps again</h3>
+  <p>WhatsApp keeps quick-reply buttons active, so a customer can tap a different answer later. Every tap is tracked; the latest answer is handled like this:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>New tap</th><th>Earlier answer</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td>15 Days / 1 Month / 1–2 Months</td><td>One of these three</td><td>Thank-you message confirming the update; span, eagerness and next call updated</td></tr>
+      <tr><td>15 Days / 1 Month / 1–2 Months</td><td>More than 2 Months or Still Researching</td><td>Ask for confirmation first ("Yes, change it" / "No, keep earlier answer"). On Yes: lead (re)opened and Qualified, next call scheduled, thanks + visit date list</td></tr>
+      <tr><td>More than 2 Months</td><td>Any other</td><td>Thanks for confirming + immediate call scheduled (lead reopened if it was closed)</td></tr>
+      <tr><td>Still Researching (not interested)</td><td>Any other</td><td>Lead reopened if closed, immediate call scheduled, thanks message</td></tr>
+      <tr><td>Same answer again</td><td>Same</td><td>"Already noted" message, no change</td></tr>
+    </tbody>
+  </table></div>
+  <p>An immediate call is due now if the dealer is open, otherwise at the next opening time.</p>
   <h3>Which leads count as non-working hours</h3>
   <ul>
     <li>Each dealer has working hours per weekday, a timezone (default <code>Asia/Kolkata</code>), weekly offs and a holiday calendar.</li>
