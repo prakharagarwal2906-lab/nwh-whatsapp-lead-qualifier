@@ -147,9 +147,5 @@ def kept_text() -> str:
     return "No problem, we've kept your earlier answer."
 
 
-def call_soon_text() -> str:
-    return "Thanks for confirming! Our team will call you shortly."
-
-
-def reopened_text() -> str:
-    return "Thanks for getting back to us! Our team will call you shortly."
+def still_researching_ack_text() -> str:
+    return "Thanks for letting us know. Feel free to reach us anytime if you need help."

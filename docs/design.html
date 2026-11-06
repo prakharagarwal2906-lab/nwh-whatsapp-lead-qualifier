@@ -200,12 +200,12 @@ flowchart TD
     <tbody>
       <tr><td>15 Days / 1 Month / 1–2 Months</td><td>Another of these three</td><td>Thank-you message confirming the update; span, eagerness and next call updated</td></tr>
       <tr><td>15 Days / 1 Month / 1–2 Months</td><td>More than 2 Months or Still Researching</td><td>Ask for confirmation first ("Yes, change it" / "No, keep earlier answer"). On Yes, handle the new answer: More than 2 Months → Not qualified · open with the span-based call; Still Researching → lead closed (Not interested in buying · Just researching)</td></tr>
-      <tr><td>More than 2 Months</td><td>Any other option</td><td>"Thanks for confirming" + immediate call so the telecaller can confirm</td></tr>
-      <tr><td>Still Researching (lead closed)</td><td>Any other option</td><td>Lead reopened, immediate call scheduled, thanks message</td></tr>
+      <tr><td>More than 2 Months</td><td>Any other option</td><td>Thank-you message; next call scheduled by the new buying span (7 days before it ends, or 1 day after a visit if earlier)</td></tr>
+      <tr><td>Still Researching (lead closed)</td><td>Any other option</td><td>Lead reopened (Not qualified · open), next call scheduled by the new buying span, thank-you message</td></tr>
       <tr><td>Any</td><td>The same option again</td><td>"Already noted" message, no change</td></tr>
     </tbody>
   </table></div>
-  <p>An immediate call is due now if the dealer is open, otherwise at the next opening time.</p>
+  <p>More than 2 Months → Still Researching keeps the existing call and adds a note on the lead.</p>
   <h3>Which leads count as non-working hours</h3>
   <ul>
     <li>Each dealer has working hours per weekday, a timezone (default <code>Asia/Kolkata</code>), weekly offs and a holiday calendar.</li>
@@ -414,8 +414,9 @@ POST /api/v1/leads/{leadId}/visits         Idempotency-Key: wa-&lt;inbound id&gt
   "assignee":"Sathya", "source":"WHATSAPP_BOT" }
 
 POST /api/v1/leads/{leadId}/calls          Idempotency-Key: wa-&lt;inbound id&gt;
-{ "dueAt":"2026-11-06T09:30:00+05:30",     # now if open, else next opening
+{ "dueAt":"2026-11-30T09:30:00+05:30",
   "reopen":true,                           # true when the lead was closed (Still Researching)
+                                           # dueAt follows the new buying span (span - 7 days)
   "purchaseTimeline":"1M", "reason":"Customer changed the answer ... on WhatsApp" }</code></pre>
   <h3>Change confirmation (session quick-reply message)</h3>
 <pre class="code"><code>message={"type":"quick_reply",

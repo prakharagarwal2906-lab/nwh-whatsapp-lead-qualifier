@@ -6,16 +6,16 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from .clients import GupshupClient, L2RClient, ListRow, SendError, TemplateSend
 from .db import Repo
 from .models import DealerConfig, Lead, MsgStatus, Outcome, WaMessage
 from .rules import (
     FLOW, QUALIFYING, STEP_CONFIRM, STEP_TIMELINE, STEP_VISIT_DATE, STEP_VISIT_TIME, TIMELINE_LABEL,
-    TIMELINE_OPTIONS, build_postback, call_soon_text, classify_text, confirm_change_text, decide_timeline,
-    gt2m_text, kept_text, parse_postback, reopened_text, research_text, same_answer_text, updated_text,
-    visit_confirm_text,
+    TIMELINE_DAYS, TIMELINE_OPTIONS, build_postback, classify_text, confirm_change_text, decide_timeline,
+    gt2m_text, kept_text, parse_postback, research_text, same_answer_text, still_researching_ack_text,
+    updated_text, visit_confirm_text,
 )
 from .working_hours import DealerCalendar, day_label
 
@@ -315,13 +315,18 @@ class QualifierService:
                                                   slot, cfg.rep_name, cfg.rep_phone)))
 
     # ---- changed answers --------------------------------------------------
-    def _immediate(self, cfg: DealerConfig) -> datetime:
-        """Now if the dealer is open, otherwise the next opening time."""
+    def _span_call(self, cfg: DealerConfig, option: str, lead_id: str) -> datetime:
+        """Next call: 7 days before the buying span ends, or 1 day after a booked visit,
+        whichever is earlier, at the dealer's opening time on an open day."""
         cal, now = DealerCalendar(cfg), datetime.now(timezone.utc)
-        if not cal.is_non_working(now):
-            return now
-        nxt = cal.next_window_start(now)
-        return nxt[0] if nxt else now
+        candidates = [now + timedelta(days=max(TIMELINE_DAYS[option] - 7, 1))]
+        visit = self.repo.latest_interaction(lead_id, STEP_VISIT_DATE)
+        if visit:
+            candidates.append(datetime.combine(date.fromisoformat(visit["option_code"]) + timedelta(days=1),
+                                               datetime.min.time(), cal.tz))
+        day = cal.next_open_days(min(candidates).replace(hour=0, minute=0), 1)
+        wins = cal.windows(day[0]) if day else []
+        return wins[0][0] if wins else min(candidates)
 
     def _text(self, root: WaMessage, cfg: DealerConfig, step: str, text: str) -> None:
         self._send_session(root, cfg, step, "text",
@@ -337,8 +342,8 @@ class QualifierService:
         """Rules keyed by the answer the customer already gave:
         earlier 15D/1M/1-2M -> another of these: thank-you confirming the update
         earlier 15D/1M/1-2M -> GT2M / RESEARCH: ask for confirmation first
-        earlier GT2M -> any other: thanks + immediate call
-        earlier RESEARCH (lead closed) -> any other: reopen the lead, schedule a call, thanks
+        earlier GT2M -> any other: thanks, next call by the new buying span
+        earlier RESEARCH (lead closed) -> any other: reopen the lead, next call by the new span, thanks
         """
         prev = tpl.reply_code
         prev_label, new_label = TIMELINE_LABEL[prev], TIMELINE_LABEL[option]
@@ -362,12 +367,17 @@ class QualifierService:
             return "reply:CONFIRMATION_ASKED"
         reopen = prev == "RESEARCH"
         self.repo.set_answer(tpl.id, option, decide_timeline(option, cfg.qualify_max_days).outcome)
-        self._l2r(self.l2r.schedule_call, tpl.lead_id, {
-            "dueAt": self._immediate(cfg).isoformat(), "reopen": reopen, "purchaseTimeline": option,
-            "reason": f"Customer changed the answer from '{prev_label}' to '{new_label}' on WhatsApp",
-            "actor": "system:whatsapp-bot"}, key)
-        self._text(tpl, cfg, "CHANGE_ACK", reopened_text() if reopen else call_soon_text())
-        return "reply:REOPENED" if reopen else "reply:IMMEDIATE_CALL"
+        reason = f"Customer changed the answer from '{prev_label}' to '{new_label}' on WhatsApp"
+        span = option if option != "RESEARCH" else ("GT2M" if reopen else None)
+        if span:
+            self._l2r(self.l2r.schedule_call, tpl.lead_id, {
+                "dueAt": self._span_call(cfg, span, tpl.lead_id).isoformat(), "reopen": reopen,
+                "purchaseTimeline": option, "reason": reason, "actor": "system:whatsapp-bot"}, key)
+        else:  # GT2M -> Still Researching: keep the existing call, note the change
+            self._safe_comment(tpl.lead_id, reason, key)
+        self._text(tpl, cfg, "CHANGE_ACK",
+                   still_researching_ack_text() if option == "RESEARCH" else updated_text(new_label))
+        return "reply:REOPENED" if reopen else "reply:TIMELINE_CHANGED"
 
     def _confirm_change(self, confirm: WaMessage, cfg: DealerConfig, option: str, key: str) -> str:
         tpl = self.repo.find_template(confirm.lead_id)

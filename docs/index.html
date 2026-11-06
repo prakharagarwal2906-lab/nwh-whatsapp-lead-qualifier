@@ -840,20 +840,14 @@ function scheduleNext(lead, n){
   const old = new Date(c.due_at); c.due_at = n.at.toISOString(); c.due_reason = n.why;
   addFeed(lead, {icon:"call", title:"Next call rescheduled", lines:[`From ${fmtWall(old)} to ${fmtWall(n.at)}`, `Reason: ${n.why}`]});
 }
-/* As soon as possible: now if the dealer is open, else at the next opening. */
-function immediateCall(lead, why){
-  const dealer = DEALERS[lead.dealerId], now = simNow(lead);
-  const at = isOpen(dealer, now) ? now : atOpen(dealer, nextOpenDays(dealer, now, 1)[0] || now);
-  scheduleNext(lead, {at, why});
-}
 /* Customer taps the timeline template again (WhatsApp keeps the buttons active).
    Rules (from the Excel), keyed by the answer the customer ALREADY gave:
    - earlier 15 Days / 1 Month / 1-2 Months:
        new tap is another of these three -> thank-you message confirming the update
        new tap is More than 2 Months / Still Researching -> ask for confirmation first, then handle it
-   - earlier More than 2 Months -> any other tap: thanks for confirming + immediate call
+   - earlier More than 2 Months -> any other tap: thanks, next call by the new buying span
    - earlier Still Researching (lead closed as Not interested) -> any other tap: reopen the lead,
-       schedule a call, thanks message */
+       next call by the new buying span, thanks message */
 async function timelineChanged(lead, option, dealer){
   const prev = lead.waAnswer, P = TIMELINE.find(x=>x[0]===prev)[1], t = TIMELINE.find(x=>x[0]===option), N = t[1];
   const say = async text => { await wait(300); await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text, payload:{type:"text"}}); };
@@ -876,20 +870,19 @@ async function timelineChanged(lead, option, dealer){
     return sendMessage(lead, {kind:"buttons", step:"CONFIRM_CHANGE", text:`You earlier told us "${P}". Do you want to change it to "${N}"?`,
       buttons:[{code:"YES", label:"Yes, change it"}, {code:"NO", label:"No, keep earlier answer"}], payload:{type:"quick_reply", options:["Yes, change it","No, keep earlier answer"]}});
   }
-  if (prev==="GT2M"){
-    lead.waAnswer = option; lead.timeline = N;
-    const reopened = !OPEN_STATUSES.includes(lead.leadStatus); if (reopened) setLeadStatus(lead, "NOT_QUALIFIED_OPEN");
-    addFeed(lead, {icon:"wa", tone:"waf", title: reopened ? "Lead reopened via WhatsApp" : "WhatsApp: answer changed", lines:[`From '${P}' to '${N}'`, "Immediate call scheduled so the telecaller can confirm"]});
-    immediateCall(lead, `customer changed the answer from '${P}' to '${N}' on WhatsApp`);
-    return say("Thanks for confirming! Our team will call you shortly.");
-  }
-  // prev === "RESEARCH": the lead was closed as Not interested
+  // Earlier More than 2 Months, or Still Researching (closed): thanks, and the next call
+  // follows the new answer's buying span (7 days before it ends, or 1 day after a visit).
+  const reopened = !OPEN_STATUSES.includes(lead.leadStatus);
   lead.waAnswer = option; lead.timeline = N;
-  setLeadStatus(lead, "NOT_QUALIFIED_OPEN");
-  addFeed(lead, {icon:"wa", tone:"waf", title:"Lead reopened via WhatsApp", lines:[`From '${P}' to '${N}'`, "Lead Status: Not qualified · open"]});
-  l2r(lead, "dispose", {source:"WHATSAPP_BOT", reopen:true, expectedBuyingSpan:N});
-  immediateCall(lead, `lead reopened: customer chose '${N}' on WhatsApp`);
-  return say("Thanks for getting back to us! Our team will call you shortly.");
+  if (reopened) setLeadStatus(lead, "NOT_QUALIFIED_OPEN");
+  if (option!=="RESEARCH"){ lead.spanCode = option; lead.eagerness = eagerness(option); }
+  addFeed(lead, {icon:"wa", tone:"waf", title: reopened ? "Lead reopened via WhatsApp" : "Buying timeline changed via WhatsApp",
+    lines:[`From '${P}' to '${N}'`, reopened ? "Lead Status: Not qualified · open" : null].filter(Boolean)});
+  l2r(lead, "dispose", {source:"WHATSAPP_BOT", reopen:reopened, expectedBuyingSpan:N});
+  if (option!=="RESEARCH") scheduleNext(lead, nextCallAt(lead, option, lead.visitDate));
+  else if (reopened || !openCall(lead)) scheduleNext(lead, nextCallAt(lead, "GT2M", lead.visitDate));
+  return say(option==="RESEARCH" ? "Thanks for letting us know. Feel free to reach us anytime if you need help."
+                                 : `Thanks for confirming! We've updated your buying timeline to ${N}.`);
 }
 
 /* The bot disposes the open call only if no telecaller has spoken to the customer yet. */
