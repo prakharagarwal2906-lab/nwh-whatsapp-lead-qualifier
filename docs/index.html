@@ -608,10 +608,10 @@ function disposeCall(lead, by, d){
     reason:d.reason||null, sub_reason:d.subReason||null,
     td_required:d.td==null?null:(d.td?"Yes":"No"), td_at:d.tdAt||null, comment:d.comment||null, next_call_at:d.next?d.next.at.toISOString():null});
   const lines = [d.comment&&`Comment: ${d.comment}`, `Call Status: ${c.call_status}`, c.followup_status&&`Follow-Up Status: ${c.followup_status}`,
-    c.interest&&`Lead Status: ${c.interest}`, c.buying_span&&`Expected Buying Span: ${c.buying_span}`, d.eager&&`Eagerness: ${d.eager}`,
+    c.interest&&`Lead Status: ${c.interest}`, c.buying_span&&`Expected Buying Span: ${c.buying_span}`,
     c.reason&&`Reason: ${c.reason}`, c.sub_reason&&`Sub Reason: ${c.sub_reason}`,
     c.td_required&&`TD Required: ${c.td_required}${c.td_at?` · ${c.td_at}`:""}`, d.extra,
-    d.next ? `Next Call: ${fmtWall(d.next.at)} (${d.next.why})` : "Next Call: none, lead closed"].filter(Boolean);
+    d.next ? `Next Call: ${fmtWall(d.next.at)}` : null].filter(Boolean);
   const title = by!=="WhatsApp Bot" ? `Follow up added by ${by}`
     : lead.leadStatus==="QUALIFIED" ? "WhatsApp has qualified the lead"
     : OPEN_STATUSES.includes(lead.leadStatus) ? "WhatsApp has updated the lead" : "WhatsApp has closed the lead";
@@ -635,9 +635,8 @@ function l2rDealerEvent(lead, event){
   if (first) lead.dealerPushedAt = simNow(lead).toISOString();
   const label = {QUALIFIED:"Lead sent to dealer panel", VISIT_BOOKED:"Dealer panel updated: visit booked", SPAN_UPDATED:"Dealer panel updated: buying timeline changed",
     WITHDRAWN:"Dealer panel updated: lead no longer qualified", BOOKED:"Dealer panel updated: booking"}[event] || "Dealer panel updated";
-  addFeed(lead, {icon:"dealer", tone:"dealer", title:label, lines:[`${dealer.name} (${dealer.id})`,
-    event==="QUALIFIED" ? `Triggered automatically when the lead was qualified (follow up added by ${by})` : null,
-    body.expectedBuyingSpan && `Expected Buying Span: ${body.expectedBuyingSpan}`, body.visit && `Visit: ${body.visit}`].filter(Boolean)});
+  addFeed(lead, {icon:"dealer", tone:"dealer", title:label,
+    lines: event==="VISIT_BOOKED" ? [`Visit created: ${body.visit}`] : [dealer.name]});
 }
 function setLeadStatus(lead, st, spanCode){
   lead.leadStatus = st;
@@ -650,7 +649,7 @@ function rescheduleForVisit(lead){
   const n = nextCallAt(lead, lead.spanCode, lead.visitDate);
   if (n.at < new Date(c.due_at)){
     const old = new Date(c.due_at); c.due_at = n.at.toISOString(); c.due_reason = n.why;
-    addFeed(lead, {icon:"call", title:`Next call rescheduled`, lines:[`From ${fmtWall(old)} to ${fmtWall(n.at)}`, `Reason: ${n.why}, earlier than the buying-span date`]});
+    addFeed(lead, {icon:"call", title:`Next call rescheduled`, lines:[`From ${fmtWall(old)} to ${fmtWall(n.at)}`]});
     log("info","L2R",`call ${c.call_id} moved to ${fmtWall(n.at)} (${n.why})`, undefined, lead.id);
   }
 }
@@ -806,7 +805,7 @@ async function handleReply(p){
       lead.waAnswer = target; lead.timeline = t[1]; lead.priority = null;
       if (target==="GT2M"){
         setLeadStatus(lead, "NOT_QUALIFIED_OPEN", "GT2M"); lead.botState = "Nurture";
-        addFeed(lead, {icon:"wa", tone:"waf", title:"WhatsApp has updated the lead", lines:[`Customer confirmed the change from '${P}' to '${t[1]}'`, "Lead Status: Not qualified · open · Eagerness: Normal"]});
+        addFeed(lead, {icon:"wa", tone:"waf", title:"WhatsApp has updated the lead", lines:[`Customer confirmed the change from '${P}' to '${t[1]}'`, "Lead Status: Not qualified · open"]});
         l2rDealerEvent(lead, "WITHDRAWN");
         l2r(lead, "dispose", {source:"WHATSAPP_BOT", leadStatus:"NOT_QUALIFIED_OPEN", expectedBuyingSpan:t[1]});
         scheduleNext(lead, nextCallAt(lead, "GT2M", null));
@@ -815,7 +814,7 @@ async function handleReply(p){
       } else {
         setLeadStatus(lead, "NOT_QUALIFIED_CLOSED"); lead.eagerness = null; lead.botState = "Closed · just researching";
         l2rDealerEvent(lead, "WITHDRAWN");
-        disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected (WhatsApp)", followup:"Spoke to customer (WhatsApp)", interest:"Not interested",
+        disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected", followup:"Spoke to customer", interest:"Not interested",
           reason:"Not interested in buying", subReason:"Just researching", comment:`Customer changed the answer to '${t[1]}' on WhatsApp`, next:null});
         await wait(400);
         await sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Please feel free to reach us at ${dealer.virtual} for any queries you might have.`, payload:{type:"text"}});
@@ -841,7 +840,7 @@ async function handleReply(p){
       created_at:simNow(lead).toISOString(), dealer_id:dealer.id, sales_executive:dealer.exec}; lead.tasks.push(task); }
     Object.assign(task, {date:lead.visitDate, date_label:lead.visitDateLabel, slot:title, changed_at:simNow(lead).toISOString()});
     addFeed(lead, {icon:"td", tone:"task", title: again ? "WhatsApp has rescheduled the Showroom Visit task" : "WhatsApp has created a Showroom Visit task",
-      lines:[`Date: ${lead.visitDateLabel}`, `Time: ${title}`, `${dealer.name} · Sales executive: ${dealer.exec}`]});
+      lines:[`Date: ${lead.visitDateLabel}`, `Time: ${title}`]});
     l2r(lead, "task", {taskId:task.task_id, type:"SHOWROOM_VISIT", date:lead.visitDate, slot:title, createdBy:"WHATSAPP", dealerId:dealer.id});
     rescheduleForVisit(lead);
     l2rDealerEvent(lead, "VISIT_BOOKED");
@@ -864,9 +863,9 @@ async function sendDateList(lead, dealer){
 /* Move the open call to `n` (or create one if the lead had none). */
 function scheduleNext(lead, n){
   const c = openCall(lead);
-  if (!c){ createCall(lead, n.at, n.why); addFeed(lead, {icon:"call", title:"Next call scheduled", lines:[fmtWall(n.at), `Reason: ${n.why}`]}); return; }
+  if (!c){ createCall(lead, n.at, n.why); addFeed(lead, {icon:"call", title:"Next call scheduled", lines:[fmtWall(n.at)]}); return; }
   const old = new Date(c.due_at); c.due_at = n.at.toISOString(); c.due_reason = n.why;
-  addFeed(lead, {icon:"call", title:"Next call rescheduled", lines:[`From ${fmtWall(old)} to ${fmtWall(n.at)}`, `Reason: ${n.why}`]});
+  if (old.getTime()!==n.at.getTime()) addFeed(lead, {icon:"call", title:"Next call rescheduled", lines:[`From ${fmtWall(old)} to ${fmtWall(n.at)}`]});
 }
 /* Customer taps the timeline template again (WhatsApp keeps the buttons active).
    Rules (from the Excel), keyed by the answer the customer ALREADY gave:
@@ -889,11 +888,11 @@ async function timelineChanged(lead, option, dealer){
     if (QUALIFY.includes(option)){
       lead.waAnswer = option; lead.timeline = N; lead.priority = t[2]<=30 ? "P1" : "P2";
       setLeadStatus(lead, "QUALIFIED", option);
-      addFeed(lead, {icon:"wa", tone:"waf", title:"WhatsApp has updated the buying timeline", lines:[`From '${P}' to '${N}'`, `Eagerness: ${lead.eagerness}`]});
+      addFeed(lead, {icon:"wa", tone:"waf", title:"WhatsApp has updated the buying timeline", lines:[`From '${P}' to '${N}'`]});
       l2r(lead, "dispose", {source:"WHATSAPP_BOT", expectedBuyingSpan:N});
       scheduleNext(lead, nextCallAt(lead, option, lead.visitDate));
       l2rDealerEvent(lead, "SPAN_UPDATED");
-      return say(`Thank you for confirming! We've updated your buying timeline to ${N}.`);
+      return say("Thank you for the confirmation.");
     }
     lead.pendingChange = option;
     await wait(300);
@@ -915,10 +914,10 @@ async function timelineChanged(lead, option, dealer){
     // schedules the next one and its lead-qualified event sends the lead to the dealer panel.
     lead.priority = t[2]<=30 ? "P1" : "P2"; lead.botState = "Qualified by bot";
     setLeadStatus(lead, "QUALIFIED", option);
-    disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected (WhatsApp)", followup:"Spoke to customer (WhatsApp)", interest:"Interested", span:option,
+    disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected", followup:"Spoke to customer", interest:"Interested", span:option,
       eager:lead.eagerness, comment:`Customer changed the answer from '${P}' to '${N}' on WhatsApp`, next: nextCallAt(lead, option, lead.visitDate)});
     l2rDealerEvent(lead, "QUALIFIED");
-    await say(`Thanks for confirming! We've updated your buying timeline to ${N}.`);
+    await say("Thank you for the confirmation.");
     if (!lead.visitSlot){ await wait(300); await sendDateList(lead, dealer); }
     return;
   }
@@ -929,7 +928,7 @@ async function timelineChanged(lead, option, dealer){
     lines:[`From '${P}' to '${N}'`, reopened ? "Lead Status: Not qualified · open" : null].filter(Boolean)});
   l2r(lead, "dispose", {source:"WHATSAPP_BOT", reopen:reopened, expectedBuyingSpan:N});
   scheduleNext(lead, nextCallAt(lead, option, lead.visitDate));
-  return say(`Thanks for confirming! We've updated your buying timeline to ${N}.`);
+  return say("Thank you for the confirmation.");
 }
 
 /* The bot disposes the open call only if no telecaller has spoken to the customer yet. */
@@ -939,7 +938,7 @@ function botDispose(lead, spanCode, label, status, interest, next, extra={}){
     return;
   }
   setLeadStatus(lead, status, spanCode);
-  disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected (WhatsApp)", followup:"Spoke to customer (WhatsApp)", interest, span:spanCode, spanLabel:spanCode?null:label,
+  disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected", followup:"Spoke to customer", interest, span:spanCode, spanLabel:spanCode?null:label,
     eager: lead.eagerness, comment:`Customer chose '${label}' on WhatsApp`, next, ...extra});
   if (status==="QUALIFIED") l2rDealerEvent(lead, "QUALIFIED");
 }

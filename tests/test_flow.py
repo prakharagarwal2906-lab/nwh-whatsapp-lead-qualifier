@@ -195,7 +195,7 @@ def test_qualified_to_qualified_sends_thank_you(env):
     assert env.repo.event_result("wamid.in9") == "reply:TIMELINE_UPDATED"
     assert env.l2r.dispositions[-1][1]["purchaseTimeline"] == "1_2M"
     assert env.l2r.dispositions[-1][1]["priority"] == "P2"
-    assert env.gs.texts[-1][1] == "Thank you for confirming! We've updated your buying timeline to 1 - 2 Months."
+    assert env.gs.texts[-1][1] == "Thank you for the confirmation."
     assert env.repo.find_template("L1").reply_code == "1_2M"
 
 
@@ -243,7 +243,7 @@ def test_gt2m_to_one_month_qualifies_straight_away(env):
     body = env.l2r.dispositions[-1][1]
     assert body["targetStage"] == "QUALIFICATION" and body["leadStatus"] == "INTERESTED"
     assert body["expectedBuyingSpan"] == "1M" and body["reopen"] is False
-    assert env.gs.texts[-1][1] == "Thank you for confirming! We've updated your buying timeline to 1 Month."
+    assert env.gs.texts[-1][1] == "Thank you for the confirmation."
     assert env.gs.lists[-1]["section"] == "Choose your preferred date"   # continues to the visit
     assert env.l2r.calls == []
 

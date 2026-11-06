@@ -136,7 +136,7 @@ def same_answer_text(label: str) -> str:
 
 
 def updated_text(label: str) -> str:
-    return f"Thank you for confirming! We've updated your buying timeline to {label}."
+    return "Thank you for the confirmation."
 
 
 def confirm_change_text(prev_label: str, new_label: str) -> str:
