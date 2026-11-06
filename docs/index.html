@@ -427,9 +427,7 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
     <div><h1>2 · L2R and the customer's WhatsApp, side by side</h1>
       <p>Tap the options on the phone as the customer and watch L2R update. Our telecaller, or the WhatsApp bot through the L2R API, tags the follow-up form; when the lead is <b>qualified</b>, L2R sends it to the <b>dealer panel</b>. Our team keeps calling until the customer books.</p></div>
     <div class="next">
-      <span class="l2rpick"><label for="leadPick" class="hint">Lead</label><select id="leadPick"></select></span>
       <button class="btn ghost" id="resetAll" type="button">Reset demo</button>
-      <a class="btn primary" href="#tracking">See tracking →</a>
     </div>
   </div>
   <div class="combo">
@@ -477,19 +475,10 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
 
   <div class="kpis" id="kpis"></div>
 
-  <div class="grid2" style="margin-top:14px">
+  <div style="margin-top:14px">
     <section class="panel">
       <h2>Clicks against each option</h2>
       <div class="pad"><div class="funnel" id="funnel"></div></div>
-    </section>
-    <section class="panel">
-      <h2>When do we get the message ID?</h2>
-      <div class="pad" style="display:grid;gap:10px;font-size:13.5px">
-        <div><span class="tag t-info">1 · On send</span> Gupshup's send API returns <code>messageId</code> straight away (HTTP 202). Unlike the template ID it is unique to this customer and this send. We save <code>messageId → lead, dealer, template, flow, step</code> right then.</div>
-        <div><span class="tag t-info">2 · First status callback</span> The <code>enqueued</code> event brings WhatsApp's own ID (<code>wamid…</code>). We save it on the same row.</div>
-        <div><span class="tag t-info">3 · On every tap</span> The reply carries <code>context.gsId</code> (our messageId) and <code>context.id</code> (wamid) of the message it answers, plus our <code>postbackText</code>. One lookup gives lead, template, flow and step.</div>
-        <div class="hint">Engagement % per template = replies ÷ delivered, grouping sends by <code>template_id</code>. The date and time questions are session messages in the same flow, linked back to the template that started it.</div>
-      </div>
     </section>
   </div>
 
@@ -536,7 +525,7 @@ const FLOW = "NWH_QUALIFIER";
 const RANK = {SUBMITTED:0,SENT:1,DELIVERED:2,READ:3,REPLIED:4,FAILED:5};
 const QUALIFY = ["15D","1M","1_2M"];
 const SPAN = [["15D","15 Days",15],["1M","1 Month",30],["1_2M","1 - 2 Months",60],["GT2M","More than 2 Months",90]];
-const LEAD_STATUS = {NEW:"New", QUALIFIED:"Qualified", NOT_QUALIFIED_OPEN:"Not qualified · open", QUALIFIED_CLOSED:"Qualified · closed", BOOKED:"Booked", NOT_QUALIFIED_CLOSED:"Not qualified · closed"};
+const LEAD_STATUS = {NEW:"New", QUALIFIED:"Qualified", NOT_QUALIFIED_OPEN:"Not qualified · open", QUALIFIED_CLOSED:"Closed after qualification", BOOKED:"Booked", NOT_QUALIFIED_CLOSED:"Closed before qualification"};
 const OPEN_STATUSES = ["NEW","QUALIFIED","NOT_QUALIFIED_OPEN"];
 const NOT_INTERESTED_REASONS = ["Bought competition brand","Bought from Multibrand dealership","Bought same vehicle from another dealer",
   "Planning to buy competition brand","Planning to buy/bought used vehicle","Postponed/dropped purchase plan","Not interested in buying",
@@ -656,10 +645,14 @@ function disposeCall(lead, by, d){
   Object.assign(c, {status:"DISPOSED", disposed_at:simNow(lead).toISOString(), disposed_by:by, call_status:d.callStatus||"Connected",
     followup_status:d.followup||null, interest:d.interest||null, buying_span:span?span[1]:(d.spanLabel||null),
     reason:d.reason||null, sub_reason:d.subReason||null,
-    td_required:d.td==null?null:(d.td?"Yes":"No"), td_at:d.tdAt||null, comment:d.comment||null, next_call_at:d.next?d.next.at.toISOString():null});
+    td_required:d.td==null?null:(d.td?"Yes":"No"), td_at:d.tdAt||null, comment:d.comment||null, next_call_at:d.next?d.next.at.toISOString():null,
+    booking_status:d.booking||null, booking_date:d.bookDate||null, booking_name:d.bookName||null, vehicle_year:d.year||null, vehicle_color:d.color||null});
   const lines = [d.comment&&`Comment: ${d.comment}`, `Call Status: ${c.call_status}`, c.followup_status&&`Follow-Up Status: ${c.followup_status}`,
-    c.interest&&`Lead Status: ${c.interest}`, c.buying_span&&`Expected Buying Span: ${c.buying_span}`,
-    c.reason&&`Reason: ${c.reason}`, c.sub_reason&&`Sub Reason: ${c.sub_reason}`,
+    c.interest&&`Lead Status: ${c.interest}`, c.booking_status&&`Booking Status: ${c.booking_status}`,
+    c.booking_date&&`Booking Date: ${dayLabel(at(c.booking_date))}`, c.booking_name&&`Name: ${c.booking_name}`,
+    c.vehicle_year&&`Vehicle Year: ${c.vehicle_year}`, c.vehicle_color&&`Colour: ${c.vehicle_color}`,
+    c.buying_span&&`Expected Buying Span: ${c.buying_span}`,
+    c.reason&&`Reason: ${c.reason}`, c.sub_reason&&`Sub Reason: ${c.sub_reason}`, d.closed&&`Lead closed: ${d.closed}`,
     c.td_required&&`Visit Required: ${c.td_required}${c.td_at?` · ${c.td_at}`:""}`, d.extra,
     d.next ? `Next Call: ${fmtWall(d.next.at)}` : null].filter(Boolean);
   const title = by!=="WhatsApp Bot" ? `Follow up added by ${by}`
@@ -667,7 +660,8 @@ function disposeCall(lead, by, d){
     : OPEN_STATUSES.includes(lead.leadStatus) ? "WhatsApp has updated the lead" : "WhatsApp has closed the lead";
   addFeed(lead, {icon:"follow", tone:"call", title, lines});
   l2r(lead, "dispose", {callId:c.call_id, disposedBy:by, callStatus:c.call_status, followUpStatus:c.followup_status, leadStatus:c.interest,
-    expectedBuyingSpan:c.buying_span, reason:c.reason, subReason:c.sub_reason, tdRequired:c.td_required, tdAt:c.td_at, nextCallAt:c.next_call_at, comment:c.comment});
+    expectedBuyingSpan:c.buying_span, reason:c.reason, subReason:c.sub_reason, tdRequired:c.td_required, tdAt:c.td_at, nextCallAt:c.next_call_at, comment:c.comment,
+    bookingStatus:c.booking_status, bookingDate:c.booking_date, bookingName:c.booking_name, vehicleYear:c.vehicle_year, vehicleColor:c.vehicle_color});
   if (d.next) createCall(lead, d.next.at, d.next.why);
   return c;
 }
@@ -1152,7 +1146,7 @@ const ICONS = {
   td:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M12 3v7M5 15l5-2M19 15l-5-2"/></svg>',
 };
 let F = null;   // follow-up form state (not persisted)
-function resetForm(lead){ F = {lead: lead && lead.id, followup:"", interest:"", span:"", td:"", tdDate:"", tdTime:"", nextDate:"", nextTime:"", nextTouched:false, callStatus:"", reason:"", subReason:"", comment:"", err:""}; }
+function resetForm(lead){ F = {lead: lead && lead.id, followup:"", interest:"", span:"", td:"", tdDate:"", tdTime:"", nextDate:"", nextTime:"", nextTouched:false, callStatus:"", booking:"", bookDate:"", bookName:"", year:"", color:"", reason:"", subReason:"", comment:"", err:""}; }
 const isoOf = d => d.toISOString().slice(0,10);
 const hhmmOf = d => d.toISOString().slice(11,16);
 const at = (dateIso, time) => new Date(Date.parse(`${dateIso}T${time||"00:00"}:00Z`));
@@ -1168,9 +1162,9 @@ function leadTags(l){
   if (l.qualifiedBy==="WhatsApp") t.push(`<span class="ltag lt-wa">WhatsApp Qualified</span>`);
   if (l.eagerness) t.push(`<span class="ltag lt-${l.eagerness.toLowerCase()}">${l.eagerness}</span>`);
   if (l.leadStatus==="BOOKED") t.push(`<span class="ltag lt-booked">Booked</span>`);
-  else if (OPEN_STATUSES.includes(l.leadStatus)) { if (l.leadStatus!=="NEW") t.push(`<span class="ltag lt-active">Active</span>`); }
-  else t.push(`<span class="ltag lt-closed">Closed</span>`);
-  if (l.leadStatus!=="NEW" && l.leadStatus!=="BOOKED") t.push(`<span class="ltag lt-closed">${esc(LEAD_STATUS[l.leadStatus])}</span>`);
+  else if (OPEN_STATUSES.includes(l.leadStatus)) {
+    if (l.leadStatus!=="NEW") t.push(`<span class="ltag lt-active">Active</span>`, `<span class="ltag lt-closed">${esc(LEAD_STATUS[l.leadStatus])}</span>`);
+  } else t.push(`<span class="ltag lt-closed">${esc(LEAD_STATUS[l.leadStatus])}</span>`);   // Closed after / before qualification
   if (openCall(l)) t.push(`<span class="ltag lt-pend">Followup pending</span>`);
   const vs = visitState(l);
   if (vs) t.push(vs.state==="done" ? `<span class="ltag lt-vdone">Visit completed</span>`
@@ -1179,7 +1173,7 @@ function leadTags(l){
   return t.join("");
 }
 function renderLms(){
-  $("#leadPick").innerHTML = S.leads.length ? S.leads.map(l=>`<option value="${l.id}" ${l.id===S.selected?"selected":""}>${l.id} · ${esc(l.name)} · ${esc(LEAD_STATUS[l.leadStatus]||"")}</option>`).join("") : `<option>No leads yet</option>`;
+  if ($("#leadPick")) $("#leadPick").innerHTML = S.leads.length ? S.leads.map(l=>`<option value="${l.id}" ${l.id===S.selected?"selected":""}>${l.id} · ${esc(l.name)} · ${esc(LEAD_STATUS[l.leadStatus]||"")}</option>`).join("") : `<option>No leads yet</option>`;
   const l = leadById(S.selected), box = $("#l2rBody");
   if (!l){ box.innerHTML = `<div class="lcard" style="grid-column:1/-1"><div class="empty">No leads yet. Submit an enquiry on the <a href="#website">customer website</a>.</div></div>`; return; }
   if (!F || F.lead!==l.id) resetForm(l);
@@ -1232,12 +1226,28 @@ function formHtml(l, c){
   const err = F.err ? `<div class="lerr">${esc(F.err)}</div>` : "";
   const comments = `<div class="frow2"><label for="fComment">Comments<sup>*</sup></label><textarea id="fComment" class="ltext" placeholder="Type your comments here">${esc(F.comment)}</textarea></div>`;
   const submit = `<div class="frow2"><span></span><div class="opts2"><button type="button" class="lsubmit" data-act="submit">Submit</button>${err}</div></div>`;
-  if (l.leadStatus==="QUALIFIED"){   // follow-up call on a qualified lead (second screenshot)
-    return `<div class="lform">
-      <div class="frow2"><label>Call Status<sup>*</sup></label><div class="opts2">${tog("callStatus","CONNECTED","Connected")}${tog("callStatus","NOT_CONNECTED","Not Connected")}</div></div>
-      ${F.callStatus==="CONNECTED" ? `<div class="frow2"><label>Next Call Date<sup>*</sup></label><div class="opts2"><input type="date" id="fNextDate" class="ldate" value="${F.nextDate}"><input type="time" id="fNextTime" class="ldate" value="${F.nextTime}"><span class="lhint">Set by the telecaller for now (rule to be decided with booking)</span></div></div>`
-        : F.callStatus==="NOT_CONNECTED" ? `<div class="frow2"><span></span><span class="lhint">The next call is scheduled for the next working day.</span></div>` : ""}
-      ${comments}${submit}</div>`;
+  if (l.leadStatus==="QUALIFIED"){   // follow-up call after qualification
+    let q = `<div class="lform">
+      <div class="frow2"><label>Follow-up Status<sup>*</sup></label><div class="opts2">${tog("followup","SPOKE","Spoke to Customer")}${tog("followup","BUSY","Customer was Busy")}</div></div>`;
+    if (F.followup==="BUSY"){
+      q += `<div class="frow2"><span></span><span class="lhint">The system schedules the next call for the next working day.</span></div>`;
+    } else if (F.followup==="SPOKE"){
+      q += `<div class="frow2"><label>Booking Status<sup>*</sup></label><div class="opts2">${tog("booking","BOOKED","Booked")}${tog("booking","PLANNING","Planning to Book")}${tog("booking","NOT_INTERESTED","Not Interested")}</div></div>`;
+      if (F.booking==="NOT_INTERESTED"){
+        q += `<div class="frow2"><label for="fReason">Reason<sup>*</sup></label><div class="opts2"><select id="fReason" class="lsel" style="width:260px"><option value="">Select</option>${NOT_INTERESTED_REASONS.map(r=>`<option ${F.reason===r?"selected":""}>${esc(r)}</option>`).join("")}</select></div></div>`;
+        if (SUB_REASONS[F.reason]) q += `<div class="frow2"><label for="fSubReason">Sub Reason<sup>*</sup></label><div class="opts2"><select id="fSubReason" class="lsel"><option value="">Select</option>${SUB_REASONS[F.reason].map(r=>`<option ${F.subReason===r?"selected":""}>${esc(r)}</option>`).join("")}</select></div></div>`;
+        q += `<div class="frow2"><span></span><span class="lhint">The lead will be closed after qualification.</span></div>`;
+      } else if (F.booking==="PLANNING"){
+        q += `<div class="frow2"><label>Next Follow-up<sup>*</sup></label><div class="opts2"><input type="date" id="fNextDate" class="ldate" value="${F.nextDate}" min="${isoOf(today)}"><input type="time" id="fNextTime" class="ldate" value="${F.nextTime}"></div></div>`;
+      } else if (F.booking==="BOOKED"){
+        const y = today.getUTCFullYear();
+        q += `<div class="frow2"><label for="fBookDate">Booking Date<sup>*</sup></label><div class="opts2"><input type="date" id="fBookDate" class="ldate" value="${F.bookDate}" max="${isoOf(today)}"></div></div>
+          <div class="frow2"><label for="fBookName">Name<sup>*</sup></label><div class="opts2"><input type="text" id="fBookName" class="ldate" style="width:220px" placeholder="Name on the booking" value="${esc(F.bookName)}"></div></div>
+          <div class="frow2"><label for="fYear">Vehicle Year<sup>*</sup></label><div class="opts2"><select id="fYear" class="lsel"><option value="">Select</option>${[y+1,y,y-1].map(v=>`<option ${String(F.year)===String(v)?"selected":""}>${v}</option>`).join("")}</select></div></div>
+          <div class="frow2"><label for="fColor">Colour<sup>*</sup></label><div class="opts2"><input type="text" id="fColor" class="ldate" style="width:220px" placeholder="e.g. Racing Red" value="${esc(F.color)}"></div></div>`;
+      }
+    }
+    return q + comments + submit + `</div>`;
   }
   let h = `<div class="lform">
     <div class="frow2"><label>Follow-up Status<sup>*</sup></label><div class="opts2">${tog("followup","SPOKE","Spoke to Customer")}${tog("followup","BUSY","Customer was Busy")}</div></div>`;
@@ -1378,12 +1388,42 @@ function submitForm(){
   F.comment = ($("#fComment")||{}).value?.trim() || "";
   const fail = msg => { F.err = msg; renderLms(); };
   if (l.leadStatus==="QUALIFIED"){
-    if (!F.callStatus) return fail("Choose the call status.");
-    if (!F.comment) return fail("Add a comment.");
-    const connected = F.callStatus==="CONNECTED";
-    if (connected && (!F.nextDate || !F.nextTime)) return fail("Choose the next call date and time.");
-    disposeCall(l, by, {callStatus: connected?"Connected":"Not connected", comment:F.comment,
-      next: connected ? {at: at(F.nextDate, F.nextTime), why:"set by telecaller"} : nextCallAt(l, null, null, 1)});
+    F.bookName = ($("#fBookName")||{}).value?.trim() ?? F.bookName;
+    F.color = ($("#fColor")||{}).value?.trim() ?? F.color;
+    if (!F.followup) return fail("Choose the follow-up status.");
+    if (F.followup==="BUSY"){
+      if (!F.comment) return fail("Add a comment.");
+      disposeCall(l, by, {followup:"Customer was busy", comment:F.comment, next: nextCallAt(l, null, null, 1)});
+    } else if (!F.booking){
+      return fail("Choose the booking status.");
+    } else if (F.booking==="NOT_INTERESTED"){
+      if (!F.reason) return fail("Choose a reason.");
+      if (SUB_REASONS[F.reason] && !F.subReason) return fail("Choose a sub reason.");
+      if (!F.comment) return fail("Add a comment.");
+      l.humanSpoke = true;
+      l.tasks.forEach(t=>{ if (t.status==="SCHEDULED") t.status = "CANCELLED"; }); syncVisitFields(l);
+      setLeadStatus(l, "QUALIFIED_CLOSED"); l.botState = "Closed after qualification";
+      disposeCall(l, by, {followup:"Spoke to customer", booking:"Not interested", reason:F.reason, subReason:SUB_REASONS[F.reason]?F.subReason:null,
+        closed:"after qualification", comment:F.comment, next:null});
+    } else if (F.booking==="PLANNING"){
+      if (!F.nextDate || !F.nextTime) return fail("Choose the next follow-up date and time.");
+      if (!F.comment) return fail("Add a comment.");
+      l.humanSpoke = true;
+      disposeCall(l, by, {followup:"Spoke to customer", booking:"Planning to book", comment:F.comment, next:{at: at(F.nextDate, F.nextTime), why:"next follow-up set by telecaller"}});
+    } else {
+      if (!F.bookDate) return fail("Choose the booking date.");
+      if (!F.bookName) return fail("Enter the name on the booking.");
+      if (!F.year) return fail("Choose the vehicle year.");
+      if (!F.color) return fail("Enter the colour.");
+      if (!F.comment) return fail("Add a comment.");
+      l.humanSpoke = true;
+      l.tasks.forEach(t=>{ if (t.status==="SCHEDULED") t.status = "COMPLETED"; }); syncVisitFields(l);
+      Object.assign(l, {bookingDate:F.bookDate, bookingName:F.bookName, vehicleYear:F.year, vehicleColor:F.color});
+      setLeadStatus(l, "BOOKED"); l.botState = "Booked";
+      disposeCall(l, by, {followup:"Spoke to customer", booking:"Booked", bookDate:F.bookDate, bookName:F.bookName, year:F.year, color:F.color, comment:F.comment, next:null});
+      addFeed(l, {icon:"dealer", tone:"conv", title:"Booking confirmed · conversion recorded", lines:[`${l.make} ${l.model} · ${F.year} · ${F.color}`, `Booked by ${F.bookName} on ${dayLabel(at(F.bookDate))}`]});
+      l2rDealerEvent(l, "BOOKED");
+    }
   } else if (!F.followup){
     return fail("Choose the follow-up status.");
   } else if (F.followup==="SPOKE" && !F.interest){
@@ -1396,8 +1436,8 @@ function submitForm(){
     if (!F.reason) return fail("Choose a reason.");
     if (SUB_REASONS[F.reason] && !F.subReason) return fail("Choose a sub reason.");
     if (!F.comment) return fail("Add a comment.");
-    l.humanSpoke = true; setLeadStatus(l, "NOT_QUALIFIED_CLOSED"); l.botState = "Not interested";
-    disposeCall(l, by, {followup:"Spoke to customer", interest:"Not interested", reason:F.reason, subReason:SUB_REASONS[F.reason]?F.subReason:null, comment:F.comment, next:null});
+    l.humanSpoke = true; setLeadStatus(l, "NOT_QUALIFIED_CLOSED"); l.botState = "Closed before qualification";
+    disposeCall(l, by, {followup:"Spoke to customer", interest:"Not interested", reason:F.reason, subReason:SUB_REASONS[F.reason]?F.subReason:null, closed:"before qualification", comment:F.comment, next:null});
   } else {
     if (!F.span) return fail("Choose the expected buying span.");
     if (!F.td) return fail("Choose whether a visit is required.");
@@ -1429,7 +1469,7 @@ function closeLead(kind){
   } else {
     const st = l.leadStatus==="QUALIFIED" ? "QUALIFIED_CLOSED" : "NOT_QUALIFIED_CLOSED";
     setLeadStatus(l, st); l.botState = "Closed";
-    disposeCall(l, by, {followup:"Lead closed", comment:`Inquiry closed (${LEAD_STATUS[st]})`, next:null});
+    disposeCall(l, by, {followup:"Lead closed", closed: st==="QUALIFIED_CLOSED" ? "after qualification" : "before qualification", comment:"Inquiry closed", next:null});
   }
   resetForm(l); render();
 }
@@ -1535,7 +1575,7 @@ function renderTracking(){
 let dbTable = "wa_message";
 function tables(){
   return {
-    leads_l2r: S.leads.map(l=>({lead_id:l.id, customer_name:l.name, mobile:l.mobile, make:l.make, model:l.model, city:l.city, dealer_id:l.dealerId, source:l.source, created_at_local:fmtWall(l.createdAt), lead_status:l.leadStatus, qualified_by:l.qualifiedBy||null, whatsapp_qualified:l.qualifiedBy==="WhatsApp", inquiries:l.inquiries.length, stage:l.stage, eagerness:l.eagerness||null, priority:l.priority||null, purchase_timeline:l.timeline||null, visit_date:l.visitDate||null, visit_slot:l.visitSlot||null, sent_to_dealer_at:l.dealerPushedAt||null, open_call_due:openCall(l)?fmtWall(new Date(openCall(l).due_at)):null, bot_state:l.botState||null})),
+    leads_l2r: S.leads.map(l=>({lead_id:l.id, customer_name:l.name, mobile:l.mobile, make:l.make, model:l.model, city:l.city, dealer_id:l.dealerId, source:l.source, created_at_local:fmtWall(l.createdAt), lead_status:l.leadStatus, qualified_by:l.qualifiedBy||null, whatsapp_qualified:l.qualifiedBy==="WhatsApp", inquiries:l.inquiries.length, stage:l.stage, eagerness:l.eagerness||null, priority:l.priority||null, purchase_timeline:l.timeline||null, closed_stage: l.leadStatus==="QUALIFIED_CLOSED" ? "after qualification" : l.leadStatus==="NOT_QUALIFIED_CLOSED" ? "before qualification" : null, booking_date:l.bookingDate||null, booking_name:l.bookingName||null, vehicle_year:l.vehicleYear||null, vehicle_color:l.vehicleColor||null, visit_date:l.visitDate||null, visit_slot:l.visitSlot||null, sent_to_dealer_at:l.dealerPushedAt||null, open_call_due:openCall(l)?fmtWall(new Date(openCall(l).due_at)):null, bot_state:l.botState||null})),
     lead_inquiries: S.leads.flatMap(l=>l.inquiries.map(q=>({...q, lead_id:l.id}))),
     lead_calls: S.leads.flatMap(l=>l.calls),
     lead_tasks: S.leads.flatMap(l=>l.tasks),
@@ -1719,7 +1759,6 @@ $("#leadForm").addEventListener("submit", e=>{
   $("#submitBtn").disabled=true;
   setTimeout(()=>{ $("#submitBtn").disabled=false; th.hidden=true; location.hash="#lms"; r.after(); }, 1400);
 });
-$("#leadPick").addEventListener("change", e=>{ S.selected=e.target.value; F=null; render(); });
 $("#l2rBody").addEventListener("click", e=>{
   const t = e.target.closest("[data-f],[data-date],[data-act]"); if (!t || t.disabled) return;
   const l = leadById(S.selected); if (!l) return;
@@ -1727,6 +1766,7 @@ $("#l2rBody").addEventListener("click", e=>{
   if (t.dataset.f){ F[t.dataset.f] = t.dataset.v; F.err=""; renderLms(); }
   else if (t.dataset.date){ F[t.dataset.date] = t.dataset.v; F.err=""; renderLms(); }
   else if (t.dataset.act==="submit") submitForm();
+  else if (t.dataset.act==="book" && l.leadStatus==="QUALIFIED"){ TAB="follow"; F.followup="SPOKE"; F.booking="BOOKED"; F.err=""; renderLms(); }
   else if (t.dataset.act==="book" || t.dataset.act==="close") closeLead(t.dataset.act);
   else if (t.dataset.act==="visit"){ const vs = visitState(l); vs && vs.state!=="done" ? openVisit("view", vs.v.task_id) : openVisit("schedule"); }
   else if (t.dataset.act==="visit-new") openVisit("schedule");
@@ -1758,8 +1798,20 @@ $("#l2rBody").addEventListener("change", e=>{
   else if (id==="fTdTime") F.tdTime = e.target.value;
   else if (id==="fNextDate"){ F.nextDate = e.target.value; F.nextTouched = true; }
   else if (id==="fNextTime"){ F.nextTime = e.target.value; F.nextTouched = true; }
+  else if (id==="fBookDate") F.bookDate = e.target.value;
+  else if (id==="fBookName"){ F.bookName = e.target.value.trim(); return; }
+  else if (id==="fYear") F.year = e.target.value;
+  else if (id==="fColor"){ F.color = e.target.value.trim(); return; }
   else return;
   F.err=""; renderLms();
+});
+// Keep typed text in the form state so a re-render (e.g. choosing the vehicle year) never wipes it.
+$("#l2rBody").addEventListener("input", e=>{
+  if (!F) return;
+  const id = e.target.id;
+  if (id==="fBookName") F.bookName = e.target.value;
+  else if (id==="fColor") F.color = e.target.value;
+  else if (id==="fComment") F.comment = e.target.value;
 });
 $("#msgs").addEventListener("click", e=>{
   const b=e.target.closest("button[data-code]"); if (b && !b.disabled) return tapButton(b.dataset.msg, b.dataset.code, b.dataset.label);
@@ -1781,9 +1833,9 @@ $("#exportCsv").addEventListener("click", ()=>{
   download(`${dbTable}.csv`, [cols.join(","),...rows.map(r=>cols.map(c=>cell(r[c])).join(","))].join("\n"), "text/csv");
 });
 $("#exportJson").addEventListener("click", ()=>download("qualifier-db.json", JSON.stringify(tables(),null,2), "application/json"));
+// Reset demo starts a fresh walkthrough but keeps every lead, message and tracking row.
 $("#resetAll").addEventListener("click", ()=>{
-  S=fresh(); try{ localStorage.removeItem(STORE_KEY); }catch(e){}
-  if (REMOTE.on) fetch("/api/db/reset",{method:"POST"}).then(r=>r.json()).then(j=>{ REMOTE.version=j.version||0; REMOTE.lastPushed=""; setBadge(); });
+  S.selected = null; F = null; MV = null; TAB = "follow";
   location.hash="#website"; render();
 });
 

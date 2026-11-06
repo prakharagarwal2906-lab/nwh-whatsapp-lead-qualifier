@@ -19,7 +19,8 @@ export const TABLES = {
     lead_id: "text", customer_name: "text", mobile: "text", make: "text", model: "text", city: "text",
     dealer_id: "text", source: "text", created_at_local: "text", lead_status: "text", qualified_by: "text",
     whatsapp_qualified: "boolean", inquiries: "integer", stage: "text",
-    eagerness: "text", priority: "text", purchase_timeline: "text", visit_date: "text", visit_slot: "text",
+    eagerness: "text", priority: "text", purchase_timeline: "text", closed_stage: "text",
+    booking_date: "text", booking_name: "text", vehicle_year: "text", vehicle_color: "text", visit_date: "text", visit_slot: "text",
     sent_to_dealer_at: "text", open_call_due: "text", bot_state: "text",
   }],
   // Inquiries on a lead (a new vehicle version on an open lead adds one; the same version does not).
@@ -31,6 +32,7 @@ export const TABLES = {
     call_id: "text", lead_id: "text", seq: "integer", status: "text", created_at: "text", due_at: "text",
     due_reason: "text", disposed_at: "text", disposed_by: "text", call_status: "text", followup_status: "text",
     interest: "text", buying_span: "text", reason: "text", sub_reason: "text", td_required: "text", td_at: "text", comment: "text", next_call_at: "text",
+    booking_status: "text", booking_date: "text", booking_name: "text", vehicle_year: "text", vehicle_color: "text",
   }],
   dealer_config: [["dealer_id"], {
     dealer_id: "text", dealer_name: "text", city: "text", waba_number: "text", virtual_number: "text",

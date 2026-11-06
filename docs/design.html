@@ -268,6 +268,18 @@ flowchart TD
       <tr><td>Follow-up call confirms booking</td><td>Telecaller</td><td>Lead Booked, conversion recorded, dealer panel updated</td></tr>
     </tbody>
   </table></div>
+  <h3>Follow-up after qualification</h3>
+  <p>Once a lead is qualified the telecaller's form asks for the follow-up status, then the booking status:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Follow-up status</th><th>Booking status</th><th>Fields</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td>Customer was busy</td><td>—</td><td>Comment only</td><td>The system schedules the next call for the next working day (BikeWale opening time)</td></tr>
+      <tr><td>Spoke to customer</td><td>Planning to book</td><td>Next follow-up date, time, comment</td><td>Next call at that date and time; lead stays Qualified</td></tr>
+      <tr><td>Spoke to customer</td><td>Booked</td><td>Booking date, name, vehicle year, colour, comment</td><td>Lead <b>Booked</b>; the status line at the top completes (Booking ✓); conversion recorded; dealer panel updated; no further calls</td></tr>
+      <tr><td>Spoke to customer</td><td>Not interested</td><td>Same reasons and sub reasons as before qualification, comment</td><td>Lead <b>closed after qualification</b>; no further calls</td></tr>
+    </tbody>
+  </table></div>
+  <p>Every closed lead shows which side of qualification it closed on: <b>Closed before qualification</b> (e.g. Still Researching, or Not interested on the first call) or <b>Closed after qualification</b>.</p>
   <p>What the bot sends to L2R when it qualifies a lead, the same fields as the follow-up form:</p>
 <pre class="code"><code>POST /api/v1/leads/{leadId}/dispositions
 { "callStatus":"CONNECTED", "followUpStatus":"SPOKE_TO_CUSTOMER", "leadStatus":"INTERESTED",
