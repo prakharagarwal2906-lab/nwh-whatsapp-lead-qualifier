@@ -73,6 +73,13 @@ CREATE TABLE IF NOT EXISTS wa_interaction (
 );
 CREATE INDEX IF NOT EXISTS ix_inter_lead ON wa_interaction (lead_id, step);
 CREATE INDEX IF NOT EXISTS ix_inter_tpl ON wa_interaction (template_id, step);
+CREATE TABLE IF NOT EXISTS dealer_push (           -- leads sent to the dealer panel
+  lead_id TEXT PRIMARY KEY,
+  dealer_id TEXT NOT NULL,
+  pushed_at TEXT NOT NULL,
+  last_event TEXT NOT NULL,
+  last_event_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS opt_out (
   mobile TEXT NOT NULL,
   dealer_id TEXT NOT NULL,
@@ -87,6 +94,7 @@ _ORDER = {
     "wa_message": "id",
     "wa_event": "received_at",
     "wa_interaction": "received_at",
+    "dealer_push": "pushed_at",
     "opt_out": "created_at",
     "audit_log": "id",
 }
@@ -274,6 +282,16 @@ class Repo:
             "l2r_sync_status = 'PENDING' WHERE id = ?",
             (MsgStatus.REPLIED.value, code, outcome.value, now().isoformat(), msg_id),
         )
+
+    def dealer_pushed(self, lead_id: str) -> bool:
+        return self._exec("SELECT 1 FROM dealer_push WHERE lead_id = ?", (lead_id,)).fetchone() is not None
+
+    def record_dealer_push(self, lead_id: str, dealer_id: str, event: str) -> None:
+        ts = now().isoformat()
+        self._exec(
+            "INSERT INTO dealer_push (lead_id, dealer_id, pushed_at, last_event, last_event_at) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(lead_id) DO UPDATE SET last_event = excluded.last_event, last_event_at = excluded.last_event_at",
+            (lead_id, dealer_id, ts, event, ts))
 
     def set_answer(self, msg_id: int, code: str, outcome: Outcome) -> None:
         """Store the customer's latest answer on a message without re-queuing an L2R sync."""

@@ -361,3 +361,42 @@ def test_engagement_per_template(env):
     assert (t["sent"], t["delivered"], t["replied"]) == (3, 3, 2)
     assert t["engagement_pct"] == 66.7
     assert t["options"] == {"1M": 1, "GT2M": 1} and t["qualified"] == 1
+
+
+# ---------------------------------------------------------------- dealer panel
+def test_qualified_lead_is_sent_to_dealer_panel_then_updated_with_visit(env):
+    send(env)
+    post(env, quick_reply("1M", "L1", "gs-1"))
+    first = env.dp.pushes[0]
+    assert first["event"] == "QUALIFIED" and first["dealerId"] == "D1" and first["leadId"] == "L1"
+    assert first["purchaseTimeline"] == "1M" and first["vehicle"] == "Royal Enfield Classic 350"
+    day = env.gs.lists[0]["rows"][0]
+    post(env, list_reply("VISIT_DATE", day.postback.split("|")[2], day.title, "L1", gs_of(env, "VISIT_DATE"), msg_id="wamid.in2"))
+    slot = env.gs.lists[1]["rows"][0]
+    post(env, list_reply("VISIT_TIME", "0930", slot.title, "L1", gs_of(env, "VISIT_TIME"), msg_id="wamid.in3"))
+    assert [p["event"] for p in env.dp.pushes] == ["QUALIFIED", "VISIT_BOOKED"]
+    assert env.client.get("/internal/db/dealer_push").json()["rows"][0]["last_event"] == "VISIT_BOOKED"
+
+
+def test_unqualified_leads_never_reach_the_dealer(env):
+    send(env)
+    post(env, quick_reply("GT2M", "L1", "gs-1"))
+    send(env, lead_id="L2", mobile="919800000002")
+    post(env, quick_reply("RESEARCH", "L2", "gs-2", mobile="919800000002", msg_id="wamid.b1"))
+    assert env.dp.pushes == []
+
+
+def test_timeline_change_and_withdrawal_update_the_dealer(env):
+    send(env)
+    post(env, quick_reply("15D", "L1", "gs-1"))
+    post(env, quick_reply("1_2M", "L1", "gs-1", msg_id="wamid.in8"))
+    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.in9"))
+    confirm(env, "YES")
+    assert [p["event"] for p in env.dp.pushes] == ["QUALIFIED", "SPAN_UPDATED", "WITHDRAWN"]
+
+
+def test_already_worked_lead_is_not_pushed_by_the_bot(env):
+    send(env)
+    env.l2r.leads["L1"].stage = "QUALIFICATION"   # telecaller qualified it first (and L2R sent it)
+    post(env, quick_reply("1M", "L1", "gs-1"))
+    assert env.dp.pushes == []

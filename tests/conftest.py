@@ -52,6 +52,14 @@ class FakeGupshup:
         return f"gs-{self._n}"
 
 
+class FakeDealerPanel:
+    def __init__(self):
+        self.pushes: list[dict] = []
+
+    def push_lead(self, body, idempotency_key):
+        self.pushes.append(body)
+
+
 class FakeL2R:
     def __init__(self):
         self.leads: dict[str, Lead] = {}
@@ -138,11 +146,12 @@ def env(tmp_path):
     if pg:  # run the same suite against Postgres
         import psycopg
         with psycopg.connect(pg, autocommit=True) as c:
-            c.execute("DROP TABLE IF EXISTS dealer_config, wa_message, wa_event, wa_interaction, audit_log, opt_out")
+            c.execute("DROP TABLE IF EXISTS dealer_config, wa_message, wa_event, wa_interaction, dealer_push, audit_log, opt_out")
     repo = Repo(pg or str(tmp_path / "t.db"))
     repo.upsert_dealer(dealer())
     gs, l2r = FakeGupshup(), FakeL2R()
-    svc = QualifierService(repo, gs, l2r)
+    dp = FakeDealerPanel()
+    svc = QualifierService(repo, gs, l2r, dealer_panel=dp)
     settings = Settings(db_path=str(tmp_path / "t.db"), webhook_tokens=[TOKEN, "old-token"],
                         log_file=str(tmp_path / "logs" / "audit.log"))
     client = TestClient(create_app(svc, settings))
@@ -151,5 +160,5 @@ def env(tmp_path):
         pass
 
     e = Env()
-    e.repo, e.gs, e.l2r, e.svc, e.client = repo, gs, l2r, svc, client
+    e.repo, e.gs, e.l2r, e.svc, e.client, e.dp = repo, gs, l2r, svc, client, dp
     return e

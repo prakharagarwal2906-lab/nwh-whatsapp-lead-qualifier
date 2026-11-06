@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
-from .clients import GupshupClient, L2RClient, ListRow, SendError, TemplateSend
+from .clients import DealerPanelClient, GupshupClient, L2RClient, ListRow, SendError, TemplateSend
 from .db import Repo
 from .models import DealerConfig, Lead, MsgStatus, Outcome, WaMessage
 from .rules import (
@@ -61,10 +61,12 @@ def template_variables(lead: Lead, cfg: DealerConfig) -> list[str]:
 
 class QualifierService:
     def __init__(self, repo: Repo, gupshup: GupshupClient, l2r: L2RClient,
-                 max_event_age_seconds: int = 86400, session_window_hours: int = 24):
+                 max_event_age_seconds: int = 86400, session_window_hours: int = 24,
+                 dealer_panel: DealerPanelClient | None = None):
         self.repo = repo
         self.gupshup = gupshup
         self.l2r = l2r
+        self.dealer_panel = dealer_panel
         self.max_event_age = max_event_age_seconds
         self.window_hours = session_window_hours
 
@@ -358,6 +360,7 @@ class QualifierService:
                     "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT", "purchaseTimeline": option,
                     "priority": d.priority, "comment": f"Customer changed the buying timeline from '{prev_label}' to '{new_label}' on WhatsApp",
                     "actor": "system:whatsapp-bot"}, key)
+                self.push_to_dealer(tpl.lead_id, tpl.dealer_id, "SPAN_UPDATED", key, purchaseTimeline=option)
                 self._text(tpl, cfg, "CHANGE_ACK", updated_text(new_label))
                 return "reply:TIMELINE_UPDATED"
             buttons = [ListRow("Yes, change it", build_postback(STEP_CONFIRM, f"YES:{option}", tpl.lead_id)),
@@ -388,6 +391,7 @@ class QualifierService:
         d = decide_timeline(target, cfg.qualify_max_days)
         self.repo.set_answer(tpl.id, target, d.outcome)
         note = f"Customer confirmed changing the buying timeline to '{TIMELINE_LABEL[target]}' on WhatsApp"
+        self.push_to_dealer(tpl.lead_id, tpl.dealer_id, "WITHDRAWN", key, purchaseTimeline=target)
         if target == "GT2M":
             self._l2r(self.l2r.dispose, tpl.lead_id, {
                 "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT", "leadStatus": "NOT_QUALIFIED_OPEN",
@@ -415,6 +419,7 @@ class QualifierService:
         if msg is None or msg.outcome is None:
             return "nothing_to_sync"
         key = idempotency_key or f"wa-msg-{msg.id}-{msg.outcome.value}"
+        qualified_now = False
         try:
             lead = self.l2r.get_lead(msg.lead_id)
             if lead is None or lead.closed:
@@ -443,6 +448,7 @@ class QualifierService:
                     # A human has already moved this lead on. Never downgrade.
                     self.l2r.add_comment(lead.lead_id, note, key)
                 elif msg.outcome == Outcome.QUALIFIED:
+                    qualified_now = True
                     d = decide_timeline(msg.reply_code, cfg.qualify_max_days if cfg else 60)
                     self.l2r.dispose(lead.lead_id, {
                         "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT",
@@ -473,7 +479,37 @@ class QualifierService:
         self.repo.set_sync(msg.id, "DONE")
         self.audit("INFO", "l2r_synced", msg.lead_id, msg.id, outcome=msg.outcome.value,
                    reply_code=msg.reply_code, step=msg.step)
+        if qualified_now:
+            self.push_to_dealer(msg.lead_id, msg.dealer_id, "QUALIFIED", key, lead=lead,
+                                purchaseTimeline=msg.reply_code)
+        elif msg.outcome == Outcome.VISIT_BOOKED:
+            chosen = self.repo.latest_interaction(msg.lead_id, STEP_VISIT_DATE)
+            self.push_to_dealer(msg.lead_id, msg.dealer_id, "VISIT_BOOKED", key, lead=lead,
+                                visitDate=chosen["option_code"] if chosen else None, visitSlotStart=msg.reply_code)
         return "done"
+
+    # ------------------------------------------------------------ dealer panel
+    def push_to_dealer(self, lead_id: str, dealer_id: str, event: str, key: str,
+                       lead: Lead | None = None, **extra) -> bool:
+        """Send a qualified lead to the dealer panel; later events are updates.
+        Leads that were never qualified are never sent."""
+        if self.dealer_panel is None:
+            return False
+        first = not self.repo.dealer_pushed(lead_id)
+        if first and event != "QUALIFIED":
+            return False
+        body = {"event": event, "dealerId": dealer_id, "leadId": lead_id, "source": "WHATSAPP_BOT", **extra}
+        if lead is not None:
+            body.update({"customerName": lead.customer_name, "mobile": lead.mobile,
+                         "vehicle": f"{lead.make} {lead.model_name}".strip()})
+        try:
+            self.dealer_panel.push_lead(body, f"{key}-dealer-{event}")
+        except Exception as e:
+            self.audit("ERROR", "dealer_push_failed", lead_id, event=event, error=str(e)[:300])
+            return False
+        self.repo.record_dealer_push(lead_id, dealer_id, event)
+        self.audit("INFO", f"dealer_pushed:{event}", lead_id, dealer_id=dealer_id)
+        return True
 
     # ------------------------------------------------------------ scheduled
     def run_maintenance(self) -> dict:

@@ -98,6 +98,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
     <li><a href="#journey">Customer journey</a></li>
     <li><a href="#rules">Qualification rules</a></li>
     <li><a href="#metrics">Success metrics</a></li>
+    <li><a href="#dealer">Who works where</a></li>
     <li><a href="#tracking">Tracking &amp; message IDs</a></li>
     <li><a href="#arch">Architecture</a></li>
     <li><a href="#sequence">End-to-end sequence</a></li>
@@ -149,8 +150,9 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
     <thead><tr><th>Who</th><th>What they need from this</th></tr></thead>
     <tbody>
       <tr><td>Customer</td><td>A quick acknowledgement, a clear callback time, and one-tap answers</td></tr>
-      <tr><td>Sales executive (lead owner)</td><td>Hot leads flagged first, with the bot's answer visible in the L2R Activity Feed</td></tr>
-      <tr><td>Dealer manager</td><td>A per-dealer switch, working-hours setup, and reports on bot-qualified leads to visit and booking</td></tr>
+      <tr><td>Internal calling team (lead owner in L2R)</td><td>Qualifies leads and makes follow-up calls until the customer books; sees the bot's answers and disposed calls in the L2R Activity Feed</td></tr>
+      <tr><td>Dealer (own dealer panel)</td><td>Receives only qualified leads, by API, with buying span and any visit booked; the dealer's sales executive handles the visit</td></tr>
+      <tr><td>OEM</td><td>Paid on conversion, so booking rate of delivered leads is the number that matters</td></tr>
       <tr><td>CarWale ops</td><td>Template approval status, delivery failures, and an audit trail per lead</td></tr>
     </tbody>
   </table></div>
@@ -218,7 +220,8 @@ flowchart TD
   <div class="table-wrap"><table>
     <thead><tr><th>Type</th><th>Metric</th><th>Why it matters</th></tr></thead>
     <tbody>
-      <tr><td>North star</td><td>Visit and booking rate of NWH leads, bot vs holdout</td><td>Proves the bot creates sales, not just tags</td></tr>
+      <tr><td>North star</td><td>Booking (conversion) rate of NWH leads, bot vs holdout</td><td>Revenue on the OEM contract is tied to conversion</td></tr>
+      <tr><td>Dealer delivery</td><td>% of leads qualified and sent to the dealer panel; time from enquiry to dealer</td><td>Dealers act only on qualified leads</td></tr>
       <tr><td>Funnel</td><td class="metric">Sent → Delivered → Read → Replied → Qualified → Date chosen → Visit booked</td><td>Shows where the drop-off is (template copy, number quality, list design)</td></tr>
       <tr><td>Engagement per template</td><td>Replies ÷ delivered, option split, visit booked %, grouped by template ID</td><td>Compares template versions and dealers; drives copy changes</td></tr>
       <tr><td>Speed</td><td>Time from lead creation to first touch; time from shift start to first call on hot leads</td><td>Speed to lead is the core promise</td></tr>
@@ -228,6 +231,27 @@ flowchart TD
     </tbody>
   </table></div>
   <p>To measure lift, hold out about 10% of eligible NWH leads per dealer (no template sent) for the first 4–6 weeks.</p>
+</section>
+
+<section id="dealer">
+  <h2>Who works where <span class="pill pm">Product</span></h2>
+  <p>L2R is the <b>internal calling team's</b> tool. Dealers work in a separate <b>dealer panel</b>. The OEM contract pays on conversion, so our team stays on the lead until it books.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Moment</th><th>L2R (internal calling team)</th><th>Dealer panel</th></tr></thead>
+    <tbody>
+      <tr><td>Lead created</td><td>Lead assigned to an internal telecaller; first call created</td><td>Nothing yet</td></tr>
+      <tr><td>Qualified (bot or telecaller)</td><td>Call disposed, next call by the buying-span rule</td><td><b>Lead sent by API</b> (POST) with customer, vehicle, buying span, eagerness</td></tr>
+      <tr><td>Visit / TD booked</td><td>Next call moved to 1 day after the visit if earlier</td><td>Update (PATCH): visit date and slot</td></tr>
+      <tr><td>Timeline changed / no longer qualified</td><td>Lead status and next call updated</td><td>Update: new span, or withdrawn</td></tr>
+      <tr><td>Follow-up call confirms booking</td><td>Lead Booked, conversion recorded</td><td>Update: booked</td></tr>
+    </tbody>
+  </table></div>
+<pre class="code"><code>POST  /dealer-panel/api/v1/leads            # first time the lead is qualified
+PATCH /dealer-panel/api/v1/leads/{leadId}   # VISIT_BOOKED | SPAN_UPDATED | WITHDRAWN | BOOKED
+{ "event":"QUALIFIED", "dealerId":"D101", "leadId":"L12345", "customerName":"Prakhar",
+  "mobile":"919876543210", "vehicle":"Royal Enfield Classic 350", "purchaseTimeline":"1M",
+  "source":"WHATSAPP_BOT" }</code></pre>
+  <p>Leads that were never qualified are never sent. Pushes are recorded in <code>dealer_push</code> (first push time, last event) so updates go only to leads the dealer already has.</p>
 </section>
 
 <section id="tracking">
@@ -266,6 +290,7 @@ flowchart LR
     CFG["Dealer config<br/>admin UI"]
   end
   GS["Gupshup"] <--> META["Meta WhatsApp<br/>Cloud API"] <--> CUST(("Customer"))
+  SYNC -->|qualified leads + updates| DP["Dealer panel API"]
   BUS --> EL --> SND -->|template API| GS
   SND --> DB
   GS -->|callback URL| WH --> Q --> PR --> SYNC --> L2RAPI

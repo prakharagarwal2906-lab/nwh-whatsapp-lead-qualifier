@@ -13,7 +13,7 @@ def _qualify(env):
 def test_db_overview_counts_every_table(env):
     _qualify(env)
     counts = env.client.get("/internal/db").json()["tables"]
-    assert set(counts) == {"dealer_config", "wa_message", "wa_event", "wa_interaction", "opt_out", "audit_log"}
+    assert set(counts) == {"dealer_config", "wa_message", "wa_event", "wa_interaction", "dealer_push", "opt_out", "audit_log"}
     assert counts["wa_message"] == 2 and counts["wa_event"] == 1 and counts["wa_interaction"] == 1 and counts["audit_log"] >= 3
 
 
