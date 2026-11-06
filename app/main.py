@@ -57,6 +57,10 @@ class LeadCreatedIn(BaseModel):
     whatsappConsent: bool = True
 
 
+class InquiryAddedIn(LeadCreatedIn):
+    inquiryId: str
+
+
 class DealerConfigIn(BaseModel):
     enabled: bool = True
     dealerName: str
@@ -84,6 +88,7 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
             max_event_age_seconds=settings.max_event_age_seconds,
             session_window_hours=settings.session_window_hours,
             brand_name=settings.brand_name, support_number=settings.support_number,
+            team_working_hours=settings.team_working_hours, team_timezone=settings.team_timezone,
         )
     setup_file_log(settings.log_file)
     app = FastAPI(title="WhatsApp After-Hours Lead Qualifier")
@@ -128,6 +133,17 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
             created_at=body.createdAt, whatsapp_consent=body.whatsappConsent,
         )
         r = service.on_lead_created(lead)
+        return {"sent": r.sent, "reason": r.reason, "messageId": r.message_id}
+
+    @app.post("/internal/leads/inquiry-added", dependencies=[Depends(internal_auth)])
+    def inquiry_added(body: InquiryAddedIn) -> dict:
+        """L2R: a new inquiry (different vehicle version) was added to an open lead."""
+        lead = Lead(
+            lead_id=body.leadId, dealer_id=body.dealerId, mobile=body.mobile,
+            customer_name=body.customerName, model_name=body.modelName, make=body.make, city=body.city,
+            created_at=body.createdAt, whatsapp_consent=body.whatsappConsent,
+        )
+        r = service.on_inquiry_added(lead, body.inquiryId)
         return {"sent": r.sent, "reason": r.reason, "messageId": r.message_id}
 
     @app.put("/internal/dealers/{dealer_id}", dependencies=[Depends(internal_auth)])

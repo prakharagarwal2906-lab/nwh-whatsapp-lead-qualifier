@@ -48,10 +48,20 @@ def in_holdout(lead_id: str, pct: int) -> bool:
     return bucket < pct
 
 
-def template_variables(lead: Lead, cfg: DealerConfig) -> list[str]:
-    """Template params in order: customer name, make, model, working hours,
+DEFAULT_TEAM_HOURS = {d: [["10:00", "19:00"]] for d in ("mon", "tue", "wed", "thu", "fri")}
+
+
+def team_calendar(hours: dict | None = None, timezone_name: str = "Asia/Kolkata", name: str = "BikeWale") -> DealerCalendar:
+    """Working hours of the BikeWale calling team (they qualify before the dealer sees the lead)."""
+    return DealerCalendar(DealerConfig(dealer_id="TEAM", enabled=True, dealer_name=name, gupshup_app_id="",
+                                       source_number="", template_id="", timezone=timezone_name,
+                                       working_hours=hours or DEFAULT_TEAM_HOURS))
+
+
+def template_variables(lead: Lead, cfg: DealerConfig, cal: DealerCalendar | None = None) -> list[str]:
+    """Template params in order: customer name, make, model, working hours (BikeWale team),
     virtual number, sales executive, dealer name."""
-    cal = DealerCalendar(cfg)
+    cal = cal or team_calendar()
     first = next((w for d in cal.next_open_days(lead.created_at, 1) for w in cal.windows(d)), None)
     fmt = lambda d: d.strftime("%I:%M %p").lstrip("0")  # noqa: E731
     hours = f"{fmt(first[0])} - {fmt(first[1])}" if first else "working hours"
@@ -62,7 +72,8 @@ def template_variables(lead: Lead, cfg: DealerConfig) -> list[str]:
 class QualifierService:
     def __init__(self, repo: Repo, gupshup: GupshupClient, l2r: L2RClient,
                  max_event_age_seconds: int = 86400, session_window_hours: int = 24,
-                 brand_name: str = "BikeWale", support_number: str = "918047104444"):
+                 brand_name: str = "BikeWale", support_number: str = "918047104444",
+                 team_working_hours: dict | None = None, team_timezone: str = "Asia/Kolkata"):
         self.repo = repo
         self.gupshup = gupshup
         self.l2r = l2r
@@ -70,6 +81,7 @@ class QualifierService:
         self.window_hours = session_window_hours
         self.brand_name = brand_name
         self.support_number = support_number
+        self.team_cal = team_calendar(team_working_hours, team_timezone, brand_name)
 
     def audit(self, level: str, event: str, lead_id: str | None = None,
               message_id: int | None = None, **detail) -> None:
@@ -90,6 +102,34 @@ class QualifierService:
                    lead.lead_id, r.message_id, mobile=lead.mobile, dealer_id=lead.dealer_id)
         return r
 
+    def on_inquiry_added(self, lead: Lead, inquiry_id: str) -> SendResult:
+        """L2R added a new inquiry (a different vehicle version) to an open lead. Send the qualifier
+        for the new vehicle only after BikeWale hours and only if the lead is not qualified yet.
+        (Same version: L2R creates no inquiry. Closed lead: L2R creates a new lead -> on_lead_created.)"""
+        r = self._on_inquiry_added(lead, inquiry_id)
+        self.audit("INFO" if r.sent else ("ERROR" if r.reason == "send_failed" else "INFO"),
+                   "inquiry_template_sent" if r.sent else f"inquiry_send_skipped:{r.reason}",
+                   lead.lead_id, r.message_id, inquiry_id=inquiry_id)
+        return r
+
+    def _on_inquiry_added(self, lead: Lead, inquiry_id: str) -> SendResult:
+        cfg = self.repo.get_dealer(lead.dealer_id)
+        if cfg is None or not cfg.enabled:
+            return SendResult(False, "dealer_not_enabled")
+        if not lead.whatsapp_consent:
+            return SendResult(False, "no_consent")
+        if not self.team_cal.is_non_working(lead.created_at):
+            return SendResult(False, "working_hours")
+        if self.repo.is_opted_out(lead.mobile, lead.dealer_id):
+            return SendResult(False, "opted_out")
+        try:
+            current = self.l2r.get_lead(lead.lead_id)
+        except Exception:
+            current = None
+        if current is None or current.closed or current.stage != "FIRST_CALL":
+            return SendResult(False, "lead_already_qualified_or_closed")
+        return self._send_template(lead, cfg, inquiry_id)
+
     def _on_lead_created(self, lead: Lead) -> SendResult:
         cfg = self.repo.get_dealer(lead.dealer_id)
         if cfg is None or not cfg.enabled:
@@ -98,7 +138,7 @@ class QualifierService:
             return SendResult(False, "no_consent")
         if not lead.mobile.isdigit() or len(lead.mobile) < 11:
             return SendResult(False, "invalid_mobile")
-        if not DealerCalendar(cfg).is_non_working(lead.created_at):
+        if not self.team_cal.is_non_working(lead.created_at):
             return SendResult(False, "working_hours")
         if self.repo.is_opted_out(lead.mobile, lead.dealer_id):
             return SendResult(False, "opted_out")
@@ -107,7 +147,11 @@ class QualifierService:
         if in_holdout(lead.lead_id, cfg.holdout_pct):
             return SendResult(False, "holdout")
 
-        msg_id = self.repo.create_pending(lead.lead_id, lead.dealer_id, lead.mobile, cfg.template_id)
+        return self._send_template(lead, cfg)
+
+    def _send_template(self, lead: Lead, cfg: DealerConfig, inquiry_id: str = "") -> SendResult:
+        msg_id = self.repo.create_pending(lead.lead_id, lead.dealer_id, lead.mobile, cfg.template_id,
+                                          inquiry_id=inquiry_id)
         if msg_id is None:
             return SendResult(False, "already_sent")
 
@@ -116,7 +160,7 @@ class QualifierService:
             source=cfg.source_number,                     # WABA number
             destination=lead.mobile,
             template_id=cfg.template_id,
-            params=template_variables(lead, cfg),
+            params=template_variables(lead, cfg, self.team_cal),
             postbacks=[build_postback(STEP_TIMELINE, code, lead.lead_id) for code, _, _ in TIMELINE_OPTIONS],
         )
         try:
@@ -337,7 +381,7 @@ class QualifierService:
         self.repo.add_interaction({
             "inbound_id": p.get("id"), "context_message_id": None, "lead_id": tpl.lead_id, "dealer_id": tpl.dealer_id,
             "template_id": tpl.template_id, "flow": FLOW, "step": "FREE_TEXT", "option_code": "HI" if hi else "OTHER",
-            "option_title": text[:200], "received_at": datetime.now(timezone.utc).isoformat()})
+            "option_title": text[:2000], "received_at": datetime.now(timezone.utc).isoformat()})   # keep what the customer typed
         if not hi:
             self._text(tpl, cfg, "ASK_HI", ask_hi_text())
             return "reply:ASK_HI"
@@ -359,8 +403,8 @@ class QualifierService:
     # ---- changed answers --------------------------------------------------
     def _span_call(self, cfg: DealerConfig, option: str, lead_id: str) -> datetime:
         """Next call: 7 days before the buying span ends, or 1 day after a booked visit,
-        whichever is earlier, at the dealer's opening time on an open day."""
-        cal, now = DealerCalendar(cfg), datetime.now(timezone.utc)
+        whichever is earlier, at the BikeWale team's opening time on a working day."""
+        cal, now = self.team_cal, datetime.now(timezone.utc)
         candidates = [now + timedelta(days=max(TIMELINE_DAYS[option] - 7, 1))]
         visit = self.repo.latest_interaction(lead_id, STEP_VISIT_DATE)
         if visit:
@@ -440,6 +484,7 @@ class QualifierService:
                 "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT",
                 "followUpStatus": "SPOKE_TO_CUSTOMER", "leadStatus": "INTERESTED",
                 "expectedBuyingSpan": option, "eagerness": "HOT" if d.priority == "P1" else "WARM",
+                "qualifiedBy": "WHATSAPP",   # marks WhatsApp-qualified leads for conversion analysis
                 "targetStage": "QUALIFICATION", "purchaseTimeline": option, "priority": d.priority,
                 "reopen": reopen, "comment": f"Customer changed the answer from '{prev_label}' to '{new_label}' on WhatsApp",
                 "actor": "system:whatsapp-bot"}, key)
@@ -529,6 +574,7 @@ class QualifierService:
                         "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT",
                         "followUpStatus": "SPOKE_TO_CUSTOMER", "leadStatus": "INTERESTED",
                         "expectedBuyingSpan": msg.reply_code, "eagerness": "HOT" if d.priority == "P1" else "WARM",
+                        "qualifiedBy": "WHATSAPP",   # marks WhatsApp-qualified leads for conversion analysis
                         "targetStage": "QUALIFICATION", "purchaseTimeline": msg.reply_code,
                         "priority": d.priority, "comment": note, "actor": "system:whatsapp-bot",
                     }, key)

@@ -142,6 +142,12 @@ flowchart TD
 
 **Visits:** a visit is a task against the lead, created by WhatsApp (date + time), by the telecaller ("Visit Required? Yes") or with **Schedule Visit** (date, time, comments). **View Visit** offers Edit, Cancel and Complete; All Tasks lists tasks with Complete / Edit / Delete. The visit shows at the top and on the Visits step in orange (scheduled), red (time passed, not completed) or green (completed).
 
+**Working hours:** BikeWale's calling team hours (Mon–Fri, 10 AM – 7 PM; `TEAM_WORKING_HOURS`) decide after-hours, the template's hours and call times; dealer hours only set visit slots.
+
+**Repeat enquiries:** lead open + same version → no new inquiry; lead open + different version → new inquiry, and the WhatsApp qualifier goes out only after hours on an unqualified lead (`POST /internal/leads/inquiry-added`); lead closed or booked → new lead. Leads qualified on WhatsApp are marked `qualifiedBy: WHATSAPP` and tagged "WhatsApp Qualified".
+
+**Analysis (tracking screen and `GET /internal/engagement`):** templates sent, delivered, read, replied (unique per template send, so two taps count once), clicks against each option, replies apart from options, and the text customers typed.
+
 **When the customer types instead of tapping:** anything but "Hi" gets "Please type Hi to start the journey." "Hi" from a qualified lead gets the assigned dealer's number and the BikeWale number; "Hi" from an unqualified lead asks the buying-timeline question again with the same buttons.
 
 **Tracking and message IDs.** The template ID is shared by every customer. Gupshup's send API returns a unique `messageId` immediately (HTTP 202), saved against the lead, dealer, template, flow and step before any reply can arrive. WhatsApp's `wamid` arrives with the first status callback. Every tap carries `context.gsId` (the `messageId` it answers) plus the postback, and is stored in `wa_interaction`. Date and time lists are session messages that keep a pointer to the template that started the flow, so engagement for every step rolls up per template (`GET /internal/engagement`).

@@ -210,6 +210,14 @@ flowchart TD
     </tbody>
   </table></div>
   <p>More than 2 Months → Still Researching keeps the existing call and adds a note on the lead.</p>
+  <h3>Working hours and repeat enquiries</h3>
+  <ul>
+    <li><b>Whose hours:</b> BikeWale's calling team qualifies before the dealer sees the lead, so <b>BikeWale's working hours</b> (Mon–Fri, 10 AM – 7 PM, configurable) decide "after hours", the hours quoted in the template and when calls are scheduled. Dealer hours are used only for showroom visit dates and slots.</li>
+    <li><b>Same customer, lead open, same vehicle version:</b> no new inquiry.</li>
+    <li><b>Same customer, lead open, different version:</b> a new inquiry is added to the lead. The WhatsApp qualifier goes out for the new vehicle only if it is after BikeWale hours and the lead is not qualified yet (<code>POST /internal/leads/inquiry-added</code>).</li>
+    <li><b>Lead closed (or booked):</b> the enquiry creates a new lead.</li>
+    <li><b>WhatsApp Qualified:</b> leads the bot qualifies carry <code>qualifiedBy: WHATSAPP</code> in L2R and a "WhatsApp Qualified" tag, so WhatsApp-qualified leads can be followed through to conversion.</li>
+  </ul>
   <h3>Visits</h3>
   <p>A visit is a task against the lead, created by WhatsApp (once the customer picks both a date and a time), by the telecaller in the follow-up form ("Visit Required? Yes"), or with <b>Schedule Visit</b> (date, time, comments; at the dealer's showroom). <b>View Visit</b> offers Edit, Cancel and Complete. The lead shows the visit at the top and on the Visits step: <span style="color:#c25e00;font-weight:700">orange</span> when scheduled, <span style="color:#c62828;font-weight:700">red</span> when the time has passed without completion, <span style="color:#1e7d32;font-weight:700">green</span> when completed. Only tasks count under All Tasks; calls do not.</p>
   <h3>When the customer types instead of tapping</h3>
@@ -237,7 +245,7 @@ flowchart TD
       <tr><td>North star</td><td>Booking (conversion) rate of NWH leads, bot vs holdout</td><td>Revenue on the OEM contract is tied to conversion</td></tr>
       <tr><td>Dealer delivery</td><td>% of leads qualified and sent to the dealer panel; time from enquiry to dealer</td><td>Dealers act only on qualified leads</td></tr>
       <tr><td>Funnel</td><td class="metric">Sent → Delivered → Read → Replied → Qualified → Date chosen → Visit booked</td><td>Shows where the drop-off is (template copy, number quality, list design)</td></tr>
-      <tr><td>Engagement per template</td><td>Replies ÷ delivered, option split, visit booked %, grouped by template ID</td><td>Compares template versions and dealers; drives copy changes</td></tr>
+      <tr><td>Engagement per template</td><td>Sent, delivered, read, replied (unique per template send), clicks against each option, replies apart from options (typed text is saved)</td><td>Compares template versions; drives copy changes</td></tr>
       <tr><td>Speed</td><td>Time from lead creation to first touch; time from shift start to first call on hot leads</td><td>Speed to lead is the core promise</td></tr>
       <tr><td>Quality</td><td>% of bot-qualified leads later marked junk or lost within 7 days</td><td>Catches false qualification. Keep it below the human-qualified rate</td></tr>
       <tr><td>Guardrail</td><td>Opt-out rate, block or report rate, WhatsApp quality rating</td><td>A low rating throttles the dealer's number for everyone</td></tr>

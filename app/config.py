@@ -5,6 +5,7 @@ environment, never from code.
 """
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 
@@ -37,6 +38,10 @@ class Settings:
     l2r_api_key: str = field(default_factory=lambda: os.getenv("L2R_API_KEY", ""))
     internal_api_key: str = field(default_factory=lambda: os.getenv("INTERNAL_API_KEY", ""))
     brand_name: str = field(default_factory=lambda: os.getenv("BRAND_NAME", "BikeWale"))
+    # BikeWale's calling team qualifies leads first, so its hours decide "after hours" and call times.
+    team_working_hours: dict = field(default_factory=lambda: json.loads(os.getenv(
+        "TEAM_WORKING_HOURS", json.dumps({d: [["10:00", "19:00"]] for d in ("mon", "tue", "wed", "thu", "fri")}))))
+    team_timezone: str = field(default_factory=lambda: os.getenv("TEAM_TIMEZONE", "Asia/Kolkata"))
     support_number: str = field(default_factory=lambda: os.getenv("SUPPORT_NUMBER", "918047104444"))
     log_file: str = field(default_factory=lambda: os.getenv("LOG_FILE", "logs/qualifier.log"))
     session_window_hours: int = 24

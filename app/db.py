@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS wa_message (
   l2r_sync_status TEXT NOT NULL DEFAULT 'NONE',
   l2r_attempts INTEGER NOT NULL DEFAULT 0,
   l2r_last_error TEXT,
-  UNIQUE (lead_id, template_id)
+  inquiry_id TEXT NOT NULL DEFAULT '',   -- a new inquiry on the same lead can get its own template
+  UNIQUE (lead_id, template_id, inquiry_id)
 );
 CREATE INDEX IF NOT EXISTS ix_msg_mobile ON wa_message (mobile, dealer_id, sent_at);
 CREATE INDEX IF NOT EXISTS ix_msg_lead ON wa_message (lead_id);
@@ -178,22 +179,22 @@ class Repo:
 
     def create_pending(self, lead_id: str, dealer_id: str, mobile: str, template_id: str | None,
                        step: str = "TIMELINE", msg_type: str = "template",
-                       root_template_id: str | None = None) -> int | None:
+                       root_template_id: str | None = None, inquiry_id: str = "") -> int | None:
         """Insert an outbound message row before sending it.
 
         Returns the row id, or None if this lead already got this template (idempotent).
         Session messages (template_id None) never conflict.
         """
         params = (lead_id, dealer_id, mobile, template_id, root_template_id or template_id, step, msg_type,
-                  MsgStatus.PENDING.value)
-        cols = "lead_id, dealer_id, mobile, template_id, root_template_id, step, msg_type, status"
+                  MsgStatus.PENDING.value, inquiry_id)
+        cols = "lead_id, dealer_id, mobile, template_id, root_template_id, step, msg_type, status, inquiry_id"
         if self.is_pg:
             row = self._exec(
-                f"INSERT INTO wa_message ({cols}) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                f"INSERT INTO wa_message ({cols}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT DO NOTHING RETURNING id", params
             ).fetchone()
             return row["id"] if row else None
-        cur = self._exec(f"INSERT OR IGNORE INTO wa_message ({cols}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", params)
+        cur = self._exec(f"INSERT OR IGNORE INTO wa_message ({cols}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", params)
         return cur.lastrowid if cur.rowcount else None
 
     def mark_sent(self, msg_id: int, gs_message_id: str) -> None:
@@ -344,36 +345,48 @@ class Repo:
         return dict(row) if row else None
 
     def engagement(self) -> list[dict]:
-        """Per template: sends, delivery, reads, replies, option split, visit steps."""
-        rows = self._exec(
-            "SELECT template_id, COUNT(*) AS sent, "
-            "SUM(CASE WHEN status IN ('DELIVERED','READ','REPLIED') THEN 1 ELSE 0 END) AS delivered, "
-            "SUM(CASE WHEN read_at IS NOT NULL OR status = 'REPLIED' THEN 1 ELSE 0 END) AS read, "
-            "SUM(CASE WHEN status = 'REPLIED' THEN 1 ELSE 0 END) AS replied "
-            "FROM wa_message WHERE msg_type = 'template' GROUP BY template_id ORDER BY template_id"
-        ).fetchall()
+        """Per template, for analysis: sent, delivered, read, replied (unique per template send:
+        a customer who taps twice or also types counts once), clicks against each option,
+        unique customers per option, and replies apart from options (typed text)."""
+        tpls = [dict(r) for r in self._exec(
+            "SELECT id, lead_id, template_id, status, read_at, sent_at FROM wa_message "
+            "WHERE msg_type = 'template' AND sent_at IS NOT NULL ORDER BY sent_at").fetchall()]
+        inter = [dict(r) for r in self._exec(
+            "SELECT lead_id, step, option_code, received_at FROM wa_interaction").fetchall()]
+
+        def owner(i):  # the lead's template that was live when the reply arrived
+            own = None
+            for m in tpls:
+                if m["lead_id"] == i["lead_id"] and m["sent_at"] <= i["received_at"]:
+                    own = m
+            return own
+
+        by: dict[str, dict] = {}
+        for m in tpls:
+            t = by.setdefault(m["template_id"], {"template_id": m["template_id"], "sent": 0, "delivered": 0, "read": 0,
+                                                  "_replied": set(), "option_clicks": {}, "_unique": {}, "text_replies": 0})
+            t["sent"] += 1
+            t["delivered"] += m["status"] in ("DELIVERED", "READ", "REPLIED")
+            t["read"] += bool(m["read_at"]) or m["status"] == "REPLIED"
+        for i in inter:
+            m = owner(i)
+            if m is None:
+                continue
+            t = by[m["template_id"]]
+            t["_replied"].add(m["id"])
+            if i["step"] == "TIMELINE":
+                t["option_clicks"][i["option_code"]] = t["option_clicks"].get(i["option_code"], 0) + 1
+                t["_unique"].setdefault(i["option_code"], set()).add(i["lead_id"])
+            elif i["step"] == "FREE_TEXT":
+                t["text_replies"] += 1
         out = []
-        for r in rows:
-            r = dict(r)
-            t = r["template_id"]
-            opts = {o["option_code"]: o["n"] for o in self._exec(
-                "SELECT option_code, COUNT(DISTINCT lead_id) AS n FROM wa_interaction "
-                "WHERE template_id = ? AND step = 'TIMELINE' GROUP BY option_code", (t,)).fetchall()}
-            steps = {o["step"]: o["n"] for o in self._exec(
-                "SELECT step, COUNT(DISTINCT lead_id) AS n FROM wa_interaction "
-                "WHERE template_id = ? GROUP BY step", (t,)).fetchall()}
-            delivered = int(r["delivered"] or 0)
-            replied = int(r["replied"] or 0)
-            out.append({
-                "template_id": t, "sent": int(r["sent"]), "delivered": delivered,
-                "read": int(r["read"] or 0), "replied": replied,
-                "engagement_pct": round(100 * replied / delivered, 1) if delivered else 0.0,
-                "options": opts,
-                "qualified": sum(opts.get(k, 0) for k in ("15D", "1M", "1_2M")),
-                "visit_date_chosen": steps.get("VISIT_DATE", 0),
-                "visit_booked": steps.get("VISIT_TIME", 0),
-            })
-        return out
+        for t in by.values():
+            replied = len(t.pop("_replied"))
+            t["option_unique"] = {k: len(v) for k, v in t.pop("_unique").items()}
+            t["replied"] = replied
+            t["engagement_pct"] = round(100 * replied / t["delivered"], 1) if t["delivered"] else 0.0
+            out.append(t)
+        return sorted(out, key=lambda t: t["template_id"])
 
     # ---- audit log + table browsing -----------------------------------
     def add_audit(self, level: str, event: str, lead_id: str | None = None,

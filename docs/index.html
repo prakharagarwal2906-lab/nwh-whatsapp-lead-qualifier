@@ -128,6 +128,7 @@ main.screen{max-width:1240px;margin:0 auto;padding-block:18px 40px}
 .ltag{font-size:11px;padding:2px 7px;border-radius:2px;font-weight:700}
 .lt-new{background:#e7f6e7;color:#1e7d32}.lt-pend{background:#fde7ea;color:#d31d2f}.lt-hot{background:#fdeceb;color:#c62828;border:1px solid #f2b8b5}
 .lt-warm{background:#fff4e0;color:#a35b00}.lt-normal{background:#eef1f5;color:#4a5566}.lt-active{background:#e6effb;color:#1d5c96}.lt-closed{background:#eceff3;color:#5b6778}.lt-booked{background:#e3f4e8;color:#1e7d32}
+.lt-wa{background:#e7f8ee;color:#128c4a;border:1px solid #9fd9b4}
 .lt-src{background:#fbf2df;color:#7a5a1a;font-size:10.5px;padding:3px 8px}
 .lmob{display:flex;align-items:center;justify-content:space-between;font-size:22px;font-weight:900;letter-spacing:.01em}
 .callbtn{width:32px;height:32px;border-radius:50%;background:#8a8f97;color:#fff;display:grid;place-items:center;border:0}
@@ -478,7 +479,7 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
 
   <div class="grid2" style="margin-top:14px">
     <section class="panel">
-      <h2>Funnel · WhatsApp leads to conversion</h2>
+      <h2>Clicks against each option</h2>
       <div class="pad"><div class="funnel" id="funnel"></div></div>
     </section>
     <section class="panel">
@@ -496,6 +497,11 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
     <h2>Engagement by template</h2>
     <div class="tablewrap" id="tplTable"></div>
     <div class="pad legend" id="optLegend"></div>
+  </section>
+
+  <section class="panel" style="margin-top:14px">
+    <h2>What customers typed (replies apart from options) <span class="right hint" id="textCount"></span></h2>
+    <div class="tablewrap scroll" id="texts"></div>
   </section>
 
   <section class="panel" style="margin-top:14px">
@@ -564,7 +570,7 @@ In the meantime, could you please tell us how soon you are planning to buy?`,
   tpl_nwh_timeline_v2: v =>
 `Hi ${v.name} 👋 Thanks for checking out the ${v.make} ${v.model}!
 
-${v.dealer} is closed right now (open ${v.hours}). ${v.exec} will call you from ${v.virtual}.
+We're closed right now (open ${v.hours}). ${v.exec} will call you from ${v.virtual}.
 
 Quick question so we can help faster: when are you planning to buy?`,
 };
@@ -573,7 +579,7 @@ const OPT_COLORS = {"15D":"#147a4a","1M":"#2f9d6a","1_2M":"#7cc49b","GT2M":"#e0a
 
 /* ---------------- state ---------------- */
 const fresh = () => ({schema:3, leads:[], messages:{}, interactions:[], events:[], eventRows:[], audit:[],
-  selected:null, lastHook:null, seq:{lead:12345, gs:40960, wamid:1, inbound:1, audit:1, call:5001, task:7001}, timePreset:"fri-0026"});
+  selected:null, lastHook:null, seq:{lead:12345, gs:40960, wamid:1, inbound:1, audit:1, call:5001, task:7001, inq:9001}, timePreset:"fri-0026"});
 let S = fresh();
 let FAST = false;
 const wait = ms => FAST ? Promise.resolve() : new Promise(r=>setTimeout(r,ms));
@@ -589,21 +595,26 @@ const PRESETS = {
   "fri-0026":["Fri 12:26 AM", Date.UTC(2026,10,6,0,26)],
   "thu-2200":["Thu 10:00 PM", Date.UTC(2026,10,5,22,0)],
   "sat-2130":["Sat 9:30 PM", Date.UTC(2026,10,7,21,30)],
-  "fri-1100":["Fri 11:00 AM (open)", Date.UTC(2026,10,6,11,0)],
+  "fri-1100":["Fri 11:00 AM (team working)", Date.UTC(2026,10,6,11,0)],
   "now":["Right now (IST)", null],
 };
 const enquiryTime = () => new Date(PRESETS[S.timePreset][1] ?? (Date.now() + 5.5*3600e3));
 const hoursShort = d => `${fmtMin(toMin(d.open))} – ${fmtMin(toMin(d.close))}`;
-const hoursText = d => `${hoursShort(d)}, ${d.off>=0?DAYS[d.off]+" closed":"open all days"}`;
+const offDays = c => [].concat(c.off ?? []).filter(x=>x>=0);
+const isOff = (c, day) => offDays(c).includes(day);
+const hoursText = d => `${hoursShort(d)}, ${offDays(d).length ? offDays(d).slice().sort((a,b)=>(a+6)%7-(b+6)%7).map(x=>DAYS[x].slice(0,3)).join(" & ")+" closed" : "open all days"}`;
+/* BikeWale's calling team qualifies first, so its working hours decide after-hours and call times.
+   Dealer hours are used only for showroom visit dates and slots. */
+const BW = {name:"BikeWale", open:"10:00", close:"19:00", off:[0,6]};   // Mon–Fri, 10 AM – 7 PM
 function isOpen(dealer, wall){
-  if (wall.getUTCDay()===dealer.off) return false;
+  if (isOff(dealer, wall.getUTCDay())) return false;
   const m = minsOf(wall); return m >= toMin(dealer.open) && m < toMin(dealer.close) - 15;
 }
 function nextOpenDays(dealer, wall, n=7){
   const out=[]; const start=Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate());
   for (let i=0; out.length<n && i<21; i++){
     const d = new Date(start + i*86400e3);
-    if (d.getUTCDay()===dealer.off) continue;
+    if (isOff(dealer, d.getUTCDay())) continue;
     if (i===0 && minsOf(wall) > toMin(dealer.close) - 120) continue;   // too late for a same-day visit
     out.push(d);
   }
@@ -624,12 +635,12 @@ function addFeed(lead, e){ lead.feed.unshift({ts: simNow(lead).toISOString(), ic
 function feed(lead, text){ addFeed(lead, {title:text}); }
 function atOpen(dealer, d){
   let x = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-  while (new Date(x).getUTCDay()===dealer.off) x += 86400e3;          // never on the weekly off
+  while (isOff(dealer, new Date(x).getUTCDay())) x += 86400e3;          // never on a day off
   return new Date(x + toMin(dealer.open)*60e3);
 }
 /* Next call: 7 days before the buying span ends, or 1 day after the visit/TD, whichever is earlier. */
 function nextCallAt(lead, spanCode, visitIso, fallbackDays=1){
-  const dealer=DEALERS[lead.dealerId], now=simNow(lead), span=SPAN.find(s=>s[0]===spanCode), c=[];
+  const dealer=BW, now=simNow(lead), span=SPAN.find(s=>s[0]===spanCode), c=[];
   if (span) c.push({at:atOpen(dealer, new Date(now.getTime()+Math.max(span[2]-7,1)*86400e3)), why:`7 days before the ${span[1]} buying span ends`});
   if (visitIso) c.push({at:atOpen(dealer, new Date(Date.parse(visitIso+"T00:00:00Z")+86400e3)), why:"1 day after the visit"});
   if (!c.length) c.push({at:atOpen(dealer, new Date(now.getTime()+fallbackDays*86400e3)), why:`retry in ${fallbackDays} day${fallbackDays>1?"s":""}`});
@@ -707,20 +718,25 @@ const firstMsgId = lead => (lead.chat.find(c=>c.kind==="template")||{}).messageI
 async function onLeadCreated(lead){
   const dealer = DEALERS[lead.dealerId];
   log("step","L2R",`LeadCreated ${lead.id} · ${lead.name} · ${lead.make} ${lead.model} · ${fmtWall(lead.createdAt)}`, undefined, lead.id);
-  createCall(lead, isOpen(dealer, lead.createdAt) ? lead.createdAt : atOpen(dealer, nextOpenDays(dealer, lead.createdAt, 1)[0] || lead.createdAt), "first call on a new lead");
+  createCall(lead, isOpen(BW, lead.createdAt) ? lead.createdAt : atOpen(BW, nextOpenDays(BW, lead.createdAt, 1)[0] || lead.createdAt), "first call on a new lead");
   render();
   await wait(500);
   if (!lead.consent){
     lead.botState="Skipped: no consent";
     log("warn","Eligibility","no consent → skip",undefined,lead.id); render(); return;
   }
-  if (isOpen(dealer, lead.createdAt)){
+  if (isOpen(BW, lead.createdAt)){
     lead.botState = "Human callback";
-    log("warn","Eligibility",`dealer open (${hoursText(dealer)}) → no WhatsApp`,undefined,lead.id); render(); return;
+    log("warn","Eligibility",`BikeWale team working (${hoursText(BW)}) → no WhatsApp`,undefined,lead.id); render(); return;
   }
   log("ok","Eligibility",`non-working hours for ${dealer.id} → send template`,undefined,lead.id);
   await wait(400);
-  const vars = {name:lead.name, make:lead.make, model:lead.model, hours:hoursShort(dealer), virtual:dealer.virtual, exec:dealer.exec, dealer:dealer.name};
+  await sendQualifierTemplate(lead);
+}
+/* The WhatsApp qualifier template for the lead's latest inquiry. */
+async function sendQualifierTemplate(lead){
+  const dealer = DEALERS[lead.dealerId];
+  const vars = {name:lead.name, make:lead.make, model:lead.model, hours:hoursShort(BW), virtual:dealer.virtual, exec:dealer.exec, dealer:dealer.name};
   const request = {
     dealer_id: dealer.id, lead_id: lead.id, template_id: dealer.template, destination: lead.mobile, source: WABA.number,
     variables: {customer_name:vars.name, vehicle_make:vars.make, vehicle_model:vars.model, working_hours:vars.hours, virtual_number:vars.virtual, sales_executive:vars.exec, dealer_name:vars.dealer},
@@ -1027,7 +1043,7 @@ async function timelineChanged(lead, option, dealer){
     // Qualify straight away (saves a call): the bot tags the follow-up form, L2R disposes the call,
     // schedules the next one and its lead-qualified event sends the lead to the dealer panel.
     lead.priority = t[2]<=30 ? "P1" : "P2"; lead.botState = "Qualified by bot";
-    setLeadStatus(lead, "QUALIFIED", option);
+    setLeadStatus(lead, "QUALIFIED", option); lead.qualifiedBy ||= "WhatsApp";
     disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected", followup:"Spoke to customer", interest:"Interested", span:option,
       eager:lead.eagerness, comment:`Customer changed the answer from '${P}' to '${N}' on WhatsApp`, next: nextCallAt(lead, option, lead.visitDate)});
     l2rDealerEvent(lead, "QUALIFIED");
@@ -1054,7 +1070,7 @@ function botDispose(lead, spanCode, label, status, interest, next, extra={}){
   setLeadStatus(lead, status, spanCode);
   disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected", followup:"Spoke to customer", interest, span:spanCode, spanLabel:spanCode?null:label,
     eager: lead.eagerness, comment:`Customer chose '${label}' on WhatsApp`, next, ...extra});
-  if (status==="QUALIFIED") l2rDealerEvent(lead, "QUALIFIED");
+  if (status==="QUALIFIED"){ lead.qualifiedBy ||= "WhatsApp"; l2rDealerEvent(lead, "QUALIFIED"); }
 }
 function l2r(lead, kind, body){
   const path = kind==="dispose" ? `/api/v1/leads/${lead.id}/dispositions` : kind==="task" ? `/api/v1/leads/${lead.id}/tasks` : `/api/v1/leads/${lead.id}/comments`;
@@ -1131,8 +1147,8 @@ function renderWebsite(){
     ? `<path d="M40 140 L70 95 Q85 75 120 72 L270 72 Q300 74 320 95 L360 120 Q375 125 375 140 L375 150 L40 150 Z" fill="#0f4c81" opacity=".85"/><path d="M95 98 L125 80 L190 80 L190 100 Z M200 80 L265 80 Q285 82 300 100 L200 100 Z" fill="#cfe3f5"/><circle cx="110" cy="152" r="24" fill="#1b2230"/><circle cx="110" cy="152" r="10" fill="#9aa4b5"/><circle cx="300" cy="152" r="24" fill="#1b2230"/><circle cx="300" cy="152" r="10" fill="#9aa4b5"/>`
     : `<circle cx="95" cy="140" r="42" stroke="#1b2230" stroke-width="12"/><circle cx="305" cy="140" r="42" stroke="#1b2230" stroke-width="12"/><circle cx="95" cy="140" r="8" fill="#9aa4b5"/><circle cx="305" cy="140" r="8" fill="#9aa4b5"/><path d="M95 140 L160 90 L250 90 L305 140" stroke="#0f4c81" stroke-width="10" stroke-linejoin="round"/><path d="M150 82 Q200 58 255 80 L245 100 L165 100 Z" fill="#0f4c81"/><path d="M250 90 L268 55 L292 52" stroke="#1b2230" stroke-width="8" stroke-linecap="round"/><rect x="120" y="70" width="55" height="14" rx="7" fill="#1b2230"/>`;
   $("#timeChips").innerHTML = Object.entries(PRESETS).map(([k,[l]])=>`<button type="button" class="chip" data-time="${k}" aria-pressed="${k===S.timePreset}">${l}</button>`).join(" ");
-  const dealer=DEALERS[$("#fDealer").value], t=enquiryTime(), open=isOpen(dealer,t);
-  $("#timeVerdict").innerHTML = `${esc(fmtWall(t))} · ${esc(dealer.name)} is <b style="color:var(${open?"--ok":"--accent"})">${open?"open, so no WhatsApp":"closed, so WhatsApp flow runs"}</b> · ${esc(hoursText(dealer))}`;
+  const t=enquiryTime(), open=isOpen(BW,t);
+  $("#timeVerdict").innerHTML = `${esc(fmtWall(t))} · BikeWale calling team is <b style="color:var(${open?"--ok":"--accent"})">${open?"working, so no WhatsApp":"off, so WhatsApp flow runs"}</b> · ${esc(hoursText(BW))}`;
 }
 
 /* ---------- 2. LMS (L2R design) ---------- */
@@ -1158,6 +1174,7 @@ function suggestNext(lead){
 function leadTags(l){
   const t = [];
   if (l.leadStatus==="NEW") t.push(`<span class="ltag lt-new">New</span>`);
+  if (l.qualifiedBy==="WhatsApp") t.push(`<span class="ltag lt-wa">WhatsApp Qualified</span>`);
   if (l.eagerness) t.push(`<span class="ltag lt-${l.eagerness.toLowerCase()}">${l.eagerness}</span>`);
   if (l.leadStatus==="BOOKED") t.push(`<span class="ltag lt-booked">Booked</span>`);
   else if (OPEN_STATUSES.includes(l.leadStatus)) { if (l.leadStatus!=="NEW") t.push(`<span class="ltag lt-active">Active</span>`); }
@@ -1200,11 +1217,11 @@ function renderLms(){
     </div></div>
     <div class="lcard">
       <div class="inq-head"><h3>Inquiries</h3><input type="checkbox" aria-label="Select all"><button type="button" class="lbtn" data-act="close" ${OPEN_STATUSES.includes(l.leadStatus)?"":"disabled"}>Close</button><button type="button" class="lbtn red">Add New</button></div>
-      <div class="inq">
-        <div class="t"><input type="checkbox" aria-label="Select inquiry"> <span style="flex:1">${esc(l.make)} ${esc(l.model)}</span><span style="color:var(--l-navy)">✎</span><span style="color:#c77">✕</span></div>
-        <div class="d">${created.getUTCDate()} ${MONTHS[created.getUTCMonth()]} ${created.getUTCFullYear()}, ${fmtMin(minsOf(created))} <span class="ltag lt-src">WEBSITE</span></div>
+      ${l.inquiries.slice().reverse().map((q,qi)=>{ const qd=new Date(q.created_at); return `<div class="inq" ${qi?'style="border-top:1px solid var(--l-line)"':''}>
+        <div class="t"><input type="checkbox" aria-label="Select inquiry"> <span style="flex:1">${esc(q.make)} ${esc(q.model)}</span><span style="color:var(--l-navy)">✎</span><span style="color:#c77">✕</span></div>
+        <div class="d">${qd.getUTCDate()} ${MONTHS[qd.getUTCMonth()]} ${qd.getUTCFullYear()}, ${fmtMin(minsOf(qd))} <span class="ltag lt-src">${esc(q.source)}</span></div>
         <div class="links"><button type="button">Send Files</button><button type="button" data-act="visit">${vs && vs.state!=="done" ? "View Visit" : "Schedule Visit"}</button><button type="button" data-act="book">Book</button></div>
-      </div>
+      </div>`; }).join("")}
     </div>`;
   const c = openCall(l);
   const owner = `<span class="owner">Lead Owner: <b>${esc(TELECALLER)}</b> <span style="color:var(--l-navy)">✎</span></span>`;
@@ -1404,7 +1421,7 @@ function submitForm(){
     const next = {at: at(F.nextDate, F.nextTime), why: F.nextTouched ? "set by telecaller" : (F.nextWhy||"suggested")};
     disposeCall(l, by, {followup:"Spoke to customer", interest:"Interested", span:F.span, eager:l.eagerness, td:F.td==="YES", tdAt, comment:F.comment, next});
     if (F.td==="YES") saveVisit(l, {assigned_to:dealer.exec, date:F.tdDate, time:F.tdTime, location:"Showroom", comments:F.comment}, TELECALLER);
-    if (qualified) l2rDealerEvent(l, "QUALIFIED");
+    if (qualified){ l.qualifiedBy ||= TELECALLER; l2rDealerEvent(l, "QUALIFIED"); }
   }
   resetForm(l); render();
 }
@@ -1474,42 +1491,52 @@ function openSheet(messageId){
 
 /* ---------- 4. tracking ---------- */
 const pct = (a,b) => b ? Math.round(a*100/b) : 0;
+/* Analysis per template: sent, delivered, read, unique replies (a customer who taps twice
+   counts once per template), clicks against each option, and replies apart from options. */
 function stats(){
+  const tpls = Object.values(S.messages).filter(m=>m.msg_type==="template").sort((a,b)=>a.sent_at.localeCompare(b.sent_at));
+  // attribute each interaction to the lead's template that was live when it arrived
+  const ownerOf = i => { let own=null; for (const m of tpls) if (m.lead_id===i.lead_id && m.sent_at<=i.received_at) own=m; return own; };
+  const repliedTpl = new Set(); const clicks = {}; const uniq = {}; let texts = 0;
+  for (const i of S.interactions){
+    const m = ownerOf(i); if (m) repliedTpl.add(m.message_id);
+    if (i.step==="TIMELINE"){ clicks[i.option_code]=(clicks[i.option_code]||0)+1; (uniq[i.option_code] ||= new Set()).add(i.lead_id); }
+    if (i.step==="FREE_TEXT") texts++;
+  }
   const by={};
-  for (const m of Object.values(S.messages).filter(m=>m.msg_type==="template")){
-    const t = by[m.template_id] ||= {template:m.template_id, sent:0, delivered:0, read:0, replied:0, qualified:0, date:0, time:0, opts:{}};
+  for (const m of tpls){
+    const t = by[m.template_id] ||= {template:m.template_id, sent:0, delivered:0, read:0, replied:0, clicks:0, texts:0};
     t.sent++;
     if (["DELIVERED","READ","REPLIED"].includes(m.status)) t.delivered++;
     if (m.read_at || m.status==="REPLIED") t.read++;
-    if (m.status==="REPLIED"){ t.replied++; t.opts[m.reply_option]=(t.opts[m.reply_option]||0)+1; if (QUALIFY.includes(m.reply_option)) t.qualified++; }
+    if (repliedTpl.has(m.message_id)) t.replied++;
   }
-  for (const i of S.interactions){ const t=by[i.template_id]; if (!t) continue; if (i.step==="VISIT_DATE") t.date++; if (i.step==="VISIT_TIME") t.time++; }
-  return Object.values(by).sort((a,b)=>a.template.localeCompare(b.template));
+  for (const i of S.interactions){ const m=ownerOf(i); if (!m) continue; const t=by[m.template_id]; if (i.step==="TIMELINE") t.clicks++; if (i.step==="FREE_TEXT") t.texts++; }
+  return {by:Object.values(by).sort((a,b)=>a.template.localeCompare(b.template)), clicks, uniq, texts};
 }
 function renderTracking(){
-  const by=stats();
-  const tot=by.reduce((a,t)=>{ for (const k of ["sent","delivered","read","replied","qualified","date","time"]) a[k]+=t[k]; return a; }, {sent:0,delivered:0,read:0,replied:0,qualified:0,date:0,time:0});
-  const waLeads = S.leads.filter(l=>firstMsgId(l));
-  const conv = {leads:S.leads.length, pushed:S.leads.filter(l=>l.dealerPushedAt).length, booked:S.leads.filter(l=>l.leadStatus==="BOOKED").length,
-    pushedWa:waLeads.filter(l=>l.dealerPushedAt).length, bookedWa:waLeads.filter(l=>l.leadStatus==="BOOKED").length};
+  const {by, clicks, uniq, texts} = stats();
+  const tot=by.reduce((a,t)=>{ for (const k of ["sent","delivered","read","replied"]) a[k]+=t[k]; return a; }, {sent:0,delivered:0,read:0,replied:0});
   $("#kpis").innerHTML = [
     ["Templates sent",tot.sent,""],["Delivered",tot.delivered,pct(tot.delivered,tot.sent)+"%"],["Read",tot.read,pct(tot.read,tot.delivered)+"%"],
-    ["Replied (engagement)",tot.replied,pct(tot.replied,tot.delivered)+"%"],["Qualified ≤ 2 months",tot.qualified,pct(tot.qualified,tot.replied)+"%"],["Visits booked",tot.time,pct(tot.time,tot.qualified)+"%"],
-    ["Sent to dealer",conv.pushed,pct(conv.pushed,conv.leads)+"%"],["Booked (conversion)",conv.booked,pct(conv.booked,conv.pushed)+"%"],
+    ["Replied (unique per template)",tot.replied,pct(tot.replied,tot.delivered)+"%"],
   ].map(([k,v,p])=>`<div><b>${v}${p?`<em>${p}</em>`:""}</b><span>${k}</span></div>`).join("");
-  const f=[["Template sent",tot.sent],["Delivered",tot.delivered],["Read",tot.read],["Answered timeline",tot.replied],["Qualified (≤ 2 months)",tot.qualified],["Chose visit date",tot.date],["Chose visit time",tot.time],
-    ["Sent to dealer panel",conv.pushedWa],["Booked (conversion)",conv.bookedWa]];
-  $("#funnel").innerHTML = f.map(([k,v])=>`<div class="frow"><span>${k}</span><div class="fbar"><i style="width:${tot.sent?v*100/tot.sent:0}%"></i></div><span class="v">${v} <small>${pct(v,tot.sent)}%</small></span></div>`).join("");
+  const maxC = Math.max(1, ...TIMELINE.map(o=>clicks[o[0]]||0), texts);
+  $("#funnel").innerHTML = TIMELINE.map(o=>`<div class="frow"><span>${o[1]}</span><div class="fbar"><i style="width:${(clicks[o[0]]||0)*100/maxC}%;background:${OPT_COLORS[o[0]]}"></i></div><span class="v">${clicks[o[0]]||0} <small>${(uniq[o[0]]||new Set()).size} unique</small></span></div>`).join("")
+    + `<div class="frow"><span>Replies apart from options</span><div class="fbar"><i style="width:${texts*100/maxC}%;background:#5f6a7d"></i></div><span class="v">${texts} <small>texts</small></span></div>`;
   $("#tplTable").innerHTML = !by.length ? `<div class="empty">No templates sent yet. Submit an after-hours enquiry, or click “Simulate 25 customers”.</div>` :
-    `<table class="data"><thead><tr><th>Template ID</th><th class="num">Sent</th><th class="num">Delivered</th><th class="num">Read</th><th class="num">Replied</th><th class="num">Engagement</th><th>Option split</th><th class="num">Qualified</th><th class="num">Date chosen</th><th class="num">Visit booked</th></tr></thead><tbody>${
-      by.map(t=>`<tr><td class="mono">${esc(t.template)}</td><td class="num">${t.sent}</td><td class="num">${t.delivered}</td><td class="num">${t.read}</td><td class="num">${t.replied}</td><td class="num"><b>${pct(t.replied,t.delivered)}%</b></td>
-        <td><div class="opts-bar" title="${esc(TIMELINE.map(o=>`${o[1]}: ${t.opts[o[0]]||0}`).join(", "))}">${TIMELINE.map(o=>t.opts[o[0]]?`<i style="width:${t.opts[o[0]]*100/t.replied}%;background:${OPT_COLORS[o[0]]}"></i>`:"").join("")}</div></td>
-        <td class="num">${t.qualified}</td><td class="num">${t.date} <span class="hint">${pct(t.date,t.qualified)}%</span></td><td class="num">${t.time} <span class="hint">${pct(t.time,t.qualified)}%</span></td></tr>`).join("")}</tbody></table>`;
-  $("#optLegend").innerHTML = TIMELINE.map(o=>`<span><i style="background:${OPT_COLORS[o[0]]}"></i>${o[1]}</span>`).join("");
+    `<table class="data"><thead><tr><th>Template ID</th><th class="num">Sent</th><th class="num">Delivered</th><th class="num">Read</th><th class="num">Replied (unique)</th><th class="num">Engagement</th><th class="num">Option clicks</th><th class="num">Replies apart from options</th></tr></thead><tbody>${
+      by.map(t=>`<tr><td class="mono">${esc(t.template)}</td><td class="num">${t.sent}</td><td class="num">${t.delivered}</td><td class="num">${t.read}</td><td class="num">${t.replied}</td><td class="num"><b>${pct(t.replied,t.delivered)}%</b></td><td class="num">${t.clicks}</td><td class="num">${t.texts}</td></tr>`).join("")}</tbody></table>`;
+  $("#optLegend").innerHTML = `<span class="hint">Replied counts a template once even if the customer tapped several options or typed. Option clicks count every tap.</span>`;
+  const typed = S.interactions.filter(i=>i.step==="FREE_TEXT");
+  $("#textCount").textContent = `${typed.length} message(s)`;
+  $("#texts").innerHTML = !typed.length ? `<div class="empty">No typed replies yet.</div>` :
+    `<table class="data"><thead><tr><th>Received</th><th>Lead</th><th>What the customer typed</th><th>Handled as</th></tr></thead><tbody>${
+      typed.slice().reverse().map(i=>`<tr><td class="mono">${esc(i.received_at.slice(11,19))}</td><td class="mono">${esc(i.lead_id)}</td><td style="white-space:normal">${esc(i.option_title)}</td><td>${i.option_code==="HI"?"Hi":"Asked to type Hi"}</td></tr>`).join("")}</tbody></table>`;
   $("#clickCount").textContent = `${S.interactions.length} click(s)`;
   $("#clicks").innerHTML = !S.interactions.length ? `<div class="empty">No clicks yet.</div>` :
     `<table class="data"><thead><tr><th>Received</th><th>Lead</th><th>Dealer</th><th>Template</th><th>Flow / step</th><th>Option</th><th>Inbound msg ID</th><th>Replied to messageId</th></tr></thead><tbody>${
-      S.interactions.slice().reverse().map(i=>`<tr><td class="mono">${esc(i.received_at.slice(11,19))}</td><td class="mono">${esc(i.lead_id)}</td><td class="mono">${esc(i.dealer_id)}</td><td class="mono">${esc(i.template_id)}</td><td class="mono">${esc(i.flow)} / ${esc(i.step)}</td><td>${esc(i.option_title)} <span class="hint mono">${esc(i.option_code)}</span></td><td class="mono">${esc(i.inbound_id)}</td><td class="mono">${esc(i.context_message_id)}</td></tr>`).join("")}</tbody></table>`;
+      S.interactions.slice().reverse().map(i=>`<tr><td class="mono">${esc(i.received_at.slice(11,19))}</td><td class="mono">${esc(i.lead_id)}</td><td class="mono">${esc(i.dealer_id)}</td><td class="mono">${esc(i.template_id)}</td><td class="mono">${esc(i.flow)} / ${esc(i.step)}</td><td>${esc(i.option_title)} <span class="hint mono">${esc(i.option_code)}</span></td><td class="mono">${esc(i.inbound_id)}</td><td class="mono">${esc(i.context_message_id||"")}</td></tr>`).join("")}</tbody></table>`;
   renderDb();
 }
 
@@ -1517,7 +1544,8 @@ function renderTracking(){
 let dbTable = "wa_message";
 function tables(){
   return {
-    leads_l2r: S.leads.map(l=>({lead_id:l.id, customer_name:l.name, mobile:l.mobile, make:l.make, model:l.model, city:l.city, dealer_id:l.dealerId, source:l.source, created_at_local:fmtWall(l.createdAt), lead_status:l.leadStatus, stage:l.stage, eagerness:l.eagerness||null, priority:l.priority||null, purchase_timeline:l.timeline||null, visit_date:l.visitDate||null, visit_slot:l.visitSlot||null, sent_to_dealer_at:l.dealerPushedAt||null, open_call_due:openCall(l)?fmtWall(new Date(openCall(l).due_at)):null, bot_state:l.botState||null})),
+    leads_l2r: S.leads.map(l=>({lead_id:l.id, customer_name:l.name, mobile:l.mobile, make:l.make, model:l.model, city:l.city, dealer_id:l.dealerId, source:l.source, created_at_local:fmtWall(l.createdAt), lead_status:l.leadStatus, qualified_by:l.qualifiedBy||null, whatsapp_qualified:l.qualifiedBy==="WhatsApp", inquiries:l.inquiries.length, stage:l.stage, eagerness:l.eagerness||null, priority:l.priority||null, purchase_timeline:l.timeline||null, visit_date:l.visitDate||null, visit_slot:l.visitSlot||null, sent_to_dealer_at:l.dealerPushedAt||null, open_call_due:openCall(l)?fmtWall(new Date(openCall(l).due_at)):null, bot_state:l.botState||null})),
+    lead_inquiries: S.leads.flatMap(l=>l.inquiries.map(q=>({...q, lead_id:l.id}))),
     lead_calls: S.leads.flatMap(l=>l.calls),
     lead_tasks: S.leads.flatMap(l=>l.tasks),
     dealer_config: Object.values(DEALERS).map(d=>({dealer_id:d.id, dealer_name:d.name, city:d.city, waba_number:WABA.number, virtual_number:d.virtual, sales_executive:d.exec, working_hours:`${d.open}-${d.close}`, weekly_off:d.off>=0?DAYS[d.off]:null, template_id:d.template})),
@@ -1550,10 +1578,41 @@ function download(name, text, type){
 }
 
 /* ---------------- lead creation + simulation ---------------- */
+/* An enquiry from a customer who already has a lead:
+   - lead open, same vehicle version    -> no new inquiry
+   - lead open, different version       -> new inquiry on the same lead; WhatsApp only if it is after
+                                           hours and the lead is not qualified yet
+   - lead closed (or booked)            -> a new lead */
+function submitEnquiry(o){
+  const existing = S.leads.find(l=>l.mobile===o.mobile && OPEN_STATUSES.includes(l.leadStatus));
+  if (!existing){
+    const lead = newLead(o);
+    const closedBefore = S.leads.some(l=>l!==lead && l.mobile===o.mobile);
+    return {lead, note:`Reference ${lead.id}${closedBefore ? " (new lead: the earlier one was closed)." : "."}`, after:()=>onLeadCreated(lead)};
+  }
+  S.selected = existing.id;
+  if (existing.inquiries.some(q=>q.make===o.make && q.model===o.model)){
+    log("info","L2R",`repeat enquiry for ${o.make} ${o.model} on ${existing.id}: same version, no new inquiry`, undefined, existing.id);
+    return {lead:existing, note:`Already enquired for this vehicle (lead ${existing.id}); no new inquiry.`, after:()=>render()};
+  }
+  const inq = {inq_id:"INQ-"+(S.seq.inq++), make:o.make, model:o.model, created_at:o.createdAt.toISOString(), source:"WEBSITE"};
+  existing.inquiries.push(inq); existing.make = o.make; existing.model = o.model;
+  addFeed(existing, {icon:"note", title:"New inquiry added", lines:[`${o.make} ${o.model} · Website enquiry`]});
+  log("info","L2R",`InquiryAdded ${inq.inq_id} on ${existing.id}: ${o.make} ${o.model}`, undefined, existing.id);
+  const dealer = DEALERS[existing.dealerId];
+  const notQualified = ["NEW","NOT_QUALIFIED_OPEN"].includes(existing.leadStatus);
+  const sendWa = existing.consent && notQualified && !isOpen(BW, o.createdAt);
+  return {lead:existing, note:`Added to lead ${existing.id} as a new inquiry.`, after: async ()=>{
+    render();
+    if (sendWa){ log("ok","Eligibility",`new inquiry after hours on unqualified ${existing.id} → send template`, undefined, existing.id); await wait(400); await sendQualifierTemplate(existing); }
+    else log("info","Eligibility",`new inquiry on ${existing.id}: no WhatsApp (${!notQualified ? "lead already qualified" : !existing.consent ? "no consent" : "BikeWale team working"})`, undefined, existing.id);
+  }};
+}
 function newLead(o){
   const lead = {id:"L"+(S.seq.lead++), name:o.name, mobile:o.mobile, make:o.make, model:o.model, city:o.city, dealerId:o.dealerId, consent:o.consent,
     createdAt:o.createdAt, createdReal:Date.now(), source:"Website enquiry", stage:"FIRST_CALL", leadStatus:"NEW", eagerness:null,
-    spanCode:null, humanSpoke:false, feed:[], chat:[], calls:[], tasks:[]};
+    spanCode:null, humanSpoke:false, feed:[], chat:[], calls:[], tasks:[],
+    inquiries:[{inq_id:"INQ-"+(S.seq.inq++), make:o.make, model:o.model, created_at:o.createdAt.toISOString(), source:"WEBSITE"}]};
   addFeed(lead, {icon:"note", title:`Inquiry created and assigned to ${TELECALLER}`, lines:["Inquiry Created", `${o.make} ${o.model} · Website enquiry`]});
   S.leads.unshift(lead);
   if (!FAST) S.selected = lead.id;
@@ -1571,6 +1630,8 @@ async function simulate(n){
     const m=S.messages[firstMsgId(lead)]; if (!m) continue;
     if (Math.random()<.2) continue;                                       // delivered, never read
     await webhook(statusEvent(m,"read"));
+    if (Math.random()<.15) await webhook({type:"message", timestamp:Date.now(), payload:{id:"wamid.IN"+(S.seq.inbound++), source:lead.mobile, type:"text",
+      payload:{text: rnd(["What is the on-road price?","Is there any discount?","hi","Call me tomorrow","EMI options?"])}}});
     const replyRate = dealer.template==="tpl_nwh_timeline_v2" ? .68 : .52; // v2 copy engages better
     if (Math.random()>replyRate) continue;
     const r=Math.random(), code=r<.18?"15D":r<.40?"1M":r<.58?"1_2M":r<.80?"GT2M":"RESEARCH";
@@ -1615,8 +1676,9 @@ function applyState(d){
   if (!d || d.schema!==3) return false;
   REMOTE.applying=true;
   S=Object.assign(fresh(), d);
-  S.seq.call ||= 5001; S.seq.task ||= 7001;
+  S.seq.call ||= 5001; S.seq.task ||= 7001; S.seq.inq ||= 9001;
   S.leads.forEach(l=>{ l.createdAt=new Date(l.createdAt); l.calls ||= []; l.tasks ||= [];
+    l.inquiries ||= [{inq_id:"INQ-"+(S.seq.inq++), make:l.make, model:l.model, created_at:new Date(l.createdAt).toISOString(), source:"WEBSITE"}];
     l.tasks.forEach(t=>{ if (t.status==="OPEN") t.status="SCHEDULED"; if (t.status==="DONE") t.status="COMPLETED"; t.time ||= "10:00"; t.location ||= "Showroom"; t.assigned_to ||= t.sales_executive; }); });
   F = null; render(); REMOTE.applying=false; return true;
 }
@@ -1658,12 +1720,13 @@ for (const id of ["#fMake","#fModel","#fCity","#fDealer"]) $(id).addEventListene
 $("#timeChips").addEventListener("click", e=>{ const b=e.target.closest("[data-time]"); if (!b) return; S.timePreset=b.dataset.time; render(); });
 $("#leadForm").addEventListener("submit", e=>{
   e.preventDefault();
-  const lead=newLead({name:$("#fName").value.trim()||"Customer", mobile:$("#fMobile").value.trim(), make:$("#fMake").value, model:$("#fModel").value,
-    city:$("#fCity").value, dealerId:$("#fDealer").value, consent:$("#fConsent").checked, createdAt:enquiryTime()});
+  const o = {name:$("#fName").value.trim()||"Customer", mobile:$("#fMobile").value.trim(), make:$("#fMake").value, model:$("#fModel").value,
+    city:$("#fCity").value, dealerId:$("#fDealer").value, consent:$("#fConsent").checked, createdAt:enquiryTime()};
+  const r = submitEnquiry(o);
   const th=$("#thanks"); th.hidden=false;
-  th.innerHTML = `Thanks, ${esc(lead.name)}! Your enquiry for the ${esc(lead.make)} ${esc(lead.model)} has been sent to ${esc(DEALERS[lead.dealerId].name)}.<br><span style="font-weight:400">Reference ${lead.id}. Opening the dealer's lead management system…</span>`;
+  th.innerHTML = `Thanks, ${esc(o.name)}! Your enquiry for the ${esc(o.make)} ${esc(o.model)} has been sent to ${esc(DEALERS[r.lead.dealerId].name)}.<br><span style="font-weight:400">${esc(r.note)} Opening the lead management system…</span>`;
   $("#submitBtn").disabled=true;
-  setTimeout(()=>{ $("#submitBtn").disabled=false; th.hidden=true; location.hash="#lms"; onLeadCreated(lead); }, 1400);
+  setTimeout(()=>{ $("#submitBtn").disabled=false; th.hidden=true; location.hash="#lms"; r.after(); }, 1400);
 });
 $("#leadPick").addEventListener("change", e=>{ S.selected=e.target.value; F=null; render(); });
 $("#l2rBody").addEventListener("click", e=>{

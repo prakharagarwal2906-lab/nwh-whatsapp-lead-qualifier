@@ -34,7 +34,7 @@ def test_template_has_six_inputs_and_flow_postbacks(env):
     assert req.destination == "919876543210"          # customer mobile
     assert req.source == "919403897047"               # WABA number
     # customer name, make, model, working hours, virtual number, sales executive, dealer name
-    assert req.params == ["Prakhar", "Royal Enfield", "Classic 350", "9:30 AM - 5:30 PM",
+    assert req.params == ["Prakhar", "Royal Enfield", "Classic 350", "10:00 AM - 7:00 PM",   # BikeWale team hours
                           "919403897047", "Sathya", "Vishnu Motors TN"]
     assert req.postbacks[1] == "NWH_QUALIFIER|TIMELINE|1M|L1"   # lead id travels with every tap
     msg = env.repo.get_message(r.message_id)
@@ -383,12 +383,64 @@ def test_engagement_per_template(env):
     for gs in ("gs-1", "gs-2", "gs-3"):
         post(env, {"type": "message-event", "payload": {"id": "w" + gs, "gsId": gs, "type": "delivered"}})
     post(env, quick_reply("1M", "L1", "gs-1", msg_id="a1"))
+    post(env, quick_reply("15D", "L1", "gs-1", msg_id="a1b"))           # same customer taps again
     post(env, quick_reply("GT2M", "L2", "gs-2", mobile="919800000002", msg_id="a2"))
+    typed(env, "Is there a discount?", msg_id="t9", mobile="919800000003")
     t = env.client.get("/internal/engagement").json()["templates"][0]
     assert t["template_id"] == "tpl-nwh-1"
-    assert (t["sent"], t["delivered"], t["replied"]) == (3, 3, 2)
-    assert t["engagement_pct"] == 66.7
-    assert t["options"] == {"1M": 1, "GT2M": 1} and t["qualified"] == 1
+    assert (t["sent"], t["delivered"]) == (3, 3)
+    assert t["replied"] == 3                       # unique per template: L1 counted once
+    assert t["engagement_pct"] == 100.0
+    assert t["option_clicks"] == {"1M": 1, "15D": 1, "GT2M": 1}
+    assert t["text_replies"] == 1
+    texts = [r for r in env.client.get("/internal/db/wa_interaction").json()["rows"] if r["step"] == "FREE_TEXT"]
+    assert texts[0]["option_title"] == "Is there a discount?"     # what the customer typed is kept
+
+def test_qualified_lead_cannot_be_closed_after_gt2m_then_research(env):
+    send(env)
+    post(env, quick_reply("1M", "L1", "gs-1"))
+    env.l2r.leads["L1"].stage = "QUALIFICATION"
+    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.a1"))
+    post(env, quick_reply("RESEARCH", "L1", "gs-1", msg_id="wamid.a2"))
+    assert env.repo.event_result("wamid.a2") == "reply:NOTED_STAYS_QUALIFIED"
+    assert env.gs.buttons == []
+    assert not any(d[1].get("closeLead") for d in env.l2r.dispositions)
+
+
+
+def test_after_hours_uses_bikewale_team_hours_not_dealer_hours(env):
+    from datetime import datetime
+    # 6:30 PM Friday: the dealer (9:30-5:30) is closed but the BikeWale team (10-7) is working
+    r = send(env, created=datetime(2026, 11, 6, 18, 30, tzinfo=IST))
+    assert (r.sent, r.reason) == (False, "working_hours")
+    # Saturday 11 AM: the dealer is open but the BikeWale team is off -> WhatsApp goes out
+    r2 = send(env, lead_id="L2", mobile="919800000002", created=datetime(2026, 11, 7, 11, 0, tzinfo=IST))
+    assert r2.sent
+
+
+
+def test_new_inquiry_after_hours_on_unqualified_lead_gets_template(env):
+    from datetime import datetime
+    send(env)
+    ld = lead(created=datetime(2026, 11, 6, 22, 0, tzinfo=IST))
+    ld.make, ld.model_name = "TVS", "Jupiter 125"
+    r = env.svc.on_inquiry_added(ld, "INQ-2")
+    assert r.sent and env.gs.templates[-1].params[1:3] == ["TVS", "Jupiter 125"]
+
+
+def test_new_inquiry_on_qualified_lead_or_in_working_hours_sends_nothing(env):
+    from datetime import datetime
+    send(env)
+    post(env, quick_reply("1M", "L1", "gs-1"))                 # lead is now qualified
+    assert env.svc.on_inquiry_added(lead(created=datetime(2026, 11, 6, 22, 0, tzinfo=IST)), "INQ-2").reason == "lead_already_qualified_or_closed"
+    send(env, lead_id="L5", mobile="919800000005")
+    assert env.svc.on_inquiry_added(lead(lead_id="L5", mobile="919800000005", created=datetime(2026, 11, 6, 11, 0, tzinfo=IST)), "INQ-3").reason == "working_hours"
+
+
+def test_whatsapp_qualified_marker_is_sent_to_l2r(env):
+    send(env)
+    post(env, quick_reply("1M", "L1", "gs-1"))
+    assert env.l2r.dispositions[0][1]["qualifiedBy"] == "WHATSAPP"
 
 
 # ---------------------------------------------------------------- L2R follow-up form
@@ -401,15 +453,3 @@ def test_bot_tags_the_follow_up_form_like_a_telecaller(env):
     assert body["followUpStatus"] == "SPOKE_TO_CUSTOMER" and body["leadStatus"] == "INTERESTED"
     assert body["expectedBuyingSpan"] == "1M" and body["eagerness"] == "HOT"
     assert body["targetStage"] == "QUALIFICATION"
-
-
-
-def test_qualified_lead_cannot_be_closed_after_gt2m_then_research(env):
-    send(env)
-    post(env, quick_reply("1M", "L1", "gs-1"))
-    env.l2r.leads["L1"].stage = "QUALIFICATION"
-    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.a1"))
-    post(env, quick_reply("RESEARCH", "L1", "gs-1", msg_id="wamid.a2"))
-    assert env.repo.event_result("wamid.a2") == "reply:NOTED_STAYS_QUALIFIED"
-    assert env.gs.buttons == []
-    assert not any(d[1].get("closeLead") for d in env.l2r.dispositions)
