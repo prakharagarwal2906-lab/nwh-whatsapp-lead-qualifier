@@ -1512,7 +1512,13 @@ function renderWa(){
     let h = `<div class="bubble in">${c.title?`<span class="ttl">${esc(c.title)}</span>`:""}${esc(c.text)}${c.footer?`<span class="foot">${esc(c.footer)}</span>`:""}<span class="meta">${c.at}</span>`;
     if (c.kind==="list") h += `<button type="button" class="listbtn" data-list="${c.messageId}">☰ ${esc(c.listButton)}</button>`;
     h += `</div>`;
-    if (c.buttons) h += `<div class="qr">${c.buttons.map(b=>`<button type="button" data-msg="${c.messageId}" data-code="${b.code}" data-label="${esc(b.label)}" class="${c.used===b.code?"picked":""}">${esc(b.label)}</button>`).join("")}</div>`;
+    // Like WhatsApp: up to 3 quick replies show as buttons; with more, the first 2 show and the rest sit under "See all options".
+    if (c.buttons){
+      const btn = b => `<button type="button" data-msg="${c.messageId}" data-code="${b.code}" data-label="${esc(b.label)}" class="${c.used===b.code?"picked":""}">${esc(b.label)}</button>`;
+      h += `<div class="qr">${c.buttons.length>3
+        ? c.buttons.slice(0,2).map(btn).join("") + `<button type="button" data-opts="${c.messageId}">☰ See all options</button>`
+        : c.buttons.map(btn).join("")}</div>`;
+    }
     return h;
   }).join("");
   el.scrollTop = el.scrollHeight;
@@ -1529,6 +1535,18 @@ function renderWa(){
        <tr><td>postbackText</td><td>${esc(h.row.postback)}</td></tr>
      </table>
      <details><summary>Raw webhook payload</summary><pre class="json">${esc(JSON.stringify({type:"message", payload:h.raw},null,2))}</pre></details></div>`;
+}
+/* "See all options": every quick reply of the message in a sheet, as WhatsApp shows it. */
+function openOptions(messageId){
+  const lead=leadById(S.messages[messageId].lead_id), c=lead.chat.find(x=>x.messageId===messageId), sh=$("#sheet");
+  sh.innerHTML = `<div class="card" role="dialog" aria-label="All options"><h4><button type="button" id="sheetClose" aria-label="Close">×</button>All options</h4>
+    <div class="opts">${c.buttons.map((b,i)=>`<label><span>${esc(b.label)}</span><input type="radio" name="lrow" value="${i}"></label>`).join("")}</div>
+    <button type="button" class="send" id="sheetSend" disabled>Send</button></div>`;
+  sh.hidden=false;
+  sh.querySelectorAll("input[name=lrow]").forEach(x=>x.addEventListener("change",()=>{ $("#sheetSend").disabled=false; }));
+  $("#sheetClose").onclick=()=>{ sh.hidden=true; };
+  sh.onclick=e=>{ if (e.target===sh) sh.hidden=true; };
+  $("#sheetSend").onclick=()=>{ const b=c.buttons[+sh.querySelector("input[name=lrow]:checked").value]; sh.hidden=true; tapButton(messageId, b.code, b.label); };
 }
 function openSheet(messageId){
   const lead=leadById(S.messages[messageId].lead_id), c=lead.chat.find(x=>x.messageId===messageId), sh=$("#sheet");
@@ -1842,6 +1860,7 @@ $("#l2rBody").addEventListener("input", e=>{
 $("#msgs").addEventListener("click", e=>{
   const b=e.target.closest("button[data-code]"); if (b && !b.disabled) return tapButton(b.dataset.msg, b.dataset.code, b.dataset.label);
   const l=e.target.closest("button[data-list]"); if (l && !l.disabled) openSheet(l.dataset.list);
+  const o=e.target.closest("button[data-opts]"); if (o && !o.disabled) openOptions(o.dataset.opts);
 });
 $("#compose").addEventListener("submit", async e=>{
   e.preventDefault(); const t=$("#composeInput").value.trim(), lead=leadById(S.selected); if (!t||!lead) return;
