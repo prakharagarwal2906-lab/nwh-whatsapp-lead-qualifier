@@ -14,8 +14,8 @@ from .models import DealerConfig, Lead, MsgStatus, Outcome, WaMessage
 from .rules import (
     FLOW, QUALIFYING, STEP_CONFIRM, STEP_TIMELINE, STEP_VISIT_DATE, STEP_VISIT_TIME, TIMELINE_LABEL,
     TIMELINE_DAYS, TIMELINE_OPTIONS, build_postback, classify_text, confirm_change_text, decide_timeline,
-    gt2m_text, kept_text, parse_postback, research_text, same_answer_text, updated_text,
-    visit_confirm_text,
+    ask_hi_text, dealer_assigned_text, gt2m_text, is_hi, kept_text, parse_postback, reengage_text,
+    research_text, same_answer_text, updated_text, visit_confirm_text,
 )
 from .working_hours import DealerCalendar, day_label
 
@@ -61,12 +61,15 @@ def template_variables(lead: Lead, cfg: DealerConfig) -> list[str]:
 
 class QualifierService:
     def __init__(self, repo: Repo, gupshup: GupshupClient, l2r: L2RClient,
-                 max_event_age_seconds: int = 86400, session_window_hours: int = 24):
+                 max_event_age_seconds: int = 86400, session_window_hours: int = 24,
+                 brand_name: str = "BikeWale", support_number: str = "918047104444"):
         self.repo = repo
         self.gupshup = gupshup
         self.l2r = l2r
         self.max_event_age = max_event_age_seconds
         self.window_hours = session_window_hours
+        self.brand_name = brand_name
+        self.support_number = support_number
 
     def audit(self, level: str, event: str, lead_id: str | None = None,
               message_id: int | None = None, **detail) -> None:
@@ -215,11 +218,12 @@ class QualifierService:
         if mtype not in CHOICE_TYPES and mtype != "text":
             return "ignored_message_type"
 
+        if mtype == "text":
+            return self._handle_text(p)
+
         pb = parse_postback(inner.get("postbackText") or inner.get("id"))
         msg = self.repo.find_message(gs_id=ctx.get("gsId"), wamid=ctx.get("id"),
                                      lead_id=pb.lead_id if pb else None)
-        if msg is None and mtype == "text":
-            msg = self.repo.latest_open_for(sender)   # typed replies may have no context
         if msg is None:
             return "unmapped_reply"
         # A valid token alone must not be able to qualify an unrelated lead.
@@ -229,25 +233,23 @@ class QualifierService:
         if pb and pb.lead_id and pb.lead_id != msg.lead_id:
             return "rejected_lead_mismatch"
 
-        if pb:
-            step, option = pb.step, pb.option
-            title = inner.get("title") or inner.get("text") or option
-        else:  # typed text: only the timeline question accepts free text
-            option = classify_text(inner.get("text", ""))
-            if option is None:
-                return "unclassified_reply"
-            step, title = (msg.step, inner.get("text", ""))
-            if option != "STOP" and step != STEP_TIMELINE:
-                return "unclassified_reply"
-        if step != msg.step and option != "STOP":
+        if not pb:
+            return "unclassified_reply"
+        step, option = pb.step, pb.option
+        title = inner.get("title") or inner.get("text") or option
+        if step != msg.step:
             return "rejected_step_mismatch"
+        answered = msg   # the message the customer actually tapped
+        if step == STEP_TIMELINE and msg.msg_type != "template":
+            # Timeline asked again in a session message (after "Hi"): the answer belongs to the conversation's template.
+            msg = self.repo.find_template(msg.lead_id) or msg
 
         cfg = self.repo.get_dealer(msg.dealer_id)
         if option == "STOP":
             self.repo.add_opt_out(msg.mobile, msg.dealer_id)
             self._safe_comment(msg.lead_id, "Customer opted out of WhatsApp messages", f"wa-{p.get('id')}")
             return "reply:OPT_OUT"
-        if msg.status in (MsgStatus.EXPIRED, MsgStatus.FAILED):
+        if answered.status in (MsgStatus.EXPIRED, MsgStatus.FAILED):
             return "ignored_closed_conversation"
 
         self.repo.add_interaction({
@@ -313,6 +315,46 @@ class QualifierService:
             self._send_session(msg, cfg, "VISIT_CONFIRM", "text", lambda: send.send_text(
                 app, src, dst, visit_confirm_text(cfg.dealer_name, cfg.city, day_label(day) if day else "",
                                                   slot, cfg.rep_name, cfg.rep_phone)))
+
+    # ---- typed messages ---------------------------------------------------
+    def _handle_text(self, p: dict) -> str:
+        """Customer typed instead of tapping:
+        anything but "Hi" -> ask them to type Hi;
+        "Hi" + qualified lead -> share the assigned dealer's number and the brand's number;
+        "Hi" + not qualified -> ask the buying-timeline question again with the same buttons."""
+        sender, text = p.get("source", ""), (p.get("payload") or {}).get("text", "")
+        tpl = self.repo.latest_template_for(sender)
+        if tpl is None:
+            return "unmapped_reply"
+        cfg = self.repo.get_dealer(tpl.dealer_id)
+        if cfg is None:
+            return "ignored_no_dealer"
+        if classify_text(text) == "STOP":
+            self.repo.add_opt_out(tpl.mobile, tpl.dealer_id)
+            self._safe_comment(tpl.lead_id, "Customer opted out of WhatsApp messages", f"wa-{p.get('id')}")
+            return "reply:OPT_OUT"
+        hi = is_hi(text)
+        self.repo.add_interaction({
+            "inbound_id": p.get("id"), "context_message_id": None, "lead_id": tpl.lead_id, "dealer_id": tpl.dealer_id,
+            "template_id": tpl.template_id, "flow": FLOW, "step": "FREE_TEXT", "option_code": "HI" if hi else "OTHER",
+            "option_title": text[:200], "received_at": datetime.now(timezone.utc).isoformat()})
+        if not hi:
+            self._text(tpl, cfg, "ASK_HI", ask_hi_text())
+            return "reply:ASK_HI"
+        try:
+            lead = self.l2r.get_lead(tpl.lead_id)
+        except Exception:
+            lead = None
+        qualified = lead is not None and lead.stage in ("QUALIFICATION", "VISITS", "BOOKING")
+        if qualified:
+            self._text(tpl, cfg, "DEALER_INFO",
+                       dealer_assigned_text(cfg.dealer_name, cfg.rep_phone, self.brand_name, self.support_number))
+            return "reply:DEALER_INFO"
+        vehicle = f"{lead.make} {lead.model_name}".strip() if lead else "vehicle"
+        buttons = [ListRow(label, build_postback(STEP_TIMELINE, code, tpl.lead_id)) for code, label, _ in TIMELINE_OPTIONS]
+        self._send_session(tpl, cfg, STEP_TIMELINE, "buttons", lambda: self.gupshup.send_buttons(
+            cfg.gupshup_app_id, cfg.source_number, tpl.mobile, reengage_text(self.brand_name, vehicle), buttons))
+        return "reply:TIMELINE_ASKED_AGAIN"
 
     # ---- changed answers --------------------------------------------------
     def _span_call(self, cfg: DealerConfig, option: str, lead_id: str) -> datetime:

@@ -507,6 +507,7 @@ const DEALERS = {
 };
 const WABA = {number:"918047104444", name:"BikeWale"};
 const TELECALLER = "Akshay";   // internal calling team member who owns the lead in L2R
+const SUPPORT_NUMBER = "918047104444";   // BikeWale team number (placeholder)
 const TEMPLATES = {
   tpl_nwh_timeline_v1: v =>
 `Hi ${v.name},
@@ -635,8 +636,8 @@ function l2rDealerEvent(lead, event){
   if (first) lead.dealerPushedAt = simNow(lead).toISOString();
   const label = {QUALIFIED:"Lead sent to dealer panel", VISIT_BOOKED:"Dealer panel updated: visit booked", SPAN_UPDATED:"Dealer panel updated: buying timeline changed",
     WITHDRAWN:"Dealer panel updated: lead no longer qualified", BOOKED:"Dealer panel updated: booking"}[event] || "Dealer panel updated";
-  addFeed(lead, {icon:"dealer", tone:"dealer", title:label,
-    lines: event==="VISIT_BOOKED" ? [`Visit created: ${body.visit}`] : [dealer.name]});
+  if (event==="VISIT_BOOKED") return;   // sent to the dealer panel, not shown in the feed
+  addFeed(lead, {icon:"dealer", tone:"dealer", title:label, lines:[dealer.name]});
 }
 function setLeadStatus(lead, st, spanCode){
   lead.leadStatus = st;
@@ -735,7 +736,35 @@ async function webhook(evt){
   S.eventRows.push({event_id:eid, type: isStatus ? `message-event:${p.type}` : `message:${p.type}`, received_at:new Date().toISOString(), lead_id: ctx ? ctx.lead_id : null, payload: evt});
   if (isStatus) return handleStatus(p);
   log("info","Webhook ←",`POST /v1/webhooks/gupshup  ${p.type}`, evt, ctx && ctx.lead_id);
+  if (p.type==="text") return handleText(p);
   await handleReply(p);
+}
+/* Customer typed instead of tapping an option.
+   - anything other than "Hi": ask them to type Hi to start
+   - "Hi" and the lead is qualified: share the assigned dealer's number and the BikeWale number
+   - "Hi" and not qualified: ask the buying-timeline question again, with the same buttons */
+async function handleText(p){
+  const lead = S.leads.find(l=>l.mobile===p.source && l.chat.length) || S.leads.find(l=>l.mobile===p.source);
+  if (!lead){ log("warn","Processor",`text from unknown number ${p.source}`); return; }
+  const dealer = DEALERS[lead.dealerId], text = (p.payload||{}).text || "";
+  const isHi = /^\s*(hi+|hello|hey)\b/i.test(text);
+  S.interactions.push({inbound_id:p.id, context_message_id:null, context_wamid:null, lead_id:lead.id, dealer_id:lead.dealerId,
+    template_id:dealer.template, flow:FLOW, step:"FREE_TEXT", option_code: isHi ? "HI" : "OTHER", option_title:text, postback:null, received_at:new Date().toISOString()});
+  await wait(300);
+  if (!isHi){
+    log("info","Processor",`free text from ${lead.id}: asked to type Hi`, undefined, lead.id);
+    await sendMessage(lead, {kind:"text", step:"ASK_HI", text:"Please type Hi to start the journey.", payload:{type:"text"}});
+  } else if (["QUALIFIED","BOOKED","QUALIFIED_CLOSED"].includes(lead.leadStatus)){
+    log("info","Processor",`Hi from qualified lead ${lead.id}: shared dealer and BikeWale numbers`, undefined, lead.id);
+    await sendMessage(lead, {kind:"text", step:"DEALER_INFO", text:`${dealer.name} dealership has been assigned to you. Call them at ${dealer.virtual} for assistance.\nTo connect with the ${WABA.name} team, call ${SUPPORT_NUMBER}.`, payload:{type:"text"}});
+  } else {
+    log("info","Processor",`Hi from unqualified lead ${lead.id}: asked the buying timeline again`, undefined, lead.id);
+    await sendMessage(lead, {kind:"buttons", step:"TIMELINE", text:`Thanks for connecting with ${WABA.name}. We can see you have shown interest in the ${lead.make} ${lead.model}. Can you tell us how soon you are planning to buy?`,
+      buttons: TIMELINE.map(t=>({code:t[0], label:t[1]})), payload:{type:"quick_reply", options:TIMELINE.map(t=>t[1])}});
+  }
+  render();
+  const last = lead.chat[lead.chat.length-1];
+  if (last && last.messageId && S.messages[last.messageId].status==="SUBMITTED") await deliver(last.messageId, true);
 }
 function handleStatus(p){
   const msg = S.messages[p.gsId]; if (!msg) return;
@@ -789,7 +818,7 @@ async function handleReply(p){
         payload:{type:"list", title:"Plan your visit", body:"Choose your preferred date", items:[{title:"Next 7 days", options: rows.map(r=>({title:r.title, postbackText:r.id}))}]}});
     } else if (option==="GT2M"){
       lead.botState = "Nurture";
-      botDispose(lead, option, t[1], "NOT_QUALIFIED_OPEN", "Interested", nextCallAt(lead, option, null));
+      botDispose(lead, option, t[1], "NOT_QUALIFIED_OPEN", null, nextCallAt(lead, option, null));
       await wait(500);
       await sendMessage(lead, {kind:"text", step:"GT2M_ACK", text:`Thanks, ${lead.name}!\nWe'll check in closer to your timeline.\nNeed help before that? Call us anytime at ${dealer.virtual}.`, payload:{type:"text"}});
     } else {
@@ -1485,12 +1514,12 @@ $("#msgs").addEventListener("click", e=>{
   const b=e.target.closest("button[data-code]"); if (b && !b.disabled) return tapButton(b.dataset.msg, b.dataset.code, b.dataset.label);
   const l=e.target.closest("button[data-list]"); if (l && !l.disabled) openSheet(l.dataset.list);
 });
-$("#compose").addEventListener("submit", e=>{
+$("#compose").addEventListener("submit", async e=>{
   e.preventDefault(); const t=$("#composeInput").value.trim(), lead=leadById(S.selected); if (!t||!lead) return;
-  $("#composeInput").value=""; lead.chat.push({dir:"out", text:t, at:clock()});
-  log("warn","Processor",`free text "${t}" from ${lead.id}: not a button tap, asked to use the options`, undefined, lead.id);
-  lead.chat.push({dir:"in", text:"Please tap one of the options above so we can help you faster 🙂", at:clock()});
-  render();
+  $("#composeInput").value=""; lead.chat.push({dir:"out", text:t, at:clock()}); render();
+  await wait(350);
+  await webhook({app:"BikeWaleNWH", timestamp:Date.now(), version:2, type:"message", payload:{
+    id:"wamid.IN" + (S.seq.inbound++), source: lead.mobile, type:"text", payload:{text:t}, sender:{phone: lead.mobile, name: lead.name}}});
 });
 $("#simBtn").addEventListener("click", async e=>{ const b=e.currentTarget; b.disabled=true; b.textContent="Simulating…"; await simulate(25); b.disabled=false; b.textContent="Simulate 25 customers"; });
 $("#dbTabs").addEventListener("click", e=>{ const b=e.target.closest("[data-t]"); if (!b) return; dbTable=b.dataset.t; renderDb(); });

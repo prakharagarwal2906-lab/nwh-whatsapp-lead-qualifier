@@ -83,6 +83,7 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
             HttpL2RClient(settings.l2r_base_url, settings.l2r_api_key),
             max_event_age_seconds=settings.max_event_age_seconds,
             session_window_hours=settings.session_window_hours,
+            brand_name=settings.brand_name, support_number=settings.support_number,
         )
     setup_file_log(settings.log_file)
     app = FastAPI(title="WhatsApp After-Hours Lead Qualifier")

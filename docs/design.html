@@ -210,6 +210,16 @@ flowchart TD
     </tbody>
   </table></div>
   <p>More than 2 Months → Still Researching keeps the existing call and adds a note on the lead.</p>
+  <h3>When the customer types instead of tapping</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Customer types</th><th>Lead</th><th>Reply</th></tr></thead>
+    <tbody>
+      <tr><td>Anything other than "Hi"</td><td>Any</td><td>"Please type Hi to start the journey."</td></tr>
+      <tr><td>"Hi"</td><td>Qualified</td><td>"&lt;Dealer&gt; dealership has been assigned to you. Call them at &lt;dealer number&gt; for assistance. To connect with the BikeWale team, call &lt;BikeWale number&gt;."</td></tr>
+      <tr><td>"Hi"</td><td>Not qualified (including closed)</td><td>"Thanks for connecting with BikeWale. We can see you have shown interest in the &lt;make model&gt;. Can you tell us how soon you are planning to buy?" with the same five buttons; the tap is handled like a template tap (including the changed-answer rules)</td></tr>
+      <tr><td>"STOP"</td><td>Any</td><td>Opted out; no further bot messages</td></tr>
+    </tbody>
+  </table></div>
   <h3>Which leads count as non-working hours</h3>
   <ul>
     <li>Each dealer has working hours per weekday, a timezone (default <code>Asia/Kolkata</code>), weekly offs and a holiday calendar.</li>

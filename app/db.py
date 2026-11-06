@@ -284,6 +284,12 @@ class Repo:
         self._exec("UPDATE wa_message SET status = 'REPLIED', reply_code = ?, replied_at = ? WHERE id = ?",
                    (code, now().isoformat(), msg_id))
 
+    def latest_template_for(self, mobile: str) -> WaMessage | None:
+        """The customer's most recent qualifier conversation, whatever its status."""
+        return self._row_to_msg(self._exec(
+            "SELECT * FROM wa_message WHERE mobile = ? AND msg_type = 'template' ORDER BY id DESC LIMIT 1",
+            (mobile,)).fetchone())
+
     def find_template(self, lead_id: str) -> WaMessage | None:
         return self._row_to_msg(self._exec(
             "SELECT * FROM wa_message WHERE lead_id = ? AND msg_type = 'template' ORDER BY id DESC LIMIT 1",

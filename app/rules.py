@@ -146,3 +146,25 @@ def confirm_change_text(prev_label: str, new_label: str) -> str:
 def kept_text() -> str:
     return "No problem, we've kept your earlier answer."
 
+
+
+# ---- typed messages (the customer types instead of tapping) -------------
+HI_PATTERN = re.compile(r"^\s*(hi+|hello|hey)\b", re.I)
+
+
+def is_hi(text: str) -> bool:
+    return bool(HI_PATTERN.match(text or ""))
+
+
+def ask_hi_text() -> str:
+    return "Please type Hi to start the journey."
+
+
+def dealer_assigned_text(dealer: str, dealer_number: str, brand: str, support_number: str) -> str:
+    return (f"{dealer} dealership has been assigned to you. Call them at {dealer_number} for assistance.\n"
+            f"To connect with the {brand} team, call {support_number}.")
+
+
+def reengage_text(brand: str, vehicle: str) -> str:
+    return (f"Thanks for connecting with {brand}. We can see you have shown interest in the {vehicle}. "
+            f"Can you tell us how soon you are planning to buy?")

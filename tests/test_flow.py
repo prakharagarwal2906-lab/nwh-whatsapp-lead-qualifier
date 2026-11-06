@@ -299,13 +299,43 @@ def test_every_tap_is_tracked_including_changes(env):
     assert sorted(steps) == ["CONFIRM_CHANGE", "TIMELINE", "TIMELINE"]
 
 
-def test_typed_reply_is_classified(env):
-    send(env)
+def typed(env, text, msg_id="wamid.t1", mobile="919876543210"):
     evt = quick_reply("1M", "L1", "gs-1")
-    evt["payload"] = {"id": "wamid.t1", "source": "919876543210", "type": "text", "payload": {"text": "within 15 days"}}
+    evt["payload"] = {"id": msg_id, "source": mobile, "type": "text", "payload": {"text": text}}
+    return post(env, evt)
+
+
+def test_random_text_asks_to_type_hi(env):
+    send(env)
+    typed(env, "what is the price?")
+    assert env.repo.event_result("wamid.t1") == "reply:ASK_HI"
+    assert env.gs.texts[-1][1] == "Please type Hi to start the journey."
+    assert env.l2r.dispositions == []
+
+
+def test_hi_from_unqualified_lead_asks_timeline_again(env):
+    send(env)
+    typed(env, "Hi")
+    assert env.repo.event_result("wamid.t1") == "reply:TIMELINE_ASKED_AGAIN"
+    msg = env.gs.buttons[-1]
+    assert msg["body"] == ("Thanks for connecting with BikeWale. We can see you have shown interest in the "
+                           "Royal Enfield Classic 350. Can you tell us how soon you are planning to buy?")
+    assert [b.title for b in msg["buttons"]][:3] == ["15 Days", "1 Month", "1 - 2 Months"]
+    # tapping one of these buttons works like the template: the lead is qualified
+    btn = msg["buttons"][1]
+    evt = quick_reply("1M", "L1", gs_of(env, "TIMELINE"), msg_id="wamid.t2", text=btn.title)
     post(env, evt)
-    assert env.l2r.dispositions[0][1]["targetStage"] == "QUALIFICATION"
-    assert len(env.gs.lists) == 1
+    assert env.l2r.dispositions[-1][1]["targetStage"] == "QUALIFICATION"
+    assert env.repo.find_template("L1").reply_code == "1M"
+
+
+def test_hi_from_qualified_lead_shares_dealer_and_brand_numbers(env):
+    send(env)
+    post(env, quick_reply("1M", "L1", "gs-1"))
+    typed(env, "hii", msg_id="wamid.t3")
+    assert env.repo.event_result("wamid.t3") == "reply:DEALER_INFO"
+    assert env.gs.texts[-1][1] == ("Vishnu Motors TN dealership has been assigned to you. Call them at 919403897047 "
+                                   "for assistance.\nTo connect with the BikeWale team, call 918047104444.")
 
 
 def test_stop_opts_out(env):
