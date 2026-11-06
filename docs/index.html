@@ -63,6 +63,11 @@ main.screen{max-width:1240px;margin:0 auto;padding-block:18px 40px}
 .panel>h2{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0;padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .panel>h2 .right{margin-left:auto;text-transform:none;letter-spacing:0}
 .pad{padding:14px}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px 22px}
+.mdays{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px 10px;align-items:center;font-size:13.5px}
+.mdays input[type=time],.mfield input,.mfield select{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--surface);color:inherit;font:inherit;min-width:0;width:100%}
+.mfield{display:grid;gap:4px;font-size:13px;margin-bottom:10px}
+.mfield span{color:var(--muted)}
 .hint{font-size:12px;color:var(--muted)}
 .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:6px}
 .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap}
@@ -415,7 +420,6 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
   </div>
   <div class="democtl">
     <b>Demo control</b>
-    <span class="hint">Enquiry time (dealer's local time):</span>
     <span id="timeChips"></span>
     <span class="hint" id="timeVerdict"></span>
   </div>
@@ -499,6 +503,22 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
   </section>
 
   <section class="panel" style="margin-top:14px">
+    <h2>Master dealer (dealer_config · MASTER) <span class="right hint" id="masterNote"></span></h2>
+    <div class="pad">
+      <p class="hint" style="margin:0 0 12px">BikeWale's own row in <code>dealer_config</code>. Its working hours decide after-hours, the hours quoted in the template and when calls are scheduled. Dealer rows only set showroom visit dates and slots.</p>
+      <div class="mgrid">
+        <div><div class="mdays" id="masterDays"></div></div>
+        <div id="masterFields"></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn primary small" id="masterSave" type="button">Save master dealer</button>
+        <button class="btn ghost small" id="masterDefault" type="button">Mon–Sat, 9:30 AM – 6:30 PM</button>
+        <span class="hint" id="masterMsg"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" style="margin-top:14px">
     <h2>Database &amp; logs <span class="right tabs" id="dbTabs"></span></h2>
     <div class="toolbar">
       <input id="dbFilter" placeholder="Filter rows (lead id, message id, option…)" aria-label="Filter rows">
@@ -546,7 +566,8 @@ const DEALERS = {
 };
 const WABA = {number:"918047104444", name:"BikeWale"};
 const TELECALLER = "Akshay";   // internal calling team member who owns the lead in L2R
-const SUPPORT_NUMBER = "918047104444";   // BikeWale team number (placeholder)
+const supportNumber = () => S.master.support_number;   // BikeWale team number, from the master dealer
+const TPL = () => TEMPLATES[S.master.template_id] ? S.master.template_id : "tpl_nwh_timeline_v1";
 const TEMPLATES = {
   tpl_nwh_timeline_v1: v =>
 `Hi ${v.name},
@@ -561,7 +582,12 @@ const TIMELINE = [["15D","15 Days",15],["1M","1 Month",30],["1_2M","1 - 2 Months
 const OPT_COLORS = {"15D":"#147a4a","1M":"#2f9d6a","1_2M":"#7cc49b","GT2M":"#e0a640","RESEARCH":"#9aa4b5"};
 
 /* ---------------- state ---------------- */
-const fresh = () => ({schema:3, leads:[], messages:{}, interactions:[], events:[], eventRows:[], audit:[],
+/* Master dealer: BikeWale's own row in dealer_config. Its working hours decide after-hours, the hours quoted
+   in the template and call times; its other settings (WABA, support number, template...) are configured here. */
+const MASTER_DEFAULT = () => ({dealer_id:"MASTER", dealer_name:"BikeWale (master dealer)", dealer_type:"MASTER", timezone:"Asia/Kolkata",
+  working_hours:{mon:[["09:30","18:30"]], tue:[["09:30","18:30"]], wed:[["09:30","18:30"]], thu:[["09:30","18:30"]], fri:[["09:30","18:30"]], sat:[["09:30","18:30"]]},
+  waba_number:"918047104444", support_number:"918047104444", template_id:"tpl_nwh_timeline_v1", qualify_max_days:60, pre_close_buffer_min:15});
+const fresh = () => ({schema:3, master:MASTER_DEFAULT(), leads:[], messages:{}, interactions:[], events:[], eventRows:[], audit:[],
   selected:null, lastHook:null, seq:{lead:12345, gs:40960, wamid:1, inbound:1, audit:1, call:5001, task:7001, inq:9001}, timePreset:"fri-0026"});
 let S = fresh();
 let FAST = false;
@@ -582,23 +608,33 @@ const PRESETS = {
   "now":["Right now (IST)", null],
 };
 const enquiryTime = () => new Date(PRESETS[S.timePreset][1] ?? (Date.now() + 5.5*3600e3));
-const hoursShort = d => `${fmtMin(toMin(d.open))} – ${fmtMin(toMin(d.close))}`;
-const offDays = c => [].concat(c.off ?? []).filter(x=>x>=0);
-const isOff = (c, day) => offDays(c).includes(day);
+const DKEY = ["sun","mon","tue","wed","thu","fri","sat"];
+/* Working window [open, close] of a calendar on a weekday (0 = Sunday), or null on a day off.
+   Dealers have one open/close and a weekly off; the master dealer has hours per day. */
+const winOf = (c, day) => c.hours ? ((c.hours[DKEY[day]]||[])[0] || null) : ([].concat(c.off ?? []).includes(day) ? null : [c.open, c.close]);
+const offDays = c => [0,1,2,3,4,5,6].filter(d => !winOf(c, d));
+const isOff = (c, day) => !winOf(c, day);
+const fmtWin = w => `${fmtMin(toMin(w[0]))} – ${fmtMin(toMin(w[1]))}`;
+function hoursShort(c){
+  const ws = [1,2,3,4,5,6,0].map(d=>winOf(c,d)).filter(Boolean), uniq = [...new Set(ws.map(fmtWin))];
+  if (uniq.length<=1) return uniq[0] || "closed";
+  return [1,2,3,4,5,6,0].filter(d=>winOf(c,d)).map(d=>`${DAYS[d].slice(0,3)} ${fmtWin(winOf(c,d))}`).join(", ");
+}
 const hoursText = d => `${hoursShort(d)}, ${offDays(d).length ? offDays(d).slice().sort((a,b)=>(a+6)%7-(b+6)%7).map(x=>DAYS[x].slice(0,3)).join(" & ")+" closed" : "open all days"}`;
 /* BikeWale's calling team qualifies first, so its working hours decide after-hours and call times.
    Dealer hours are used only for showroom visit dates and slots. */
-const BW = {name:"BikeWale", open:"09:30", close:"18:30", off:[0]};   // Mon–Sat, 9:30 AM – 6:30 PM
+const masterCal = () => ({name:"BikeWale", hours:S.master.working_hours, buffer:Number(S.master.pre_close_buffer_min ?? 15)});
+let BW = masterCal();   // default Mon–Sat, 9:30 AM – 6:30 PM; re-read whenever the master dealer changes
 function isOpen(dealer, wall){
-  if (isOff(dealer, wall.getUTCDay())) return false;
-  const m = minsOf(wall); return m >= toMin(dealer.open) && m < toMin(dealer.close) - 15;
+  const w = winOf(dealer, wall.getUTCDay()); if (!w) return false;
+  const m = minsOf(wall); return m >= toMin(w[0]) && m < toMin(w[1]) - (dealer.buffer ?? 15);
 }
 function nextOpenDays(dealer, wall, n=7){
   const out=[]; const start=Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate());
   for (let i=0; out.length<n && i<21; i++){
     const d = new Date(start + i*86400e3);
     if (isOff(dealer, d.getUTCDay())) continue;
-    if (i===0 && minsOf(wall) > toMin(dealer.close) - 120) continue;   // too late for a same-day visit
+    if (i===0 && minsOf(wall) > toMin(winOf(dealer, d.getUTCDay())[1]) - 120) continue;   // too late for a same-day visit
     out.push(d);
   }
   return out;
@@ -619,7 +655,7 @@ function feed(lead, text){ addFeed(lead, {title:text}); }
 function atOpen(dealer, d){
   let x = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
   while (isOff(dealer, new Date(x).getUTCDay())) x += 86400e3;          // never on a day off
-  return new Date(x + toMin(dealer.open)*60e3);
+  return new Date(x + toMin(winOf(dealer, new Date(x).getUTCDay())[0])*60e3);
 }
 /* Next call: 7 days before the buying span ends, or 1 day after the visit/TD, whichever is earlier. */
 function nextCallAt(lead, spanCode, visitIso, fallbackDays=1){
@@ -726,16 +762,16 @@ async function sendQualifierTemplate(lead){
   const dealer = DEALERS[lead.dealerId];
   const vars = {name:lead.name, make:lead.make, model:lead.model, hours:hoursShort(BW)};
   const request = {
-    dealer_id: dealer.id, lead_id: lead.id, template_id: dealer.template, destination: lead.mobile, source: WABA.number,
+    dealer_id: dealer.id, lead_id: lead.id, template_id: TPL(), destination: lead.mobile, source: S.master.waba_number,
     variables: {customer_name:vars.name, vehicle_make:vars.make, vehicle_model:vars.model, working_hours:vars.hours},
   };
   const gupshupPayload = {
-    source: WABA.number, destination: lead.mobile,
-    template: {id: dealer.template, params:[vars.name, vars.make, vars.model, vars.hours]},
+    source: S.master.waba_number, destination: lead.mobile,
+    template: {id: TPL(), params:[vars.name, vars.make, vars.model, vars.hours]},
     postbackTexts: TIMELINE.map((t,i)=>({index:i, text:`${FLOW}|TIMELINE|${t[0]}|${lead.id}`})),
   };
-  const messageId = await sendMessage(lead, {kind:"template", templateId:dealer.template, step:"TIMELINE",
-    text: TEMPLATES[dealer.template](vars), buttons: TIMELINE.map(t=>({code:t[0], label:t[1]})), payload: gupshupPayload});
+  const messageId = await sendMessage(lead, {kind:"template", templateId:TPL(), step:"TIMELINE",
+    text: TEMPLATES[TPL()](vars), buttons: TIMELINE.map(t=>({code:t[0], label:t[1]})), payload: gupshupPayload});
   lead.botState = "Template sent";
   render();
   await deliver(messageId);
@@ -750,8 +786,8 @@ async function sendMessage(lead, m){
   const messageId = "gs-" + (S.seq.gs++).toString(16) + "-" + Math.random().toString(16).slice(2,6);
   S.messages[messageId] = {
     message_id: messageId, wamid: null, lead_id: lead.id, dealer_id: dealer.id,
-    template_id: m.templateId || null, started_by_template: dealer.template,
-    flow: FLOW, step: m.step, msg_type: m.kind, to_mobile: lead.mobile, from_waba: WABA.number, status:"SUBMITTED",
+    template_id: m.templateId || null, started_by_template: TPL(),
+    flow: FLOW, step: m.step, msg_type: m.kind, to_mobile: lead.mobile, from_waba: S.master.waba_number, status:"SUBMITTED",
     sent_at: new Date().toISOString(), delivered_at:null, read_at:null, replied_at:null, reply_option:null,
   };
   log("ok","Gupshup API",`202 Accepted → messageId ${messageId}`, {status:"submitted", messageId}, lead.id);
@@ -797,14 +833,14 @@ async function handleText(p){
   const dealer = DEALERS[lead.dealerId], text = (p.payload||{}).text || "";
   const isHi = /^\s*(hi+|hello|hey)\b/i.test(text);
   S.interactions.push({inbound_id:p.id, context_message_id:null, context_wamid:null, lead_id:lead.id, dealer_id:lead.dealerId,
-    template_id:dealer.template, flow:FLOW, step:"FREE_TEXT", option_code: isHi ? "HI" : "OTHER", option_title:text, postback:null, received_at:new Date().toISOString()});
+    template_id:TPL(), flow:FLOW, step:"FREE_TEXT", option_code: isHi ? "HI" : "OTHER", option_title:text, postback:null, received_at:new Date().toISOString()});
   await wait(300);
   if (!isHi){
     log("info","Processor",`free text from ${lead.id}: asked to type Hi`, undefined, lead.id);
     await sendMessage(lead, {kind:"text", step:"ASK_HI", text:"Please type Hi to start the journey.", payload:{type:"text"}});
   } else if (["QUALIFIED","BOOKED","QUALIFIED_CLOSED"].includes(lead.leadStatus)){
     log("info","Processor",`Hi from qualified lead ${lead.id}: shared dealer and BikeWale numbers`, undefined, lead.id);
-    await sendMessage(lead, {kind:"text", step:"DEALER_INFO", text:`${dealer.name} dealership has been assigned to you. Call them at ${dealer.execNumber} for assistance.\nTo connect with the ${WABA.name} team, call ${SUPPORT_NUMBER}.`, payload:{type:"text"}});
+    await sendMessage(lead, {kind:"text", step:"DEALER_INFO", text:`${dealer.name} dealership has been assigned to you. Call them at ${dealer.execNumber} for assistance.\nTo connect with the ${WABA.name} team, call ${supportNumber()}.`, payload:{type:"text"}});
   } else {
     log("info","Processor",`Hi from unqualified lead ${lead.id}: asked the buying timeline again`, undefined, lead.id);
     await sendMessage(lead, {kind:"buttons", step:"TIMELINE", text:`Thanks for connecting with ${WABA.name}. We can see you have shown interest in the ${lead.make} ${lead.model}. Can you tell us how soon you are planning to buy?`,
@@ -1545,7 +1581,41 @@ function stats(){
   for (const i of S.interactions){ const m=ownerOf(i); if (!m) continue; const t=by[m.template_id]; if (i.step==="TIMELINE") t.clicks++; if (i.step==="FREE_TEXT") t.texts++; }
   return {by:Object.values(by).sort((a,b)=>a.template.localeCompare(b.template)), clicks, uniq, texts};
 }
+let MASTER_DIRTY = false;
+function renderMaster(){
+  const m = S.master, box = $("#masterDays"); if (!box) return;
+  box.innerHTML = `<b>Day</b><b>Opens</b><b>Closes</b>` + [1,2,3,4,5,6,0].map(d=>{
+    const w = (m.working_hours[DKEY[d]]||[])[0];
+    return `<label><input type="checkbox" data-mday="${DKEY[d]}" ${w?"checked":""}> ${DAYS[d]}</label>
+      <input type="time" data-mopen="${DKEY[d]}" value="${w?w[0]:"09:30"}" ${w?"":"disabled"} aria-label="${DAYS[d]} opens">
+      <input type="time" data-mclose="${DKEY[d]}" value="${w?w[1]:"18:30"}" ${w?"":"disabled"} aria-label="${DAYS[d]} closes">`;
+  }).join("");
+  const f = (id, label, val, type="text") => `<label class="mfield"><span>${label}</span><input id="${id}" type="${type}" value="${esc(String(val??""))}"></label>`;
+  $("#masterFields").innerHTML = f("mName","Name", m.dealer_name) + f("mWaba","WABA number (sender)", m.waba_number) + f("mSupport","BikeWale support number", m.support_number)
+    + `<label class="mfield"><span>Template</span><select id="mTpl">${Object.keys(TEMPLATES).map(t=>`<option ${t===m.template_id?"selected":""}>${t}</option>`).join("")}</select></label>`
+    + f("mTz","Time zone", m.timezone) + f("mMax","Qualify if buying within (days)", m.qualify_max_days, "number") + f("mBuf","Stop new work this many minutes before closing", m.pre_close_buffer_min, "number");
+  $("#masterNote").textContent = hoursText(BW);
+}
+function saveMaster(hoursOnly){
+  const hours = {};
+  if (hoursOnly) Object.assign(hours, MASTER_DEFAULT().working_hours);
+  else for (const k of DKEY){
+    const on = $(`[data-mday="${k}"]`).checked, o = $(`[data-mopen="${k}"]`).value, c = $(`[data-mclose="${k}"]`).value;
+    if (!on) continue;
+    if (!o || !c || toMin(c) <= toMin(o)) { $("#masterMsg").textContent = `Check the hours for ${DAYS[DKEY.indexOf(k)]}: closing must be after opening.`; return; }
+    hours[k] = [[o, c]];
+  }
+  if (!Object.keys(hours).length) { $("#masterMsg").textContent = "Add at least one working day."; return; }
+  const v = id => $(id).value.trim();
+  if (!hoursOnly) Object.assign(S.master, {dealer_name:v("#mName")||"BikeWale (master dealer)", waba_number:v("#mWaba"), support_number:v("#mSupport"), template_id:v("#mTpl"),
+    timezone:v("#mTz")||"Asia/Kolkata", qualify_max_days:Number(v("#mMax"))||60, pre_close_buffer_min:Number(v("#mBuf"))||0});
+  S.master.working_hours = hours; BW = masterCal();
+  log("info","DB",`UPDATE dealer_config MASTER · ${hoursText(BW)}`, {...S.master});
+  MASTER_DIRTY = false; save(); render();
+  $("#masterMsg").textContent = `Saved · ${hoursText(BW)}`;
+}
 function renderTracking(){
+  if (!MASTER_DIRTY) renderMaster();   // never overwrite unsaved edits (the page refreshes from Postgres every few seconds)
   const {by, clicks, uniq, texts} = stats();
   const tot=by.reduce((a,t)=>{ for (const k of ["sent","delivered","read","replied"]) a[k]+=t[k]; return a; }, {sent:0,delivered:0,read:0,replied:0});
   $("#kpis").innerHTML = [
@@ -1579,7 +1649,11 @@ function tables(){
     lead_inquiries: S.leads.flatMap(l=>l.inquiries.map(q=>({...q, lead_id:l.id}))),
     lead_calls: S.leads.flatMap(l=>l.calls),
     lead_tasks: S.leads.flatMap(l=>l.tasks),
-    dealer_config: Object.values(DEALERS).map(d=>({dealer_id:d.id, dealer_name:d.name, city:d.city, waba_number:WABA.number, virtual_number:d.virtual, sales_executive:d.exec, sales_executive_number:d.execNumber, working_hours:`${d.open}-${d.close}`, weekly_off:d.off>=0?DAYS[d.off]:null, template_id:d.template})),
+    dealer_config: [
+      {dealer_id:S.master.dealer_id, dealer_type:"MASTER", dealer_name:S.master.dealer_name, city:null, waba_number:S.master.waba_number, support_number:S.master.support_number,
+        virtual_number:null, sales_executive:null, sales_executive_number:null, timezone:S.master.timezone, working_hours:JSON.stringify(S.master.working_hours),
+        weekly_off:offDays(BW).sort((a,b)=>(a+6)%7-(b+6)%7).map(x=>DAYS[x]).join(", ")||null, template_id:S.master.template_id, qualify_max_days:S.master.qualify_max_days, pre_close_buffer_min:S.master.pre_close_buffer_min},
+      ...Object.values(DEALERS).map(d=>({dealer_id:d.id, dealer_type:"DEALER", dealer_name:d.name, city:d.city, waba_number:S.master.waba_number, support_number:null, virtual_number:d.virtual, sales_executive:d.exec, sales_executive_number:d.execNumber, timezone:"Asia/Kolkata", working_hours:`${d.open}-${d.close}`, weekly_off:d.off>=0?DAYS[d.off]:null, template_id:S.master.template_id, qualify_max_days:null, pre_close_buffer_min:null}))],
     wa_message: Object.values(S.messages),
     wa_interaction: S.interactions,
     wa_event: S.eventRows.map(r=>({...r, payload: JSON.stringify(r.payload)})),
@@ -1706,7 +1780,7 @@ function pushRemote(snap){
 function applyState(d){
   if (!d || d.schema!==3) return false;
   REMOTE.applying=true;
-  S=Object.assign(fresh(), d);
+  S=Object.assign(fresh(), d); S.master = Object.assign(MASTER_DEFAULT(), d.master||{}); BW = masterCal();
   S.seq.call ||= 5001; S.seq.task ||= 7001; S.seq.inq ||= 9001;
   S.leads.forEach(l=>{ l.createdAt=new Date(l.createdAt); l.calls ||= []; l.tasks ||= [];
     l.inquiries ||= [{inq_id:"INQ-"+(S.seq.inq++), make:l.make, model:l.model, created_at:new Date(l.createdAt).toISOString(), source:"WEBSITE"}];
@@ -1833,6 +1907,14 @@ $("#exportCsv").addEventListener("click", ()=>{
   download(`${dbTable}.csv`, [cols.join(","),...rows.map(r=>cols.map(c=>cell(r[c])).join(","))].join("\n"), "text/csv");
 });
 $("#exportJson").addEventListener("click", ()=>download("qualifier-db.json", JSON.stringify(tables(),null,2), "application/json"));
+$("#masterDays").addEventListener("change", e=>{
+  const k = e.target.dataset.mday; MASTER_DIRTY = true; $("#masterMsg").textContent = "Unsaved changes";
+  if (k){ $(`[data-mopen="${k}"]`).disabled = !e.target.checked; $(`[data-mclose="${k}"]`).disabled = !e.target.checked; }
+});
+$("#masterFields").addEventListener("input", ()=>{ MASTER_DIRTY = true; $("#masterMsg").textContent = "Unsaved changes"; });
+$("#masterSave").addEventListener("click", ()=>saveMaster(false));
+$("#masterDefault").addEventListener("click", ()=>{ MASTER_DIRTY = false; saveMaster(true); });
+
 // Reset demo starts a fresh walkthrough but keeps every lead, message and tracking row.
 $("#resetAll").addEventListener("click", ()=>{
   S.selected = null; F = null; MV = null; TAB = "follow";

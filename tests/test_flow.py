@@ -481,3 +481,23 @@ def test_bot_tags_the_follow_up_form_like_a_telecaller(env):
     assert body["followUpStatus"] == "SPOKE_TO_CUSTOMER" and body["leadStatus"] == "INTERESTED"
     assert body["expectedBuyingSpan"] == "1M" and body["eagerness"] == "HOT"
     assert body["targetStage"] == "QUALIFICATION"
+
+
+def test_master_dealer_holds_bikewale_hours_and_is_configurable(env):
+    from datetime import datetime
+    master = env.repo.get_dealer("MASTER")
+    assert master is not None and master.dealer_name == "BikeWale (master dealer)"
+    assert sorted(master.working_hours) == ["fri", "mon", "sat", "thu", "tue", "wed"]       # Mon-Sat
+    assert master.working_hours["sat"] == [["09:30", "18:30"]]
+    # Saturday 11 AM: the team is working -> no WhatsApp
+    assert send(env, created=datetime(2026, 11, 7, 11, 0, tzinfo=IST)).reason == "working_hours"
+    # Configure the master dealer (e.g. Saturday off, new support number) through the API
+    hours = {d: [["09:30", "18:30"]] for d in ("mon", "tue", "wed", "thu", "fri")}
+    r = env.client.put("/internal/dealers/MASTER", json={
+        "dealerName": "BikeWale (master dealer)", "gupshupAppId": "", "sourceNumber": "918047104444",
+        "templateId": "tpl_nwh_timeline_v1", "workingHours": hours, "supportNumber": "918000000000"})
+    assert r.status_code == 200
+    # Same Saturday time now counts as after hours -> WhatsApp goes out, quoting the master's hours
+    r2 = send(env, lead_id="L2", mobile="919800000002", created=datetime(2026, 11, 7, 11, 0, tzinfo=IST))
+    assert r2.sent and env.gs.templates[-1].params[3] == "9:30 AM - 6:30 PM"
+    assert env.svc.support_number == "918000000000"

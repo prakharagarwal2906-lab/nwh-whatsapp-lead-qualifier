@@ -35,8 +35,9 @@ export const TABLES = {
     booking_status: "text", booking_date: "text", booking_name: "text", vehicle_year: "text", vehicle_color: "text",
   }],
   dealer_config: [["dealer_id"], {
-    dealer_id: "text", dealer_name: "text", city: "text", waba_number: "text", virtual_number: "text",
-    sales_executive: "text", sales_executive_number: "text", working_hours: "text", weekly_off: "text", template_id: "text",
+    dealer_id: "text", dealer_type: "text", dealer_name: "text", city: "text", waba_number: "text", support_number: "text",
+    virtual_number: "text", sales_executive: "text", sales_executive_number: "text", timezone: "text",
+    working_hours: "text", weekly_off: "text", template_id: "text", qualify_max_days: "integer", pre_close_buffer_min: "integer",
   }],
   // One row per outbound message. message_id is Gupshup's id from the send response.
   wa_message: [["message_id"], {

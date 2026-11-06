@@ -72,6 +72,7 @@ class DealerConfig:
     rep_name: str = "our representative"   # sales executive name (L2R visit task owner)
     rep_phone: str = ""                    # virtual number (check-in and research replies)
     sales_executive_number: str = ""       # fixed number kept against the dealer (visit booked, dealer assigned)
+    support_number: str = ""               # master dealer only: BikeWale team number shared with customers
     city: str = ""
     holdout_pct: int = 0
 

@@ -211,7 +211,7 @@ flowchart TD
   </table></div>
   <h3>Working hours and repeat enquiries</h3>
   <ul>
-    <li><b>Whose hours:</b> BikeWale's calling team qualifies before the dealer sees the lead, so <b>BikeWale's working hours</b> (Mon–Sat, 9:30 AM – 6:30 PM, configurable) decide "after hours", the hours quoted in the template and when calls are scheduled. Dealer hours are used only for showroom visit dates and slots.</li>
+    <li><b>Whose hours:</b> BikeWale's calling team qualifies before the dealer sees the lead, so <b>BikeWale's working hours</b> (Mon–Sat, 9:30 AM – 6:30 PM by default, kept in the <b>master dealer</b> row <code>dealer_config.MASTER</code> with BikeWale's WABA number, support number, template and rules, and editable there) decide "after hours", the hours quoted in the template and when calls are scheduled. Dealer hours are used only for showroom visit dates and slots.</li>
     <li><b>Same customer, lead open, same vehicle version:</b> no new inquiry.</li>
     <li><b>Same customer, lead open, different version:</b> a new inquiry is added to the lead. The WhatsApp qualifier goes out for the new vehicle only if it is after BikeWale hours and the lead is not qualified yet (<code>POST /internal/leads/inquiry-added</code>).</li>
     <li><b>Lead closed (or booked):</b> the enquiry creates a new lead.</li>

@@ -77,6 +77,7 @@ class DealerConfigIn(BaseModel):
     salesExecutiveNumber: str = ""        # fixed sales executive number for this dealer
     city: str = ""
     holdoutPct: int = 0
+    supportNumber: str = ""               # master dealer only
 
 
 def create_app(service: QualifierService | None = None, settings: Settings | None = None) -> FastAPI:
@@ -156,7 +157,7 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
             holidays=body.holidays, pre_close_buffer_min=body.preCloseBufferMin,
             qualify_max_days=body.qualifyMaxDays, rep_name=body.repName, rep_phone=body.repPhone,
             sales_executive_number=body.salesExecutiveNumber, city=body.city,
-            holdout_pct=body.holdoutPct,
+            holdout_pct=body.holdoutPct, support_number=body.supportNumber,
         ))
         return {"ok": True, "db": service.repo.backend}
 

@@ -58,6 +58,20 @@ def team_calendar(hours: dict | None = None, timezone_name: str = "Asia/Kolkata"
                                        working_hours=hours or DEFAULT_TEAM_HOURS))
 
 
+MASTER_DEALER_ID = "MASTER"
+
+
+def master_dealer(hours: dict | None = None, timezone_name: str = "Asia/Kolkata", brand: str = "BikeWale",
+                  support_number: str = "") -> DealerConfig:
+    """The master dealer row in dealer_config: BikeWale's own working hours (Mon-Sat 9:30 AM - 6:30 PM by
+    default) and settings. It decides after-hours, the hours quoted in the template and call times.
+    Configure it with PUT /internal/dealers/MASTER."""
+    return DealerConfig(dealer_id=MASTER_DEALER_ID, enabled=True, dealer_name=f"{brand} (master dealer)",
+                        gupshup_app_id="", source_number="", template_id="tpl_nwh_timeline_v1",
+                        timezone=timezone_name, working_hours=hours or DEFAULT_TEAM_HOURS,
+                        support_number=support_number)
+
+
 def template_variables(lead: Lead, cfg: DealerConfig, cal: DealerCalendar | None = None) -> list[str]:
     """Template params in order: customer name, make, model, working hours (BikeWale team)."""
     cal = cal or team_calendar()
@@ -78,8 +92,25 @@ class QualifierService:
         self.max_event_age = max_event_age_seconds
         self.window_hours = session_window_hours
         self.brand_name = brand_name
-        self.support_number = support_number
-        self.team_cal = team_calendar(team_working_hours, team_timezone, brand_name)
+        self._support_number = support_number
+        # Seed the master dealer once; after that its row in dealer_config is the source of truth.
+        if self.repo.get_dealer(MASTER_DEALER_ID) is None:
+            self.repo.upsert_dealer(master_dealer(team_working_hours, team_timezone, brand_name, support_number))
+
+    @property
+    def master(self) -> DealerConfig | None:
+        return self.repo.get_dealer(MASTER_DEALER_ID)
+
+    @property
+    def team_cal(self) -> DealerCalendar:
+        """BikeWale's working hours, read from the master dealer row on every use."""
+        m = self.master
+        return DealerCalendar(m) if m else team_calendar(name=self.brand_name)
+
+    @property
+    def support_number(self) -> str:
+        m = self.master
+        return (m.support_number if m and m.support_number else "") or self._support_number
 
     def audit(self, level: str, event: str, lead_id: str | None = None,
               message_id: int | None = None, **detail) -> None:
