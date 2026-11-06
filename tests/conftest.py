@@ -85,11 +85,9 @@ class FakeL2R:
 
 def dealer(**kw) -> DealerConfig:
     base = dict(
-        dealer_id="D1", enabled=True, dealer_name="Vishnu Motors TN", gupshup_app_id="app1",
-        source_number="919403897047", template_id="tpl-nwh-1", timezone="Asia/Kolkata",
+        dealer_id="D1", enabled=True, dealer_name="Vishnu Motors TN", timezone="Asia/Kolkata",
         working_hours={d: [["09:30", "17:30"]] for d in ["mon", "tue", "wed", "thu", "fri", "sat"]},
-        holidays=[], rep_name="Sathya", rep_phone="919403897047",
-        sales_executive_number="919840011223", city="Chennai",
+        holidays=[], rep_name="Sathya", sales_executive_number="919840011223", city="Chennai",
     )
     base.update(kw)
     return DealerConfig(**base)
@@ -143,7 +141,8 @@ def env(tmp_path):
     repo = Repo(pg or str(tmp_path / "t.db"))
     repo.upsert_dealer(dealer())
     gs, l2r = FakeGupshup(), FakeL2R()
-    svc = QualifierService(repo, gs, l2r)
+    svc = QualifierService(repo, gs, l2r, waba_number="919403897047", gupshup_app_id="app1",
+                           template_id="tpl-nwh-1", support_number="918047105555")
     settings = Settings(db_path=str(tmp_path / "t.db"), webhook_tokens=[TOKEN, "old-token"],
                         log_file=str(tmp_path / "logs" / "audit.log"))
     client = TestClient(create_app(svc, settings))

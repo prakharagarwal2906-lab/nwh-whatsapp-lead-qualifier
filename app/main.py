@@ -62,22 +62,20 @@ class InquiryAddedIn(LeadCreatedIn):
 
 
 class DealerConfigIn(BaseModel):
-    enabled: bool = True
+    whatsappEnabled: bool = True
     dealerName: str
-    gupshupAppId: str
-    sourceNumber: str          # WABA number
-    templateId: str
     timezone: str = "Asia/Kolkata"
-    workingHours: dict[str, list[list[str]]]
+    workingHours: dict[str, list[list[str]]]   # a missing day is a day off
     holidays: list[str] = []
-    preCloseBufferMin: int = 15
-    qualifyMaxDays: int = 60
     repName: str = "our representative"   # sales executive
-    repPhone: str = ""                    # virtual number
     salesExecutiveNumber: str = ""        # fixed sales executive number for this dealer
     city: str = ""
     holdoutPct: int = 0
-    supportNumber: str = ""               # master dealer only
+    # MASTER only
+    gupshupAppId: str = ""
+    wabaNumber: str = ""
+    templateId: str = ""
+    supportNumber: str = ""
 
 
 def create_app(service: QualifierService | None = None, settings: Settings | None = None) -> FastAPI:
@@ -90,6 +88,7 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
             max_event_age_seconds=settings.max_event_age_seconds,
             session_window_hours=settings.session_window_hours,
             brand_name=settings.brand_name, support_number=settings.support_number,
+            waba_number=settings.waba_number, gupshup_app_id=settings.gupshup_app_id,
             team_working_hours=settings.team_working_hours, team_timezone=settings.team_timezone,
         )
     setup_file_log(settings.log_file)
@@ -151,13 +150,11 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
     @app.put("/internal/dealers/{dealer_id}", dependencies=[Depends(internal_auth)])
     def put_dealer(dealer_id: str, body: DealerConfigIn) -> dict:
         service.repo.upsert_dealer(DealerConfig(
-            dealer_id=dealer_id, enabled=body.enabled, dealer_name=body.dealerName,
-            gupshup_app_id=body.gupshupAppId, source_number=body.sourceNumber,
-            template_id=body.templateId, timezone=body.timezone, working_hours=body.workingHours,
-            holidays=body.holidays, pre_close_buffer_min=body.preCloseBufferMin,
-            qualify_max_days=body.qualifyMaxDays, rep_name=body.repName, rep_phone=body.repPhone,
-            sales_executive_number=body.salesExecutiveNumber, city=body.city,
-            holdout_pct=body.holdoutPct, support_number=body.supportNumber,
+            dealer_id=dealer_id, enabled=body.whatsappEnabled, dealer_name=body.dealerName,
+            timezone=body.timezone, working_hours=body.workingHours, holidays=body.holidays,
+            rep_name=body.repName, sales_executive_number=body.salesExecutiveNumber, city=body.city,
+            holdout_pct=body.holdoutPct, gupshup_app_id=body.gupshupAppId, source_number=body.wabaNumber,
+            template_id=body.templateId, support_number=body.supportNumber,
         ))
         return {"ok": True, "db": service.repo.backend}
 

@@ -35,9 +35,9 @@ export const TABLES = {
     booking_status: "text", booking_date: "text", booking_name: "text", vehicle_year: "text", vehicle_color: "text",
   }],
   dealer_config: [["dealer_id"], {
-    dealer_id: "text", dealer_type: "text", dealer_name: "text", city: "text", waba_number: "text", support_number: "text",
-    virtual_number: "text", sales_executive: "text", sales_executive_number: "text", timezone: "text",
-    working_hours: "text", weekly_off: "text", template_id: "text", qualify_max_days: "integer", pre_close_buffer_min: "integer",
+    dealer_id: "text", dealer_type: "text", dealer_name: "text", city: "text", whatsapp_enabled: "boolean",
+    waba_number: "text", support_number: "text", template_id: "text",   // MASTER row only
+    sales_executive: "text", sales_executive_number: "text", timezone: "text", working_hours: "text",
   }],
   // One row per outbound message. message_id is Gupshup's id from the send response.
   wa_message: [["message_id"], {
@@ -108,6 +108,11 @@ export function getPool(url = (findDatabaseUrl() || {}).url) {
 }
 export function setPool(p) { pool = p; }
 
+// Columns removed from the model; dropped from existing tables on start.
+const RETIRED = {
+  dealer_config: ["virtual_number", "weekly_off", "qualify_max_days", "pre_close_buffer_min"],
+};
+
 let ready = null;
 async function ensureSchema(db) {
   if (!ready) {
@@ -123,6 +128,10 @@ async function ensureSchema(db) {
         // Add columns introduced after the table was first created.
         for (const [col, type] of Object.entries(cols)) {
           await db.query(`ALTER TABLE ${SCHEMA}.${name} ADD COLUMN IF NOT EXISTS ${col} ${type}`);
+        }
+        // Drop columns that are no longer kept.
+        for (const col of RETIRED[name] || []) {
+          await db.query(`ALTER TABLE ${SCHEMA}.${name} DROP COLUMN IF EXISTS ${col}`);
         }
       }
     })().catch(e => { ready = null; throw e; });

@@ -126,17 +126,17 @@ def test_more_than_two_months_gets_check_in_message(env):
     body = env.l2r.dispositions[0][1]
     assert body["targetStage"] == "FIRST_CALL" and body["followUpInDays"] == 60
     assert env.gs.texts[-1][1] == ("Thanks, Prakhar!\nWe'll check in closer to your timeline.\n"
-                                   "Need help before that? Call us anytime at 919403897047.")
+                                   "Need help before that? Call us anytime at 918047105555.")   # BikeWale support number
     assert env.gs.lists == []
 
 
-def test_still_researching_closes_lead_and_gets_help_message(env):
+def test_just_researching_closes_lead_and_gets_help_message(env):
     send(env)
     post(env, quick_reply("RESEARCH", "L1", "gs-1", text="Just Researching"))
     body = env.l2r.dispositions[0][1]
     assert body["leadStatus"] == "NOT_INTERESTED" and body["closeLead"] is True
     assert (body["reason"], body["subReason"]) == ("Not interested in buying", "Just researching")
-    assert env.gs.texts[-1][1] == "Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at 919403897047."
+    assert env.gs.texts[-1][1] == "Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at 918047105555."
 
 
 def test_date_postback_against_template_is_rejected(env):
@@ -350,7 +350,7 @@ def test_hi_from_qualified_lead_shares_dealer_and_brand_numbers(env):
     typed(env, "hii", msg_id="wamid.t3")
     assert env.repo.event_result("wamid.t3") == "reply:DEALER_INFO"
     assert env.gs.texts[-1][1] == ("Vishnu Motors TN dealership has been assigned to you. Call them at 919840011223 "
-                                   "for assistance.\nTo connect with the BikeWale team, call 918047104444.")
+                                   "for assistance.\nTo connect with the BikeWale team, call 918047105555.")
 
 
 def test_stop_opts_out(env):
@@ -494,10 +494,21 @@ def test_master_dealer_holds_bikewale_hours_and_is_configurable(env):
     # Configure the master dealer (e.g. Saturday off, new support number) through the API
     hours = {d: [["09:30", "18:30"]] for d in ("mon", "tue", "wed", "thu", "fri")}
     r = env.client.put("/internal/dealers/MASTER", json={
-        "dealerName": "BikeWale (master dealer)", "gupshupAppId": "", "sourceNumber": "918047104444",
+        "dealerName": "BikeWale (master dealer)", "gupshupAppId": "app1", "wabaNumber": "918047104444",
         "templateId": "tpl_nwh_timeline_v1", "workingHours": hours, "supportNumber": "918000000000"})
     assert r.status_code == 200
     # Same Saturday time now counts as after hours -> WhatsApp goes out, quoting the master's hours
     r2 = send(env, lead_id="L2", mobile="919800000002", created=datetime(2026, 11, 7, 11, 0, tzinfo=IST))
     assert r2.sent and env.gs.templates[-1].params[3] == "9:30 AM - 6:30 PM"
     assert env.svc.support_number == "918000000000"
+    # every message goes out from the master's WABA number and template, never a dealer's
+    assert env.gs.templates[-1].source == "918047104444" and env.gs.templates[-1].template_id == "tpl_nwh_timeline_v1"
+
+
+def test_dealer_rows_hold_only_dealer_details(env):
+    d = env.repo.get_dealer("D1")
+    assert d.enabled is True                       # WhatsApp enabled for this dealer
+    assert (d.source_number, d.template_id, d.gupshup_app_id) == ("", "", "")   # no WABA / template per dealer
+    assert not hasattr(d, "rep_phone") and not hasattr(d, "qualify_max_days") and not hasattr(d, "pre_close_buffer_min")
+    m = env.repo.get_dealer("MASTER")
+    assert m.source_number != m.support_number     # BikeWale WABA and support numbers differ

@@ -374,11 +374,14 @@ sequenceDiagram
 <section id="data">
   <h2>Data model <span class="pill eng">Engineering</span></h2>
 <pre class="code"><code>dealer_config
-  dealer_id PK, enabled, gupshup_app_id, waba_number, template_id,
-  timezone, working_hours JSONB  -- {"mon":[["09:30","17:30"]], ...}
-  holidays DATE[], pre_close_buffer_min, qualify_max_days (60),
+  dealer_id PK, dealer_type (MASTER | DEALER), dealer_name, city,
+  whatsapp_enabled,                          -- per dealer: send the WhatsApp flow or not
+  timezone, working_hours JSONB  -- {"mon":[["09:30","17:30"]], ...}; a missing day is a day off
+  holidays DATE[], holdout_pct,
   sales_executive, sales_executive_number,   -- fixed number shared in visit-booked / dealer-assigned replies
-  virtual_number, dealer_name, city, holdout_pct
+  -- MASTER row (BikeWale) only:
+  gupshup_app_id, waba_number, support_number, template_id
+-- Fixed in code, not stored: qualify within 60 days, 15-minute closing buffer.
 
 wa_message                          -- one row per outbound message
   id PK, lead_id, dealer_id, mobile,

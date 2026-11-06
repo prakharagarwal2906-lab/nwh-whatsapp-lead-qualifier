@@ -444,7 +444,7 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
         <div class="screenp">
           <div class="chathead">
             <div class="avatar" id="waAvatar">B</div>
-            <div class="who"><span id="waName">BikeWale</span><span class="verified">✓</span><small id="waSub">Business account</small></div>
+            <div class="who"><span id="waName">BikeWale</span><span class="verified">✓</span></div>
           </div>
           <div class="msgs" id="msgs"></div>
           <form class="compose" id="compose">
@@ -538,8 +538,8 @@ const VEHICLES = {
   "Maruti Suzuki": {type:"Cars", models:{"Brezza":["₹ 8.34 Lakh","1462 cc","19.8 kmpl","5 seats","48 L"]}},
 };
 const DEALERS = {
-  D101: {id:"D101", name:"Vishnu Motors TN", city:"Chennai", exec:"Sathya", team:["Sathya","Karthik","Meena"], virtual:"919403897047", execNumber:"919840011223", open:"09:30", close:"17:30", off:0, template:"tpl_nwh_timeline_v1"},
-  D102: {id:"D102", name:"Sai Auto Pune", city:"Pune", exec:"Rohan", team:["Rohan","Neha","Amit"], virtual:"919898989898", execNumber:"919822033445", open:"10:00", close:"19:00", off:2, template:"tpl_nwh_timeline_v1"},
+  D101: {id:"D101", name:"Vishnu Motors TN", city:"Chennai", exec:"Sathya", team:["Sathya","Karthik","Meena"], execNumber:"919840011223", open:"09:30", close:"17:30", off:0, whatsapp:true},
+  D102: {id:"D102", name:"Sai Auto Pune", city:"Pune", exec:"Rohan", team:["Rohan","Neha","Amit"], execNumber:"919822033445", open:"10:00", close:"19:00", off:2, whatsapp:true},
 };
 const WABA = {number:"918047104444", name:"BikeWale"};
 const TELECALLER = "Akshay";   // internal calling team member who owns the lead in L2R
@@ -563,7 +563,8 @@ const OPT_COLORS = {"15D":"#147a4a","1M":"#2f9d6a","1_2M":"#7cc49b","GT2M":"#e0a
    in the template and call times; its other settings (WABA, support number, template...) are configured here. */
 const MASTER_DEFAULT = () => ({dealer_id:"MASTER", dealer_name:"BikeWale (master dealer)", dealer_type:"MASTER", timezone:"Asia/Kolkata",
   working_hours:{mon:[["09:30","18:30"]], tue:[["09:30","18:30"]], wed:[["09:30","18:30"]], thu:[["09:30","18:30"]], fri:[["09:30","18:30"]], sat:[["09:30","18:30"]]},
-  waba_number:"918047104444", support_number:"918047104444", template_id:"tpl_nwh_timeline_v1", qualify_max_days:60, pre_close_buffer_min:15});
+  waba_number:"918047104444", support_number:"918047105555", template_id:"tpl_nwh_timeline_v1"});
+const PRE_CLOSE_BUFFER_MIN = 15;   // fixed: a lead in the last 15 minutes of the day is treated as after hours
 const fresh = () => ({schema:3, master:MASTER_DEFAULT(), leads:[], messages:{}, interactions:[], events:[], eventRows:[], audit:[],
   selected:null, lastHook:null, seq:{lead:12345, gs:40960, wamid:1, inbound:1, audit:1, call:5001, task:7001, inq:9001}, timePreset:"fri-0026"});
 let S = fresh();
@@ -600,7 +601,7 @@ function hoursShort(c){
 const hoursText = d => `${hoursShort(d)}, ${offDays(d).length ? offDays(d).slice().sort((a,b)=>(a+6)%7-(b+6)%7).map(x=>DAYS[x].slice(0,3)).join(" & ")+" closed" : "open all days"}`;
 /* BikeWale's calling team qualifies first, so its working hours decide after-hours and call times.
    Dealer hours are used only for showroom visit dates and slots. */
-const masterCal = () => ({name:"BikeWale", hours:S.master.working_hours, buffer:Number(S.master.pre_close_buffer_min ?? 15)});
+const masterCal = () => ({name:"BikeWale", hours:S.master.working_hours, buffer:PRE_CLOSE_BUFFER_MIN});
 let BW = masterCal();   // default Mon–Sat, 9:30 AM – 6:30 PM; re-read whenever the master dealer changes
 function isOpen(dealer, wall){
   const w = winOf(dealer, wall.getUTCDay()); if (!w) return false;
@@ -725,6 +726,10 @@ async function onLeadCreated(lead){
   if (!lead.consent){
     lead.botState="Skipped: no consent";
     log("warn","Eligibility","no consent → skip",undefined,lead.id); render(); return;
+  }
+  if (!dealer.whatsapp){
+    lead.botState = "WhatsApp not enabled for dealer";
+    log("warn","Eligibility",`WhatsApp not enabled for ${dealer.id} → skip`,undefined,lead.id); render(); return;
   }
   if (isOpen(BW, lead.createdAt)){
     lead.botState = "Human callback";
@@ -881,12 +886,12 @@ async function handleReply(p){
       lead.botState = "Nurture";
       botDispose(lead, option, t[1], "NOT_QUALIFIED_OPEN", null, nextCallAt(lead, option, null));
       await wait(500);
-      await sendMessage(lead, {kind:"text", step:"GT2M_ACK", text:`Thanks, ${lead.name}!\nWe'll check in closer to your timeline.\nNeed help before that? Call us anytime at ${dealer.virtual}.`, payload:{type:"text"}});
+      await sendMessage(lead, {kind:"text", step:"GT2M_ACK", text:`Thanks, ${lead.name}!\nWe'll check in closer to your timeline.\nNeed help before that? Call us anytime at ${supportNumber()}.`, payload:{type:"text"}});
     } else {
       lead.botState = "Closed · just researching";
       botDispose(lead, null, t[1], "NOT_QUALIFIED_CLOSED", "Not interested", null, {reason:"Not interested in buying", subReason:"Just researching", spanLabel:null});
       await wait(500);
-      await sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at ${dealer.virtual}.`, payload:{type:"text"}});
+      await sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at ${supportNumber()}.`, payload:{type:"text"}});
     }
   } else if (step==="CONFIRM_CHANGE"){
     // The new answer travels in the button itself (YES:<option>), like the service, so a page refresh or a
@@ -1038,7 +1043,7 @@ async function applyTimelineChange(lead, option, dealer){
     disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected", followup:"Spoke to customer", interest:"Not interested",
       reason:"Not interested in buying", subReason:"Just researching", comment:`Customer changed the answer to '${N}' on WhatsApp`, next:null});
     await wait(400);
-    return sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at ${dealer.virtual}.`, payload:{type:"text"}});
+    return sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at ${supportNumber()}.`, payload:{type:"text"}});
   }
   // Earlier More than 2 Months, or Just Researching (closed).
   const reopened = !OPEN_STATUSES.includes(lead.leadStatus);
@@ -1501,12 +1506,10 @@ function renderWa(){
   const lead=leadById(S.selected), el=$("#msgs");
   $("#waName").textContent=WABA.name; $("#waAvatar").textContent=WABA.name[0];
   if (!lead || !lead.chat.length){
-    $("#waSub").textContent = lead ? `${lead.name}'s phone` : "Business account";
     el.innerHTML = `<div class="phone-empty">${lead ? "No WhatsApp message for this lead (" + esc(lead.botState||"") + ")." : "Submit an after-hours enquiry on the customer website and the message arrives here."}</div>`;
     $("#lastHook").innerHTML = `<div class="hint">Tap an option on the phone. The metadata Gupshup sends us appears here.</div>`;
     return;
   }
-  $("#waSub").textContent = `${lead.name}'s phone · +${lead.mobile}`;
   el.innerHTML = `<div class="daychip">Today</div>` + lead.chat.map(c=>{
     if (c.dir==="out") return `<div class="bubble out">${c.quote?`<span class="quote">${esc(c.quote)}</span>`:""}${esc(c.text)}<span class="meta">${c.at} <span style="color:#53bdeb">✓✓</span></span></div>`;
     let h = `<div class="bubble in">${c.title?`<span class="ttl">${esc(c.title)}</span>`:""}${esc(c.text)}${c.footer?`<span class="foot">${esc(c.footer)}</span>`:""}<span class="meta">${c.at}</span>`;
@@ -1620,10 +1623,12 @@ function tables(){
     lead_calls: S.leads.flatMap(l=>l.calls),
     lead_tasks: S.leads.flatMap(l=>l.tasks),
     dealer_config: [
-      {dealer_id:S.master.dealer_id, dealer_type:"MASTER", dealer_name:S.master.dealer_name, city:null, waba_number:S.master.waba_number, support_number:S.master.support_number,
-        virtual_number:null, sales_executive:null, sales_executive_number:null, timezone:S.master.timezone, working_hours:JSON.stringify(S.master.working_hours),
-        weekly_off:offDays(BW).sort((a,b)=>(a+6)%7-(b+6)%7).map(x=>DAYS[x]).join(", ")||null, template_id:S.master.template_id, qualify_max_days:S.master.qualify_max_days, pre_close_buffer_min:S.master.pre_close_buffer_min},
-      ...Object.values(DEALERS).map(d=>({dealer_id:d.id, dealer_type:"DEALER", dealer_name:d.name, city:d.city, waba_number:S.master.waba_number, support_number:null, virtual_number:d.virtual, sales_executive:d.exec, sales_executive_number:d.execNumber, timezone:"Asia/Kolkata", working_hours:`${d.open}-${d.close}`, weekly_off:d.off>=0?DAYS[d.off]:null, template_id:S.master.template_id, qualify_max_days:null, pre_close_buffer_min:null}))],
+      {dealer_id:S.master.dealer_id, dealer_type:"MASTER", dealer_name:S.master.dealer_name, city:null, whatsapp_enabled:true,
+        waba_number:S.master.waba_number, support_number:S.master.support_number, template_id:S.master.template_id,
+        sales_executive:null, sales_executive_number:null, timezone:S.master.timezone, working_hours:JSON.stringify(S.master.working_hours)},
+      ...Object.values(DEALERS).map(d=>({dealer_id:d.id, dealer_type:"DEALER", dealer_name:d.name, city:d.city, whatsapp_enabled:!!d.whatsapp,
+        waba_number:null, support_number:null, template_id:null, sales_executive:d.exec, sales_executive_number:d.execNumber, timezone:"Asia/Kolkata",
+        working_hours:JSON.stringify(Object.fromEntries([1,2,3,4,5,6,0].filter(x=>winOf(d,x)).map(x=>[DKEY[x], [winOf(d,x)]])))}))],
     wa_message: Object.values(S.messages),
     wa_interaction: S.interactions,
     wa_event: S.eventRows.map(r=>({...r, payload: JSON.stringify(r.payload)})),
@@ -1676,7 +1681,7 @@ function submitEnquiry(o){
   log("info","L2R",`InquiryAdded ${inq.inq_id} on ${existing.id}: ${o.make} ${o.model}`, undefined, existing.id);
   const dealer = DEALERS[existing.dealerId];
   const notQualified = ["NEW","NOT_QUALIFIED_OPEN"].includes(existing.leadStatus);
-  const sendWa = existing.consent && notQualified && !isOpen(BW, o.createdAt);
+  const sendWa = existing.consent && notQualified && !isOpen(BW, o.createdAt) && DEALERS[existing.dealerId].whatsapp;
   return {lead:existing, note:`Added to lead ${existing.id} as a new inquiry.`, after: async ()=>{
     render();
     if (sendWa){ log("ok","Eligibility",`new inquiry after hours on unqualified ${existing.id} → send template`, undefined, existing.id); await wait(400); await sendQualifierTemplate(existing); }
@@ -1750,7 +1755,8 @@ function pushRemote(snap){
 function applyState(d){
   if (!d || d.schema!==3) return false;
   REMOTE.applying=true;
-  S=Object.assign(fresh(), d); S.master = Object.assign(MASTER_DEFAULT(), d.master||{}); BW = masterCal();
+  S=Object.assign(fresh(), d); S.master = Object.assign(MASTER_DEFAULT(), d.master||{}); delete S.master.qualify_max_days; delete S.master.pre_close_buffer_min;
+  if (S.master.support_number===S.master.waba_number) S.master.support_number = MASTER_DEFAULT().support_number; BW = masterCal();
   S.seq.call ||= 5001; S.seq.task ||= 7001; S.seq.inq ||= 9001;
   S.leads.forEach(l=>{ l.createdAt=new Date(l.createdAt); l.calls ||= []; l.tasks ||= [];
     l.inquiries ||= [{inq_id:"INQ-"+(S.seq.inq++), make:l.make, model:l.model, created_at:new Date(l.createdAt).toISOString(), source:"WEBSITE"}];

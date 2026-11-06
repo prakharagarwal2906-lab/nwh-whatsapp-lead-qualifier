@@ -57,24 +57,28 @@ class Lead:
 
 @dataclass
 class DealerConfig:
+    """One row of dealer_config.
+
+    Dealer rows carry only what differs per dealer: name, city, working hours (visit dates and
+    slots), the sales executive and their fixed number, and whether WhatsApp is enabled.
+    The MASTER row (BikeWale) also carries the WABA number, Gupshup app, template and support number.
+    """
     dealer_id: str
-    enabled: bool
+    enabled: bool                          # WhatsApp enabled for this dealer
     dealer_name: str
-    gupshup_app_id: str
-    source_number: str          # WABA number messages are sent from
-    template_id: str
-    timezone: str
-    # {"mon": [["09:30", "17:30"]], ... } ; missing day = weekly off
-    working_hours: dict[str, list[list[str]]]
+    timezone: str = "Asia/Kolkata"
+    # {"mon": [["09:30", "17:30"]], ... } ; a missing day is a day off
+    working_hours: dict[str, list[list[str]]] = field(default_factory=dict)
     holidays: list[str] = field(default_factory=list)  # ISO dates
-    pre_close_buffer_min: int = 15
-    qualify_max_days: int = 60
     rep_name: str = "our representative"   # sales executive name (L2R visit task owner)
-    rep_phone: str = ""                    # virtual number (check-in and research replies)
     sales_executive_number: str = ""       # fixed number kept against the dealer (visit booked, dealer assigned)
-    support_number: str = ""               # master dealer only: BikeWale team number shared with customers
     city: str = ""
     holdout_pct: int = 0
+    # MASTER row only
+    gupshup_app_id: str = ""
+    source_number: str = ""                # WABA number every message is sent from
+    template_id: str = ""
+    support_number: str = ""               # BikeWale team number shared with customers
 
 
 @dataclass

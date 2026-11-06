@@ -24,7 +24,7 @@ A working reference implementation in Python (FastAPI + SQLite) lives in [`app/`
 | `app/main.py` | HTTP API: Gupshup webhook, lead-created hook, dealer config, maintenance job |
 | `app/service.py` | Core flows: eligibility and template send, inbound reply/status processing, L2R sync, expiry and retries |
 | `app/working_hours.py` | Per-dealer calendar (hours, weekly offs, holidays, pre-close buffer) and callback phrase ("tomorrow", "on Monday") |
-| `app/rules.py` | Postback codes, qualification rule (≤ `qualify_max_days` → Qualified), typed-reply keyword classifier |
+| `app/rules.py` | Postback codes, qualification rule (≤ 60 days → Qualified, fixed in code), typed-reply keyword classifier |
 | `app/security.py` | Constant-time token check with rotation, IP allowlist |
 | `app/db.py` | Tables `dealer_config`, `wa_message`, `wa_event` (dedupe), `opt_out`, `audit_log` |
 | `app/clients.py` | Gupshup partner API and L2R API clients (L2R paths are assumed) |
@@ -142,7 +142,7 @@ flowchart TD
 
 **Visits:** a visit is a task against the lead, created by WhatsApp (date + time), by the telecaller ("Visit Required? Yes") or with **Schedule Visit** (date, time, comments). **View Visit** offers Edit, Cancel and Complete; All Tasks lists tasks with Complete / Edit / Delete. The visit shows at the top and on the Visits step in orange (scheduled), red (time passed, not completed) or green (completed).
 
-**Working hours: the master dealer.** `dealer_config` holds one `MASTER` row for BikeWale itself: working hours per day (default Mon–Sat, 9:30 AM – 6:30 PM), time zone, WABA number, support number, template, the qualify-within-days rule and the closing buffer. Its hours decide after-hours, the hours quoted in the template and call times; dealer rows only set visit dates and slots. The service seeds the row on first start (from `TEAM_WORKING_HOURS`) and then reads it on every use, so it is changed with `PUT /internal/dealers/MASTER`; the prototype shows it as the first row of the `dealer_config` table.
+**Working hours: the master dealer.** `dealer_config` holds one `MASTER` row for BikeWale itself: working hours per day (default Mon–Sat, 9:30 AM – 6:30 PM), time zone, Gupshup app, **WABA number** (918047104444) and a separate **support number** (918047105555, placeholder), and the template. Every message goes out from the master's WABA number and template. Its hours decide after-hours, the hours quoted in the template and call times. **Dealer rows** keep only name, city, working hours (visit dates and slots), sales executive and their fixed number, and **WhatsApp enabled** yes/no; no WABA number, virtual number, template ID or weekly off (a missing day in the working hours is the day off). The check-in and research replies quote the BikeWale support number. The 60-day qualify rule and the 15-minute closing buffer are fixed in code. The service seeds the MASTER row on first start and reads it on every use, so it is changed with `PUT /internal/dealers/MASTER`; the prototype shows it as the first row of the `dealer_config` table.
 
 **Repeat enquiries:** lead open + same version → no new inquiry; lead open + different version → new inquiry, and the WhatsApp qualifier goes out only after hours on an unqualified lead (`POST /internal/leads/inquiry-added`); lead closed or booked → new lead. Leads qualified on WhatsApp are marked `qualifiedBy: WHATSAPP` and tagged "WhatsApp Qualified".
 

@@ -42,7 +42,10 @@ class Settings:
     team_working_hours: dict = field(default_factory=lambda: json.loads(os.getenv(
         "TEAM_WORKING_HOURS", json.dumps({d: [["09:30", "18:30"]] for d in ("mon", "tue", "wed", "thu", "fri", "sat")}))))
     team_timezone: str = field(default_factory=lambda: os.getenv("TEAM_TIMEZONE", "Asia/Kolkata"))
-    support_number: str = field(default_factory=lambda: os.getenv("SUPPORT_NUMBER", "918047104444"))
+    # Seed values for the MASTER dealer row (BikeWale); after the first start the row is the source of truth.
+    support_number: str = field(default_factory=lambda: os.getenv("SUPPORT_NUMBER", "918047105555"))
+    waba_number: str = field(default_factory=lambda: os.getenv("WABA_NUMBER", "918047104444"))
+    gupshup_app_id: str = field(default_factory=lambda: os.getenv("GUPSHUP_APP_ID", ""))
     log_file: str = field(default_factory=lambda: os.getenv("LOG_FILE", "logs/qualifier.log"))
     session_window_hours: int = 24
 

@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from .models import DealerConfig
 
+PRE_CLOSE_BUFFER_MIN = 15   # a lead created in the last 15 minutes of a window will not be called today
 DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
 
@@ -35,11 +36,11 @@ class DealerCalendar:
     def is_non_working(self, when: datetime) -> bool:
         """True if a lead created at `when` will not be called before close.
 
-        The last `pre_close_buffer_min` minutes of a window also count as
+        The last PRE_CLOSE_BUFFER_MIN minutes of a window also count as
         non-working, since nobody will realistically call that lead today.
         """
         local = when.astimezone(self.tz)
-        buffer = timedelta(minutes=self.cfg.pre_close_buffer_min)
+        buffer = timedelta(minutes=PRE_CLOSE_BUFFER_MIN)
         for start, end in self.windows(local.date()):
             if start <= local < end - buffer:
                 return False

@@ -53,8 +53,7 @@ DEFAULT_TEAM_HOURS = {d: [["09:30", "18:30"]] for d in ("mon", "tue", "wed", "th
 
 def team_calendar(hours: dict | None = None, timezone_name: str = "Asia/Kolkata", name: str = "BikeWale") -> DealerCalendar:
     """Working hours of the BikeWale calling team (they qualify before the dealer sees the lead)."""
-    return DealerCalendar(DealerConfig(dealer_id="TEAM", enabled=True, dealer_name=name, gupshup_app_id="",
-                                       source_number="", template_id="", timezone=timezone_name,
+    return DealerCalendar(DealerConfig(dealer_id="TEAM", enabled=True, dealer_name=name, timezone=timezone_name,
                                        working_hours=hours or DEFAULT_TEAM_HOURS))
 
 
@@ -62,12 +61,13 @@ MASTER_DEALER_ID = "MASTER"
 
 
 def master_dealer(hours: dict | None = None, timezone_name: str = "Asia/Kolkata", brand: str = "BikeWale",
-                  support_number: str = "") -> DealerConfig:
+                  support_number: str = "", waba_number: str = "", gupshup_app_id: str = "",
+                  template_id: str = "tpl_nwh_timeline_v1") -> DealerConfig:
     """The master dealer row in dealer_config: BikeWale's own working hours (Mon-Sat 9:30 AM - 6:30 PM by
     default) and settings. It decides after-hours, the hours quoted in the template and call times.
     Configure it with PUT /internal/dealers/MASTER."""
     return DealerConfig(dealer_id=MASTER_DEALER_ID, enabled=True, dealer_name=f"{brand} (master dealer)",
-                        gupshup_app_id="", source_number="", template_id="tpl_nwh_timeline_v1",
+                        gupshup_app_id=gupshup_app_id, source_number=waba_number, template_id=template_id,
                         timezone=timezone_name, working_hours=hours or DEFAULT_TEAM_HOURS,
                         support_number=support_number)
 
@@ -84,8 +84,10 @@ def template_variables(lead: Lead, cfg: DealerConfig, cal: DealerCalendar | None
 class QualifierService:
     def __init__(self, repo: Repo, gupshup: GupshupClient, l2r: L2RClient,
                  max_event_age_seconds: int = 86400, session_window_hours: int = 24,
-                 brand_name: str = "BikeWale", support_number: str = "918047104444",
-                 team_working_hours: dict | None = None, team_timezone: str = "Asia/Kolkata"):
+                 brand_name: str = "BikeWale", support_number: str = "918047105555",
+                 team_working_hours: dict | None = None, team_timezone: str = "Asia/Kolkata",
+                 waba_number: str = "918047104444", gupshup_app_id: str = "",
+                 template_id: str = "tpl_nwh_timeline_v1"):
         self.repo = repo
         self.gupshup = gupshup
         self.l2r = l2r
@@ -95,11 +97,22 @@ class QualifierService:
         self._support_number = support_number
         # Seed the master dealer once; after that its row in dealer_config is the source of truth.
         if self.repo.get_dealer(MASTER_DEALER_ID) is None:
-            self.repo.upsert_dealer(master_dealer(team_working_hours, team_timezone, brand_name, support_number))
+            self.repo.upsert_dealer(master_dealer(team_working_hours, team_timezone, brand_name, support_number,
+                                                  waba_number, gupshup_app_id, template_id))
 
     @property
     def master(self) -> DealerConfig | None:
         return self.repo.get_dealer(MASTER_DEALER_ID)
+
+    def _sender(self) -> tuple[str, str]:
+        """Gupshup app and WABA number every message goes out from: the master dealer's, not the dealer's."""
+        m = self.master
+        return (m.gupshup_app_id, m.source_number) if m else ("", "")
+
+    @property
+    def template_id(self) -> str:
+        m = self.master
+        return (m.template_id if m else "") or "tpl_nwh_timeline_v1"
 
     @property
     def team_cal(self) -> DealerCalendar:
@@ -179,16 +192,16 @@ class QualifierService:
         return self._send_template(lead, cfg)
 
     def _send_template(self, lead: Lead, cfg: DealerConfig, inquiry_id: str = "") -> SendResult:
-        msg_id = self.repo.create_pending(lead.lead_id, lead.dealer_id, lead.mobile, cfg.template_id,
+        msg_id = self.repo.create_pending(lead.lead_id, lead.dealer_id, lead.mobile, self.template_id,
                                           inquiry_id=inquiry_id)
         if msg_id is None:
             return SendResult(False, "already_sent")
 
         req = TemplateSend(
-            app_id=cfg.gupshup_app_id,
-            source=cfg.source_number,                     # WABA number
+            app_id=self._sender()[0],
+            source=self._sender()[1],                     # BikeWale WABA number (master dealer)
             destination=lead.mobile,
-            template_id=cfg.template_id,
+            template_id=self.template_id,
             params=template_variables(lead, cfg, self.team_cal),
             postbacks=[build_postback(STEP_TIMELINE, code, lead.lead_id) for code, _, _ in TIMELINE_OPTIONS],
         )
@@ -343,7 +356,7 @@ class QualifierService:
             return self._timeline_changed(msg, cfg, option, key) if cfg else "ignored_no_dealer"
 
         if step == STEP_TIMELINE:
-            decision = decide_timeline(option, cfg.qualify_max_days if cfg else 60)
+            decision = decide_timeline(option)
             outcome = decision.outcome
         elif step == STEP_VISIT_DATE:
             outcome = Outcome.DATE_CHOSEN
@@ -360,9 +373,9 @@ class QualifierService:
         cal = DealerCalendar(cfg)
         lead_name = self._lead_name(msg.lead_id)
         send = self.gupshup
-        app, src, dst = cfg.gupshup_app_id, cfg.source_number, msg.mobile
+        app, src, dst = *self._sender(), msg.mobile
         if step == STEP_TIMELINE:
-            if option in ("15D", "1M", "1_2M") and decide_timeline(option, cfg.qualify_max_days).ask_visit:
+            if option in ("15D", "1M", "1_2M") and decide_timeline(option).ask_visit:
                 days = cal.next_open_days(datetime.now(timezone.utc))
                 rows = [ListRow(day_label(d), build_postback(STEP_VISIT_DATE, d.isoformat(), msg.lead_id)) for d in days]
                 self._send_session(msg, cfg, STEP_VISIT_DATE, "list", lambda: send.send_list(
@@ -371,10 +384,10 @@ class QualifierService:
                     "Choose date", "Choose your preferred date", rows))
             elif option == "GT2M":
                 self._send_session(msg, cfg, "GT2M_ACK", "text",
-                                   lambda: send.send_text(app, src, dst, gt2m_text(lead_name, cfg.rep_phone)))
+                                   lambda: send.send_text(app, src, dst, gt2m_text(lead_name, self.support_number)))
             elif option == "RESEARCH":
                 self._send_session(msg, cfg, "RESEARCH_ACK", "text",
-                                   lambda: send.send_text(app, src, dst, research_text(cfg.rep_phone)))
+                                   lambda: send.send_text(app, src, dst, research_text(self.support_number)))
         elif step == STEP_VISIT_DATE:
             day = date.fromisoformat(option)
             rows = [ListRow(label, build_postback(STEP_VISIT_TIME, code, msg.lead_id)) for code, label in cal.hourly_slots(day)]
@@ -426,7 +439,7 @@ class QualifierService:
         vehicle = f"{lead.make} {lead.model_name}".strip() if lead else "vehicle"
         buttons = [ListRow(label, build_postback(STEP_TIMELINE, code, tpl.lead_id)) for code, label, _ in TIMELINE_OPTIONS]
         self._send_session(tpl, cfg, STEP_TIMELINE, "buttons", lambda: self.gupshup.send_buttons(
-            cfg.gupshup_app_id, cfg.source_number, tpl.mobile, reengage_text(self.brand_name, vehicle), buttons))
+            *self._sender(), tpl.mobile, reengage_text(self.brand_name, vehicle), buttons))
         return "reply:TIMELINE_ASKED_AGAIN"
 
     # ---- changed answers --------------------------------------------------
@@ -445,7 +458,7 @@ class QualifierService:
 
     def _text(self, root: WaMessage, cfg: DealerConfig, step: str, text: str) -> None:
         self._send_session(root, cfg, step, "text",
-                           lambda: self.gupshup.send_text(cfg.gupshup_app_id, cfg.source_number, root.mobile, text))
+                           lambda: self.gupshup.send_text(*self._sender(), root.mobile, text))
 
     def _l2r(self, fn, lead_id: str, body: dict, key: str) -> None:
         try:
@@ -464,7 +477,7 @@ class QualifierService:
         buttons = [ListRow("Yes, change it", build_postback(STEP_CONFIRM, f"YES:{option}", tpl.lead_id)),
                    ListRow("No, keep earlier answer", build_postback(STEP_CONFIRM, "NO", tpl.lead_id))]
         self._send_session(tpl, cfg, STEP_CONFIRM, "buttons", lambda: self.gupshup.send_buttons(
-            cfg.gupshup_app_id, cfg.source_number, tpl.mobile, confirm_change_text(prev_label, new_label), buttons))
+            *self._sender(), tpl.mobile, confirm_change_text(prev_label, new_label), buttons))
         return "reply:CONFIRMATION_ASKED"
 
     def _apply_change(self, tpl: WaMessage, cfg: DealerConfig, option: str, key: str) -> str:
@@ -486,7 +499,7 @@ class QualifierService:
         stays_qualified = prev in QUALIFYING or (is_qualified and option not in QUALIFYING)
         if stays_qualified or (prev == "GT2M" and option == "RESEARCH"):
             if option in QUALIFYING and prev in QUALIFYING:
-                d = decide_timeline(option, cfg.qualify_max_days)
+                d = decide_timeline(option)
                 self.repo.set_answer(tpl.id, option, d.outcome)
                 self._l2r(self.l2r.dispose, tpl.lead_id, {
                     "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT", "purchaseTimeline": option,
@@ -508,21 +521,21 @@ class QualifierService:
                 self._text(tpl, cfg, "CHANGE_ACK", updated_text(new_label))
                 return "reply:NOTED_STAYS_QUALIFIED"
             # More than 2 Months -> Just Researching (confirmed): close the lead
-            d = decide_timeline(option, cfg.qualify_max_days)
+            d = decide_timeline(option)
             self.repo.set_answer(tpl.id, option, d.outcome)
             self._l2r(self.l2r.dispose, tpl.lead_id, {
                 "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT", "followUpStatus": "SPOKE_TO_CUSTOMER",
                 "leadStatus": "NOT_INTERESTED", "reason": d.reason, "subReason": d.sub_reason, "closeLead": True,
                 "comment": f"Customer confirmed changing the buying timeline to '{new_label}' on WhatsApp",
                 "actor": "system:whatsapp-bot"}, key)
-            self._text(tpl, cfg, "RESEARCH_ACK", research_text(cfg.rep_phone))
+            self._text(tpl, cfg, "RESEARCH_ACK", research_text(self.support_number))
             return "reply:CHANGED_TO_RESEARCH"
         reopen = prev == "RESEARCH"
         if option in QUALIFYING:
             # Qualify straight away instead of waiting for a call: tag the follow-up form in L2R
             # (L2R disposes the call, schedules the next one and sends the lead to the dealer panel),
             # then continue to the visit date question.
-            d = decide_timeline(option, cfg.qualify_max_days)
+            d = decide_timeline(option)
             self.repo.set_answer(tpl.id, option, d.outcome)
             self._l2r(self.l2r.dispose, tpl.lead_id, {
                 "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT",
@@ -536,7 +549,7 @@ class QualifierService:
             if not self.repo.latest_interaction(tpl.lead_id, STEP_VISIT_TIME):
                 self._next_step(tpl, cfg, STEP_TIMELINE, option)
             return "reply:QUALIFIED_ON_CHANGE"
-        self.repo.set_answer(tpl.id, option, decide_timeline(option, cfg.qualify_max_days).outcome)
+        self.repo.set_answer(tpl.id, option, decide_timeline(option).outcome)
         reason = f"Customer changed the answer from '{prev_label}' to '{new_label}' on WhatsApp"
         # Only remaining case: Just Researching (closed) -> More than 2 Months: reopen, span-based call.
         self._l2r(self.l2r.schedule_call, tpl.lead_id, {
@@ -598,7 +611,7 @@ class QualifierService:
                     # A human has already moved this lead on. Never downgrade.
                     self.l2r.add_comment(lead.lead_id, note, key)
                 elif msg.outcome == Outcome.QUALIFIED:
-                    d = decide_timeline(msg.reply_code, cfg.qualify_max_days if cfg else 60)
+                    d = decide_timeline(msg.reply_code)
                     # Same fields a telecaller fills in the follow-up form. L2R treats it like any
                     # other tag: the call is disposed, and L2R's "lead qualified" event sends the
                     # lead to the dealer panel. The bot never calls the dealer panel itself.
@@ -611,7 +624,7 @@ class QualifierService:
                         "priority": d.priority, "comment": note, "actor": "system:whatsapp-bot",
                     }, key)
                 elif msg.outcome == Outcome.NOT_INTERESTED:
-                    d = decide_timeline(msg.reply_code, cfg.qualify_max_days if cfg else 60)
+                    d = decide_timeline(msg.reply_code)
                     self.l2r.dispose(lead.lead_id, {
                         "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT",
                         "followUpStatus": "SPOKE_TO_CUSTOMER", "leadStatus": "NOT_INTERESTED",
@@ -619,7 +632,7 @@ class QualifierService:
                         "comment": note, "actor": "system:whatsapp-bot",
                     }, key)
                 elif msg.outcome == Outcome.NURTURE:
-                    d = decide_timeline(msg.reply_code, cfg.qualify_max_days if cfg else 60)
+                    d = decide_timeline(msg.reply_code)
                     self.l2r.dispose(lead.lead_id, {
                         "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT",
                         "targetStage": "FIRST_CALL", "purchaseTimeline": msg.reply_code,

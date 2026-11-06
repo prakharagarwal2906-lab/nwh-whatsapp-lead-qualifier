@@ -154,7 +154,10 @@ class Repo:
 
     def get_dealer(self, dealer_id: str) -> DealerConfig | None:
         row = self._exec("SELECT data FROM dealer_config WHERE dealer_id = ?", (dealer_id,)).fetchone()
-        return DealerConfig(**_loads(row["data"])) if row else None
+        if not row:
+            return None
+        known = DealerConfig.__dataclass_fields__
+        return DealerConfig(**{k: v for k, v in _loads(row["data"]).items() if k in known})
 
     # ---- opt-out -------------------------------------------------------
     def is_opted_out(self, mobile: str, dealer_id: str) -> bool:

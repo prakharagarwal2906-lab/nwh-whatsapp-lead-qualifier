@@ -101,7 +101,10 @@ class Decision:
     sub_reason: str | None = None
 
 
-def decide_timeline(option: str, qualify_max_days: int) -> Decision:
+QUALIFY_MAX_DAYS = 60   # 15 Days, 1 Month and 1 - 2 Months qualify
+
+
+def decide_timeline(option: str, qualify_max_days: int = QUALIFY_MAX_DAYS) -> Decision:
     if option == "STOP":
         return Decision(Outcome.OPT_OUT)
     if option == "RESEARCH":
