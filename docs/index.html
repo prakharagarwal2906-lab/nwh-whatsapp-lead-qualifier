@@ -910,9 +910,15 @@ async function handleReply(p){
       await sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at ${dealer.virtual}.`, payload:{type:"text"}});
     }
   } else if (step==="CONFIRM_CHANGE"){
-    const target = lead.pendingChange; lead.pendingChange = null;
-    if (option==="YES" && target && target!==lead.waAnswer){
+    // The new answer travels in the button itself (YES:<option>), like the service, so a page refresh or a
+    // sync from the shared database between the question and the tap cannot lose it.
+    const target = option.startsWith("YES") ? (option.split(":")[1] || lead.pendingChange) : null;
+    lead.pendingChange = null;
+    if (target && target!==lead.waAnswer){
       await applyTimelineChange(lead, target, dealer);
+    } else if (target){
+      await wait(400);
+      await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text:"Thank you for the confirmation.", payload:{type:"text"}});
     } else {
       await wait(400);
       await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text:"No problem, we've kept your earlier answer.", payload:{type:"text"}});
@@ -1020,7 +1026,7 @@ async function timelineChanged(lead, option, dealer){
   lead.pendingChange = option;
   await wait(300);
   return sendMessage(lead, {kind:"buttons", step:"CONFIRM_CHANGE", text:`You earlier told us "${P}". Do you want to change it to "${N}"?`,
-    buttons:[{code:"YES", label:"Yes, change it"}, {code:"NO", label:"No, keep earlier answer"}], payload:{type:"quick_reply", options:["Yes, change it","No, keep earlier answer"]}});
+    buttons:[{code:`YES:${option}`, label:"Yes, change it"}, {code:"NO", label:"No, keep earlier answer"}], payload:{type:"quick_reply", options:["Yes, change it","No, keep earlier answer"]}});
 }
 
 /* Applies a confirmed change, following the rules for the answer already given. */
