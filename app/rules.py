@@ -21,7 +21,9 @@ FLOW = "NWH_QUALIFIER"
 STEP_TIMELINE = "TIMELINE"
 STEP_VISIT_DATE = "VISIT_DATE"
 STEP_VISIT_TIME = "VISIT_TIME"
-STEPS = {STEP_TIMELINE, STEP_VISIT_DATE, STEP_VISIT_TIME}
+STEP_CONFIRM = "CONFIRM_CHANGE"      # "Do you want to change your answer?" Yes / No
+STEPS = {STEP_TIMELINE, STEP_VISIT_DATE, STEP_VISIT_TIME, STEP_CONFIRM}
+QUALIFYING = ("15D", "1M", "1_2M")
 
 # Template quick-reply buttons, in button order: (option code, label, timeline in days)
 TIMELINE_OPTIONS: list[tuple[str, str, int | None]] = [
@@ -61,6 +63,8 @@ def parse_postback(text: str | None) -> Postback | None:
     if step == STEP_VISIT_DATE and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", option):
         return None
     if step == STEP_VISIT_TIME and not re.fullmatch(r"\d{4}", option):
+        return None
+    if step == STEP_CONFIRM and not re.fullmatch(r"YES:(GT2M|RESEARCH)|NO", option):
         return None
     return Postback(FLOW, step, option, parts[3] if len(parts) > 3 and parts[3] else None)
 
@@ -124,3 +128,28 @@ def visit_confirm_text(dealer: str, city: str, day_label: str, slot_label: str,
     where = f"{dealer}, {city}" if city else dealer
     return (f"Your visit is booked\n\n{where}\n{day_label}\n{slot_label}\n\n"
             f"{exec_name} will call you to confirm. Need help? Call {virtual_number}.")
+
+
+# ---- changed answers (the customer taps the template again) -------------
+def same_answer_text(label: str) -> str:
+    return f"Got it, '{label}' is already noted. Thank you!"
+
+
+def updated_text(label: str) -> str:
+    return f"Thank you for confirming! We've updated your buying timeline to {label}."
+
+
+def confirm_change_text(prev_label: str, new_label: str) -> str:
+    return f'You earlier told us "{prev_label}". Do you want to change it to "{new_label}"?'
+
+
+def kept_text() -> str:
+    return "No problem, we've kept your earlier answer."
+
+
+def call_soon_text() -> str:
+    return "Thanks for confirming! Our team will call you shortly."
+
+
+def reopened_text() -> str:
+    return "Thanks for getting back to us! Our team will call you shortly."

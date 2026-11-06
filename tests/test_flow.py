@@ -178,12 +178,97 @@ def test_never_downgrades_lead_already_worked(env):
     assert "More than 2 Months" in env.l2r.comments[-1][1]
 
 
-def test_second_tap_after_sync_is_comment_only(env):
+# ---------------------------------------------------------------- changed answers
+def confirm(env, answer, lead_id="L1", msg_id="wamid.c1"):
+    """Customer taps Yes / No on the 'change your answer?' message."""
+    btn = env.gs.buttons[-1]["buttons"][0 if answer == "YES" else 1]
+    evt = quick_reply("1M", lead_id, gs_of(env, "CONFIRM_CHANGE"), msg_id=msg_id, text=btn.title)
+    evt["payload"]["payload"]["postbackText"] = btn.postback
+    return post(env, evt)
+
+
+def test_qualified_to_qualified_sends_thank_you(env):
+    send(env)
+    post(env, quick_reply("15D", "L1", "gs-1"))
+    post(env, quick_reply("1_2M", "L1", "gs-1", msg_id="wamid.in9"))
+    assert env.repo.event_result("wamid.in9") == "reply:TIMELINE_UPDATED"
+    assert env.l2r.dispositions[-1][1]["purchaseTimeline"] == "1_2M"
+    assert env.l2r.dispositions[-1][1]["priority"] == "P2"
+    assert env.gs.texts[-1][1] == "Thank you for confirming! We've updated your buying timeline to 1 - 2 Months."
+    assert env.repo.find_template("L1").reply_code == "1_2M"
+
+
+def test_qualified_to_research_asks_first_then_closes(env):
     send(env)
     post(env, quick_reply("1M", "L1", "gs-1"))
+    n = len(env.l2r.dispositions)
     post(env, quick_reply("RESEARCH", "L1", "gs-1", msg_id="wamid.in9"))
-    assert len(env.l2r.dispositions) == 1
-    assert env.repo.event_result("wamid.in9") == "comment_only"
+    assert env.repo.event_result("wamid.in9") == "reply:CONFIRMATION_ASKED"
+    assert env.gs.buttons[-1]["body"] == 'You earlier told us "1 Month". Do you want to change it to "Still Researching"?'
+    assert len(env.l2r.dispositions) == n                     # nothing changes until confirmed
+    confirm(env, "YES")
+    body = env.l2r.dispositions[-1][1]
+    assert body["closeLead"] is True and body["subReason"] == "Just researching"
+    assert "Please feel free to reach us" in env.gs.texts[-1][1]
+    assert env.repo.find_template("L1").reply_code == "RESEARCH"
+
+
+def test_qualified_to_gt2m_no_keeps_answer(env):
+    send(env)
+    post(env, quick_reply("1M", "L1", "gs-1"))
+    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.in9"))
+    n = len(env.l2r.dispositions)
+    confirm(env, "NO")
+    assert len(env.l2r.dispositions) == n
+    assert env.gs.texts[-1][1] == "No problem, we've kept your earlier answer."
+    assert env.repo.find_template("L1").reply_code == "1M"
+
+
+def test_qualified_to_gt2m_yes_moves_to_not_qualified_open(env):
+    send(env)
+    post(env, quick_reply("1M", "L1", "gs-1"))
+    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.in9"))
+    confirm(env, "YES")
+    body = env.l2r.dispositions[-1][1]
+    assert body["leadStatus"] == "NOT_QUALIFIED_OPEN" and body["followUpInDays"] == 60
+    assert env.gs.texts[-1][1].startswith("Thanks, Prakhar!")
+
+
+def test_gt2m_to_anything_schedules_immediate_call(env):
+    send(env)
+    post(env, quick_reply("GT2M", "L1", "gs-1"))
+    post(env, quick_reply("1M", "L1", "gs-1", msg_id="wamid.in9"))
+    assert env.repo.event_result("wamid.in9") == "reply:IMMEDIATE_CALL"
+    lead_id, body, _ = env.l2r.calls[-1]
+    assert lead_id == "L1" and body["reopen"] is False and body["dueAt"]
+    assert env.gs.texts[-1][1] == "Thanks for confirming! Our team will call you shortly."
+
+
+def test_research_to_anything_reopens_lead(env):
+    send(env)
+    post(env, quick_reply("RESEARCH", "L1", "gs-1"))
+    post(env, quick_reply("15D", "L1", "gs-1", msg_id="wamid.in9"))
+    assert env.repo.event_result("wamid.in9") == "reply:REOPENED"
+    assert env.l2r.calls[-1][1]["reopen"] is True
+    assert env.gs.texts[-1][1] == "Thanks for getting back to us! Our team will call you shortly."
+
+
+def test_same_answer_again_changes_nothing(env):
+    send(env)
+    post(env, quick_reply("1M", "L1", "gs-1"))
+    n = len(env.l2r.dispositions)
+    post(env, quick_reply("1M", "L1", "gs-1", msg_id="wamid.in9"))
+    assert env.repo.event_result("wamid.in9") == "reply:SAME_ANSWER"
+    assert len(env.l2r.dispositions) == n
+
+
+def test_every_tap_is_tracked_including_changes(env):
+    send(env)
+    post(env, quick_reply("1M", "L1", "gs-1"))
+    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.in9"))
+    confirm(env, "YES")
+    steps = [r["step"] for r in env.client.get("/internal/db/wa_interaction").json()["rows"]]
+    assert sorted(steps) == ["CONFIRM_CHANGE", "TIMELINE", "TIMELINE"]
 
 
 def test_typed_reply_is_classified(env):

@@ -12,8 +12,9 @@ from .clients import GupshupClient, L2RClient, ListRow, SendError, TemplateSend
 from .db import Repo
 from .models import DealerConfig, Lead, MsgStatus, Outcome, WaMessage
 from .rules import (
-    FLOW, STEP_TIMELINE, STEP_VISIT_DATE, STEP_VISIT_TIME, TIMELINE_LABEL, TIMELINE_OPTIONS,
-    build_postback, classify_text, decide_timeline, gt2m_text, parse_postback, research_text,
+    FLOW, QUALIFYING, STEP_CONFIRM, STEP_TIMELINE, STEP_VISIT_DATE, STEP_VISIT_TIME, TIMELINE_LABEL,
+    TIMELINE_OPTIONS, build_postback, call_soon_text, classify_text, confirm_change_text, decide_timeline,
+    gt2m_text, kept_text, parse_postback, reopened_text, research_text, same_answer_text, updated_text,
     visit_confirm_text,
 )
 from .working_hours import DealerCalendar, day_label
@@ -256,10 +257,15 @@ class QualifierService:
             "received_at": datetime.now(timezone.utc).isoformat(),
         })
 
-        if msg.status == MsgStatus.REPLIED and msg.l2r_sync_status == "DONE":
-            # This question was already answered and acted on; keep the later tap as a comment.
-            self._safe_comment(msg.lead_id, f"Later WhatsApp reply ({step}): {title}", f"wa-{p.get('id')}")
-            return "comment_only"
+        key = f"wa-{p.get('id')}"
+        if step == STEP_CONFIRM:
+            if msg.status == MsgStatus.REPLIED:
+                return "ignored_already_confirmed"
+            self.repo.mark_replied(msg.id, option)
+            return self._confirm_change(msg, cfg, option, key) if cfg else "ignored_no_dealer"
+        if step == STEP_TIMELINE and msg.reply_code:
+            # WhatsApp keeps buttons active: the customer changed (or repeated) the answer.
+            return self._timeline_changed(msg, cfg, option, key) if cfg else "ignored_no_dealer"
 
         if step == STEP_TIMELINE:
             decision = decide_timeline(option, cfg.qualify_max_days if cfg else 60)
@@ -307,6 +313,84 @@ class QualifierService:
             self._send_session(msg, cfg, "VISIT_CONFIRM", "text", lambda: send.send_text(
                 app, src, dst, visit_confirm_text(cfg.dealer_name, cfg.city, day_label(day) if day else "",
                                                   slot, cfg.rep_name, cfg.rep_phone)))
+
+    # ---- changed answers --------------------------------------------------
+    def _immediate(self, cfg: DealerConfig) -> datetime:
+        """Now if the dealer is open, otherwise the next opening time."""
+        cal, now = DealerCalendar(cfg), datetime.now(timezone.utc)
+        if not cal.is_non_working(now):
+            return now
+        nxt = cal.next_window_start(now)
+        return nxt[0] if nxt else now
+
+    def _text(self, root: WaMessage, cfg: DealerConfig, step: str, text: str) -> None:
+        self._send_session(root, cfg, step, "text",
+                           lambda: self.gupshup.send_text(cfg.gupshup_app_id, cfg.source_number, root.mobile, text))
+
+    def _l2r(self, fn, lead_id: str, body: dict, key: str) -> None:
+        try:
+            fn(lead_id, body, key)
+        except Exception as e:
+            self.audit("ERROR", "l2r_call_failed", lead_id, error=str(e)[:300], body=body)
+
+    def _timeline_changed(self, tpl: WaMessage, cfg: DealerConfig, option: str, key: str) -> str:
+        """Rules keyed by the answer the customer already gave:
+        earlier 15D/1M/1-2M -> another of these: thank-you confirming the update
+        earlier 15D/1M/1-2M -> GT2M / RESEARCH: ask for confirmation first
+        earlier GT2M -> any other: thanks + immediate call
+        earlier RESEARCH (lead closed) -> any other: reopen the lead, schedule a call, thanks
+        """
+        prev = tpl.reply_code
+        prev_label, new_label = TIMELINE_LABEL[prev], TIMELINE_LABEL[option]
+        if option == prev:
+            self._text(tpl, cfg, "CHANGE_ACK", same_answer_text(new_label))
+            return "reply:SAME_ANSWER"
+        if prev in QUALIFYING:
+            if option in QUALIFYING:
+                d = decide_timeline(option, cfg.qualify_max_days)
+                self.repo.set_answer(tpl.id, option, d.outcome)
+                self._l2r(self.l2r.dispose, tpl.lead_id, {
+                    "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT", "purchaseTimeline": option,
+                    "priority": d.priority, "comment": f"Customer changed the buying timeline from '{prev_label}' to '{new_label}' on WhatsApp",
+                    "actor": "system:whatsapp-bot"}, key)
+                self._text(tpl, cfg, "CHANGE_ACK", updated_text(new_label))
+                return "reply:TIMELINE_UPDATED"
+            buttons = [ListRow("Yes, change it", build_postback(STEP_CONFIRM, f"YES:{option}", tpl.lead_id)),
+                       ListRow("No, keep earlier answer", build_postback(STEP_CONFIRM, "NO", tpl.lead_id))]
+            self._send_session(tpl, cfg, STEP_CONFIRM, "buttons", lambda: self.gupshup.send_buttons(
+                cfg.gupshup_app_id, cfg.source_number, tpl.mobile, confirm_change_text(prev_label, new_label), buttons))
+            return "reply:CONFIRMATION_ASKED"
+        reopen = prev == "RESEARCH"
+        self.repo.set_answer(tpl.id, option, decide_timeline(option, cfg.qualify_max_days).outcome)
+        self._l2r(self.l2r.schedule_call, tpl.lead_id, {
+            "dueAt": self._immediate(cfg).isoformat(), "reopen": reopen, "purchaseTimeline": option,
+            "reason": f"Customer changed the answer from '{prev_label}' to '{new_label}' on WhatsApp",
+            "actor": "system:whatsapp-bot"}, key)
+        self._text(tpl, cfg, "CHANGE_ACK", reopened_text() if reopen else call_soon_text())
+        return "reply:REOPENED" if reopen else "reply:IMMEDIATE_CALL"
+
+    def _confirm_change(self, confirm: WaMessage, cfg: DealerConfig, option: str, key: str) -> str:
+        tpl = self.repo.find_template(confirm.lead_id)
+        if option == "NO" or tpl is None:
+            self._text(confirm, cfg, "CHANGE_ACK", kept_text())
+            return "reply:KEPT"
+        target = option.split(":", 1)[1]
+        d = decide_timeline(target, cfg.qualify_max_days)
+        self.repo.set_answer(tpl.id, target, d.outcome)
+        note = f"Customer confirmed changing the buying timeline to '{TIMELINE_LABEL[target]}' on WhatsApp"
+        if target == "GT2M":
+            self._l2r(self.l2r.dispose, tpl.lead_id, {
+                "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT", "leadStatus": "NOT_QUALIFIED_OPEN",
+                "targetStage": "FIRST_CALL", "purchaseTimeline": target, "followUpInDays": d.follow_up_days,
+                "comment": note, "actor": "system:whatsapp-bot"}, key)
+            self._text(tpl, cfg, "GT2M_ACK", gt2m_text(self._lead_name(tpl.lead_id), cfg.rep_phone))
+        else:
+            self._l2r(self.l2r.dispose, tpl.lead_id, {
+                "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT", "followUpStatus": "SPOKE_TO_CUSTOMER",
+                "leadStatus": "NOT_INTERESTED", "reason": d.reason, "subReason": d.sub_reason, "closeLead": True,
+                "comment": note, "actor": "system:whatsapp-bot"}, key)
+            self._text(tpl, cfg, "RESEARCH_ACK", research_text(cfg.rep_phone))
+        return f"reply:CHANGED_TO_{target}"
 
     def _lead_name(self, lead_id: str) -> str:
         try:

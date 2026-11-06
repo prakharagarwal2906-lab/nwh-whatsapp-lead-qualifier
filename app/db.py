@@ -275,6 +275,20 @@ class Repo:
             (MsgStatus.REPLIED.value, code, outcome.value, now().isoformat(), msg_id),
         )
 
+    def set_answer(self, msg_id: int, code: str, outcome: Outcome) -> None:
+        """Store the customer's latest answer on a message without re-queuing an L2R sync."""
+        self._exec("UPDATE wa_message SET reply_code = ?, outcome = ?, replied_at = ? WHERE id = ?",
+                   (code, outcome.value, now().isoformat(), msg_id))
+
+    def mark_replied(self, msg_id: int, code: str) -> None:
+        self._exec("UPDATE wa_message SET status = 'REPLIED', reply_code = ?, replied_at = ? WHERE id = ?",
+                   (code, now().isoformat(), msg_id))
+
+    def find_template(self, lead_id: str) -> WaMessage | None:
+        return self._row_to_msg(self._exec(
+            "SELECT * FROM wa_message WHERE lead_id = ? AND msg_type = 'template' ORDER BY id DESC LIMIT 1",
+            (lead_id,)).fetchone())
+
     def set_sync(self, msg_id: int, status: str, error: str | None = None) -> None:
         self._exec(
             "UPDATE wa_message SET l2r_sync_status = ?, l2r_attempts = l2r_attempts + 1, "

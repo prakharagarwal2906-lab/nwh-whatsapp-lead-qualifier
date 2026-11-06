@@ -43,6 +43,8 @@ class GupshupClient(Protocol):
     def send_text(self, app_id: str, source: str, destination: str, text: str) -> str: ...
     def send_list(self, app_id: str, source: str, destination: str, title: str, body: str,
                   button: str, section: str, rows: list[ListRow]) -> str: ...
+    def send_buttons(self, app_id: str, source: str, destination: str, body: str,
+                     buttons: list[ListRow]) -> str: ...
 
 
 class L2RClient(Protocol):
@@ -50,6 +52,7 @@ class L2RClient(Protocol):
     def dispose(self, lead_id: str, body: dict, idempotency_key: str) -> None: ...
     def add_comment(self, lead_id: str, text: str, idempotency_key: str) -> None: ...
     def schedule_visit(self, lead_id: str, body: dict, idempotency_key: str) -> None: ...
+    def schedule_call(self, lead_id: str, body: dict, idempotency_key: str) -> None: ...
 
 
 def _with_retry(fn, attempts: int = 4, base: float = 0.5):
@@ -118,6 +121,13 @@ class HttpGupshupClient:
         }
         return self._send_session(app_id, source, destination, message)
 
+    def send_buttons(self, app_id: str, source: str, destination: str, body: str,
+                     buttons: list[ListRow]) -> str:
+        """Session quick-reply message: up to 3 buttons, each with its own postbackText."""
+        message = {"type": "quick_reply", "content": {"type": "text", "text": body},
+                   "options": [{"type": "text", "title": b.title, "postbackText": b.postback} for b in buttons[:3]]}
+        return self._send_session(app_id, source, destination, message)
+
 
 class HttpL2RClient:
     def __init__(self, base_url: str, api_key: str, timeout: float = 10.0):
@@ -152,5 +162,11 @@ class HttpL2RClient:
 
     def schedule_visit(self, lead_id: str, body: dict, idempotency_key: str) -> None:
         r = self.http.post(f"/api/v1/leads/{lead_id}/visits", json=body,
+                           headers={"Idempotency-Key": idempotency_key})
+        r.raise_for_status()
+
+    def schedule_call(self, lead_id: str, body: dict, idempotency_key: str) -> None:
+        """Create or move the lead's open call (optionally reopening a closed lead)."""
+        r = self.http.post(f"/api/v1/leads/{lead_id}/calls", json=body,
                            headers={"Idempotency-Key": idempotency_key})
         r.raise_for_status()

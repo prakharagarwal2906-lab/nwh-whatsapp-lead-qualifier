@@ -24,6 +24,7 @@ class FakeGupshup:
         self.templates: list[TemplateSend] = []
         self.texts: list[tuple[str, str]] = []
         self.lists: list[dict] = []
+        self.buttons: list[dict] = []
         self.fail: SendError | None = None
         self._n = 0
 
@@ -36,6 +37,11 @@ class FakeGupshup:
 
     def send_text(self, app_id, source, destination, text):
         self.texts.append((destination, text))
+        self._n += 1
+        return f"gs-{self._n}"
+
+    def send_buttons(self, app_id, source, destination, body, buttons: list[ListRow]):
+        self.buttons.append({"to": destination, "body": body, "buttons": buttons})
         self._n += 1
         return f"gs-{self._n}"
 
@@ -52,6 +58,7 @@ class FakeL2R:
         self.dispositions: list[tuple[str, dict, str]] = []
         self.comments: list[tuple[str, str]] = []
         self.visits: list[tuple[str, dict, str]] = []
+        self.calls: list[tuple[str, dict, str]] = []
         self.down = False
 
     def get_lead(self, lead_id):
@@ -66,6 +73,9 @@ class FakeL2R:
 
     def add_comment(self, lead_id, text, idempotency_key):
         self.comments.append((lead_id, text))
+
+    def schedule_call(self, lead_id, body, idempotency_key):
+        self.calls.append((lead_id, body, idempotency_key))
 
     def schedule_visit(self, lead_id, body, idempotency_key):
         if self.down:
