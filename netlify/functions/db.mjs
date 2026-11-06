@@ -19,7 +19,7 @@ export const TABLES = {
     lead_id: "text", customer_name: "text", mobile: "text", make: "text", model: "text", city: "text",
     dealer_id: "text", source: "text", created_at_local: "text", lead_status: "text", stage: "text",
     eagerness: "text", priority: "text", purchase_timeline: "text", visit_date: "text", visit_slot: "text",
-    open_call_due: "text", bot_state: "text",
+    sent_to_dealer_at: "text", open_call_due: "text", bot_state: "text",
   }],
   // One row per call. A lead always has at most one OPEN call; disposing it schedules the next.
   lead_calls: [["call_id"], {
