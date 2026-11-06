@@ -12,7 +12,7 @@ A clickable, three-step journey hosted on Netlify:
 
 1. **Customer website** — the customer enquires about a vehicle with a dealer. A demo control sets the enquiry time so you can try after-hours and open-hours cases.
 2. **L2R + customer's WhatsApp, side by side** — tap the options on the phone as the customer and watch L2R update. L2R is built on the L2R lead page design (lead card, inquiries, stage tracker, Follow Up form, activity feed). Every lead has one open **call**; whoever tags it first, the telecaller or the WhatsApp bot, disposes it and the next call is created. The telecaller form has Follow-up status (Spoke to customer / Customer was busy), then Interested / Not interested (with reason and, for "Not interested in buying", a sub reason), expected buying span, TD required with date and time, next call date and comments; busy needs only a comment. **Next call = 7 days before the buying span ends, or 1 day after the visit/TD, whichever is earlier** (moved off the dealer's weekly off). **After qualification** the follow-up form changes: Follow-up status (Spoke to customer / Customer was busy). Busy needs only a comment and the system schedules the next call for the next working day. Spoke asks for the **booking status**: *Booked* (booking date, name, vehicle year, colour; the lead becomes Booked and the status line at the top completes), *Planning to book* (next follow-up date, time and comment) or *Not interested* (same reasons and sub reasons; the lead is closed). Lead status is one of New, Qualified, Not qualified · open, Booked, **Closed after qualification** or **Closed before qualification**, so every closure shows which side of qualification it happened on. WhatsApp shows up in the activity feed only once the customer replies ("WhatsApp has qualified the lead", "WhatsApp has created a Showroom Visit task" once both date and time are chosen). The Gupshup template call (dealer ID, lead ID, template ID, mobile, WABA number, variables) and its `messageId` are in the live log and `wa_message` table on the tracking screen.
-   On the phone: the template offers 15 Days / 1 Month / 1–2 Months / More than 2 Months / Still Researching. The first three qualify the lead and ask for a visit date (next 7 open days) and then a time slot (working hours). More than 2 Months gets a check-in message and a follow-up call; Still Researching gets a help message and the lead is closed (Not interested in buying · Just researching).
+   On the phone: the template offers 15 Days / 1 Month / 1–2 Months / More than 2 Months / Just Researching. The first three qualify the lead and ask for a visit date (next 7 open days) and then a time slot (working hours). More than 2 Months gets a check-in message and a follow-up call; Just Researching gets a help message and the lead is closed (Not interested in buying · Just researching).
 3. **Tracking & engagement** — every tap is stored in `wa_interaction` with the inbound message ID, the `messageId` it replied to, and the flow, step and option. Engagement % is shown per template ID, with a funnel from sent to visit booked.
 
 ## Code
@@ -111,7 +111,7 @@ flowchart TD
   B -- Yes --> C["Template from WABA number<br/>How soon are you planning to buy?"]
   C -- "15 Days / 1 Month / 1–2 Months" --> Q["Lead → Qualification"] --> D["Choose date<br/>(next 7 open days)"] --> T["Choose time<br/>(working-hour slots)"] --> V["Showroom Visit task in L2R"]
   C -- "More than 2 Months" --> N["Check-in message, follow-up in 60 days"]
-  C -- "Still Researching" --> R["Help message, lead closed (just researching)"]
+  C -- "Just Researching" --> R["Help message, lead closed (just researching)"]
 ```
 
 **Template send (Gupshup) carries:** (1) dealer ID, (2) lead ID, (3) template ID, (4) customer mobile, (5) WABA number, (6) variables: customer name, make, model, working hours. No dealer name, sales executive or virtual number in the template (virtual numbers rotate). One template only: `tpl_nwh_timeline_v1`.
@@ -123,7 +123,7 @@ flowchart TD
 | Timeline · 15 Days / 1 Month | Qualified · P1 | Stage → Qualification · ask visit date |
 | Timeline · 1–2 Months | Qualified · P2 | Stage → Qualification · ask visit date |
 | Timeline · More than 2 Months | Nurture | Follow-up +60 days · "Thanks! We'll check in closer to your timeline…" |
-| Timeline · Still Researching | Closed | Not interested · "Not interested in buying" · "Just researching" · "Please feel free to reach us at … for any queries…" |
+| Timeline · Just Researching | Closed | Not interested · "Not interested in buying" · "Just researching" · "Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at …" |
 | Visit date | Date chosen | Nothing in L2R yet · ask time slot |
 | Visit time | Visit booked | Showroom Visit task created against the lead · confirmation |
 
@@ -132,11 +132,11 @@ flowchart TD
 | Already selected | Then taps | What happens |
 |---|---|---|
 | 15 Days / 1 Month / 1–2 Months | another of these three | Thank-you confirming the update |
-| 15 Days / 1 Month / 1–2 Months (qualified) | More than 2 Months / Still Researching | Lead stays qualified (never disqualified); answer noted, thanks |
+| 15 Days / 1 Month / 1–2 Months (qualified) | More than 2 Months / Just Researching | Lead stays qualified (never disqualified); answer noted, thanks |
 | More than 2 Months | 15 Days / 1 Month / 1–2 Months | Qualified straight away (dealer panel via L2R), thanks, visit date |
-| More than 2 Months | Still Researching | Lead closed (Not interested in buying · Just researching), help message |
-| Still Researching (closed) | 15 Days / 1 Month / 1–2 Months | Reopened and qualified straight away, thanks, visit date |
-| Still Researching (closed) | More than 2 Months | Reopened, next call by the buying span, thanks |
+| More than 2 Months | Just Researching | Lead closed (Not interested in buying · Just researching), help message |
+| Just Researching (closed) | 15 Days / 1 Month / 1–2 Months | Reopened and qualified straight away, thanks, visit date |
+| Just Researching (closed) | More than 2 Months | Reopened, next call by the buying span, thanks |
 
 **Who works where.** L2R is the internal calling team's tool: an internal telecaller owns the lead, qualifies it and keeps making follow-up calls until the customer books (the OEM contract pays on conversion). Dealers use a separate dealer panel. There is one path to it, owned by L2R: a telecaller tags the follow-up form on a call, or the WhatsApp bot fills the same form fields through the L2R API, and when the lead becomes qualified L2R's event calls the dealer panel API. The bot never calls the dealer panel itself.
 

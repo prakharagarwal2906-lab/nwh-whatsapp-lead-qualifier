@@ -132,11 +132,11 @@ def test_more_than_two_months_gets_check_in_message(env):
 
 def test_still_researching_closes_lead_and_gets_help_message(env):
     send(env)
-    post(env, quick_reply("RESEARCH", "L1", "gs-1", text="Still Researching"))
+    post(env, quick_reply("RESEARCH", "L1", "gs-1", text="Just Researching"))
     body = env.l2r.dispositions[0][1]
     assert body["leadStatus"] == "NOT_INTERESTED" and body["closeLead"] is True
     assert (body["reason"], body["subReason"]) == ("Not interested in buying", "Just researching")
-    assert env.gs.texts[-1][1] == "Please feel free to reach us at 919403897047 for any queries you might have."
+    assert env.gs.texts[-1][1] == "Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at 919403897047."
 
 
 def test_date_postback_against_template_is_rejected(env):
@@ -279,12 +279,12 @@ def test_gt2m_to_research_confirms_then_closes(env):
     n = len(env.l2r.dispositions)
     post(env, quick_reply("RESEARCH", "L1", "gs-1", msg_id="wamid.in9"))
     assert env.repo.event_result("wamid.in9") == "reply:CONFIRMATION_ASKED"
-    assert env.gs.buttons[-1]["body"] == 'You earlier told us "More than 2 Months". Do you want to change it to "Still Researching"?'
+    assert env.gs.buttons[-1]["body"] == 'You earlier told us "More than 2 Months". Do you want to change it to "Just Researching"?'
     assert len(env.l2r.dispositions) == n
     confirm(env, "YES")
     body = env.l2r.dispositions[-1][1]
     assert body["closeLead"] is True and body["subReason"] == "Just researching"
-    assert "Please feel free to reach us" in env.gs.texts[-1][1]
+    assert "If you need any assistance in future" in env.gs.texts[-1][1]
     assert env.l2r.calls == []
 
 def test_research_to_fifteen_days_reopens_and_qualifies(env):

@@ -37,7 +37,7 @@ class Outcome(str, Enum):
     OPT_OUT = "OPT_OUT"
     DATE_CHOSEN = "DATE_CHOSEN"      # visit date picked from the list
     VISIT_BOOKED = "VISIT_BOOKED"    # visit time picked: showroom visit scheduled
-    NOT_INTERESTED = "NOT_INTERESTED"  # lead closed (e.g. still researching on WhatsApp)
+    NOT_INTERESTED = "NOT_INTERESTED"  # lead closed (e.g. just researching on WhatsApp)
 
 
 @dataclass

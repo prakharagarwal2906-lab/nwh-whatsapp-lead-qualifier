@@ -31,7 +31,7 @@ TIMELINE_OPTIONS: list[tuple[str, str, int | None]] = [
     ("1M", "1 Month", 30),
     ("1_2M", "1 - 2 Months", 60),
     ("GT2M", "More than 2 Months", 90),
-    ("RESEARCH", "Still Researching", None),
+    ("RESEARCH", "Just Researching", None),
 ]
 TIMELINE_DAYS = {c: d for c, _, d in TIMELINE_OPTIONS}
 TIMELINE_LABEL = {c: label for c, label, _ in TIMELINE_OPTIONS}
@@ -120,7 +120,7 @@ def gt2m_text(name: str, virtual_number: str) -> str:
 
 
 def research_text(virtual_number: str) -> str:
-    return f"Please feel free to reach us at {virtual_number} for any queries you might have."
+    return f"Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at {virtual_number}."
 
 
 def visit_confirm_text(dealer: str, city: str, day_label: str, slot_label: str,

@@ -507,7 +507,7 @@ class QualifierService:
                     self._safe_comment(tpl.lead_id, reason, key)
                 self._text(tpl, cfg, "CHANGE_ACK", updated_text(new_label))
                 return "reply:NOTED_STAYS_QUALIFIED"
-            # More than 2 Months -> Still Researching (confirmed): close the lead
+            # More than 2 Months -> Just Researching (confirmed): close the lead
             d = decide_timeline(option, cfg.qualify_max_days)
             self.repo.set_answer(tpl.id, option, d.outcome)
             self._l2r(self.l2r.dispose, tpl.lead_id, {
@@ -538,7 +538,7 @@ class QualifierService:
             return "reply:QUALIFIED_ON_CHANGE"
         self.repo.set_answer(tpl.id, option, decide_timeline(option, cfg.qualify_max_days).outcome)
         reason = f"Customer changed the answer from '{prev_label}' to '{new_label}' on WhatsApp"
-        # Only remaining case: Still Researching (closed) -> More than 2 Months: reopen, span-based call.
+        # Only remaining case: Just Researching (closed) -> More than 2 Months: reopen, span-based call.
         self._l2r(self.l2r.schedule_call, tpl.lead_id, {
             "dueAt": self._span_call(cfg, option, tpl.lead_id).isoformat(), "reopen": reopen,
             "purchaseTimeline": option, "reason": reason, "actor": "system:whatsapp-bot"}, key)
