@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import pg from "pg";
-import handler, { cleanDatabaseUrl, getPool, setPool } from "../functions/db.mjs";
+import handler, { cleanDatabaseUrl, dbVarNames, findDatabaseUrl, getPool, setPool } from "../functions/db.mjs";
 
 const URL_ = process.env.TEST_DATABASE_URL;
 const skip = !URL_ && "TEST_DATABASE_URL not set";
@@ -79,4 +79,11 @@ test("hosted database URL options that break node-postgres are removed", () => {
   const u = cleanDatabaseUrl("postgresql://user:pw@ep-x-pooler.neon.tech/neondb?sslmode=require&channel_binding=require");
   assert.equal(u, "postgresql://user:pw@ep-x-pooler.neon.tech/neondb");
   assert.equal(cleanDatabaseUrl("not a url"), "not a url");
+});
+
+test("finds the connection string under other names, never exposes values", () => {
+  assert.equal(findDatabaseUrl({ NETLIFY_DB_URL: "postgresql://a/b" }).name, "NETLIFY_DB_URL");
+  assert.equal(findDatabaseUrl({ SOME_NEON_CONN: "postgres://a/b" }).name, "SOME_NEON_CONN");
+  assert.equal(findDatabaseUrl({ DB_HOST: "localhost", OTHER: "postgres://x" }), null);
+  assert.deepEqual(dbVarNames({ DB_HOST: "x", PATH: "y", NETLIFY_DB_URL: "z" }), ["DB_HOST", "NETLIFY_DB_URL"]);
 });

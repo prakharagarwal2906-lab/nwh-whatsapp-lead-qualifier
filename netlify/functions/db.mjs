@@ -77,7 +77,23 @@ export function cleanDatabaseUrl(url) {
     return url;
   }
 }
-export function getPool(url = process.env.NETLIFY_DATABASE_URL || process.env.DATABASE_URL || process.env.NETLIFY_DATABASE_URL_UNPOOLED) {
+/* Find the Postgres connection string. Known names first, then any environment variable whose
+   name looks database-related and whose value is a postgres:// URL (hosting platforms name it
+   differently, e.g. NETLIFY_DATABASE_URL, NETLIFY_DB_URL, DATABASE_URL, POSTGRES_URL). */
+const KNOWN_DB_VARS = ["NETLIFY_DATABASE_URL", "DATABASE_URL", "NETLIFY_DB_URL", "NETLIFY_DATABASE_URL_UNPOOLED",
+                       "POSTGRES_URL", "POSTGRES_PRISMA_URL", "NEON_DATABASE_URL", "PG_URL"];
+const looksDb = k => /DATABASE|POSTGRES|NEON|(^|_)DB(_|$)|PG/i.test(k);
+export function findDatabaseUrl(env = process.env) {
+  for (const k of KNOWN_DB_VARS) if (env[k]) return { name: k, url: env[k] };
+  for (const [k, v] of Object.entries(env)) {
+    if (looksDb(k) && typeof v === "string" && /^postgres(ql)?:\/\//i.test(v)) return { name: k, url: v };
+  }
+  return null;
+}
+export function dbVarNames(env = process.env) {   // names only, never values
+  return Object.keys(env).filter(looksDb).sort();
+}
+export function getPool(url = (findDatabaseUrl() || {}).url) {
   if (pool) return pool;
   if (!url) return null;
   const local = /localhost|127\.0\.0\.1/.test(url);
@@ -149,7 +165,8 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
 
 export default async function handler(req) {
   const db = getPool();
-  if (!db) return json({ ok: false, error: "No database configured. Set NETLIFY_DATABASE_URL or DATABASE_URL." }, 503);
+  if (!db) return json({ ok: false, error: "No database configured. Set NETLIFY_DATABASE_URL or DATABASE_URL.",
+                         databaseLikeVariablesSeen: dbVarNames() }, 503);
   const url = new URL(req.url);
   const path = url.pathname.replace(/\/+$/, "");
   try {
