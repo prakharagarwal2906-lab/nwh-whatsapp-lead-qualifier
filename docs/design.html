@@ -170,7 +170,7 @@ flowchart TD
   V1 --> V2["List: Choose your preferred time<br/>hourly slots in working hours"]
   V2 --> V3["Visit scheduled in L2R<br/>confirmation message"]
   D -- "More than 2 Months" --> N["Stays in First Call, follow-up in 60 days<br/>'Thanks! We'll check in closer to your timeline.<br/>Need help before that? Call us anytime at …'"]
-  D -- "Still Researching" --> R["Stays in First Call, follow-up in 7 days<br/>'Please feel free to reach us at … for any queries'"]
+  D -- "Still Researching" --> R["Lead closed: Not interested in buying · Just researching<br/>'Please feel free to reach us at … for any queries'"]
   D -- "No reply in 24h" --> E["No Response<br/>normal callback"]
   </pre></div>
 </section>
@@ -185,7 +185,7 @@ flowchart TD
       <tr><td>Timeline · 1 Month</td><td><code>…|TIMELINE|1M|…</code></td><td><span class="tag q">Qualified · P1</span></td><td>Same · ask visit date</td></tr>
       <tr><td>Timeline · 1 – 2 Months</td><td><code>…|TIMELINE|1_2M|…</code></td><td><span class="tag q">Qualified · P2</span></td><td>Same · ask visit date</td></tr>
       <tr><td>Timeline · More than 2 Months</td><td><code>…|TIMELINE|GT2M|…</code></td><td><span class="tag n">Nurture</span></td><td>Follow-up task +60 days · check-in message</td></tr>
-      <tr><td>Timeline · Still Researching</td><td><code>…|TIMELINE|RESEARCH|…</code></td><td><span class="tag n">Nurture</span></td><td>Follow-up task +7 days · help message</td></tr>
+      <tr><td>Timeline · Still Researching</td><td><code>…|TIMELINE|RESEARCH|…</code></td><td><span class="tag x">Closed</span></td><td>Lead closed: Not interested · reason "Not interested in buying" · sub reason "Just researching" · help message</td></tr>
       <tr><td>Visit date · e.g. Sat, 7 Nov</td><td><code>…|VISIT_DATE|2026-11-07|…</code></td><td><span class="tag h">Date chosen</span></td><td>Comment on lead · ask time slot</td></tr>
       <tr><td>Visit time · e.g. 11:30 AM – 12:30 PM</td><td><code>…|VISIT_TIME|1130|…</code></td><td><span class="tag q">Visit booked</span></td><td>Schedule showroom visit for the sales executive · confirmation</td></tr>
       <tr><td>Typed "STOP"</td><td>none</td><td><span class="tag x">Opt-out</span></td><td>No more bot messages for that mobile and dealer</td></tr>

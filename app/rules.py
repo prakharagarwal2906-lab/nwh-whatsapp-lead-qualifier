@@ -93,13 +93,16 @@ class Decision:
     priority: str | None = None      # P1/P2 for qualified leads
     follow_up_days: int | None = None
     ask_visit: bool = False          # continue to the visit date question
+    reason: str | None = None        # L2R "Not interested" reason, when the lead is closed
+    sub_reason: str | None = None
 
 
 def decide_timeline(option: str, qualify_max_days: int) -> Decision:
     if option == "STOP":
         return Decision(Outcome.OPT_OUT)
     if option == "RESEARCH":
-        return Decision(Outcome.NURTURE, follow_up_days=7)
+        # Close the lead: Not interested -> "Not interested in buying" -> "Just researching"
+        return Decision(Outcome.NOT_INTERESTED, reason="Not interested in buying", sub_reason="Just researching")
     days = TIMELINE_DAYS[option]
     if days is not None and days <= qualify_max_days:
         return Decision(Outcome.QUALIFIED, priority="P1" if days <= 30 else "P2", ask_visit=True)

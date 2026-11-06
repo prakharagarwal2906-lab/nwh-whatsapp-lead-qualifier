@@ -9,7 +9,7 @@ from app.rules import Postback, build_postback, classify_text, decide_timeline, 
     ("1M", Outcome.QUALIFIED, "P1", True),
     ("1_2M", Outcome.QUALIFIED, "P2", True),
     ("GT2M", Outcome.NURTURE, None, False),
-    ("RESEARCH", Outcome.NURTURE, None, False),
+    ("RESEARCH", Outcome.NOT_INTERESTED, None, False),
     ("STOP", Outcome.OPT_OUT, None, False),
 ])
 def test_decide_timeline(option, outcome, priority, ask_visit):
@@ -24,7 +24,8 @@ def test_threshold_is_configurable():
 
 def test_follow_up_days():
     assert decide_timeline("GT2M", 60).follow_up_days == 60
-    assert decide_timeline("RESEARCH", 60).follow_up_days == 7
+    d = decide_timeline("RESEARCH", 60)
+    assert (d.reason, d.sub_reason, d.follow_up_days) == ("Not interested in buying", "Just researching", None)
 
 
 def test_postback_round_trip():

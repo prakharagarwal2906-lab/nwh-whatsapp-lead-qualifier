@@ -127,10 +127,12 @@ def test_more_than_two_months_gets_check_in_message(env):
     assert env.gs.lists == []
 
 
-def test_still_researching_gets_help_message(env):
+def test_still_researching_closes_lead_and_gets_help_message(env):
     send(env)
     post(env, quick_reply("RESEARCH", "L1", "gs-1", text="Still Researching"))
-    assert env.l2r.dispositions[0][1]["followUpInDays"] == 7
+    body = env.l2r.dispositions[0][1]
+    assert body["leadStatus"] == "NOT_INTERESTED" and body["closeLead"] is True
+    assert (body["reason"], body["subReason"]) == ("Not interested in buying", "Just researching")
     assert env.gs.texts[-1][1] == "Please feel free to reach us at 919403897047 for any queries you might have."
 
 

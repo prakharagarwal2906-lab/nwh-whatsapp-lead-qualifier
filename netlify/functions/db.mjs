@@ -25,7 +25,7 @@ export const TABLES = {
   lead_calls: [["call_id"], {
     call_id: "text", lead_id: "text", seq: "integer", status: "text", created_at: "text", due_at: "text",
     due_reason: "text", disposed_at: "text", disposed_by: "text", call_status: "text", followup_status: "text",
-    interest: "text", buying_span: "text", td_required: "text", td_at: "text", comment: "text", next_call_at: "text",
+    interest: "text", buying_span: "text", reason: "text", sub_reason: "text", td_required: "text", td_at: "text", comment: "text", next_call_at: "text",
   }],
   dealer_config: [["dealer_id"], {
     dealer_id: "text", dealer_name: "text", city: "text", waba_number: "text", virtual_number: "text",

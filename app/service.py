@@ -355,6 +355,14 @@ class QualifierService:
                         "targetStage": "QUALIFICATION", "purchaseTimeline": msg.reply_code,
                         "priority": d.priority, "comment": note, "actor": "system:whatsapp-bot",
                     }, key)
+                elif msg.outcome == Outcome.NOT_INTERESTED:
+                    d = decide_timeline(msg.reply_code, cfg.qualify_max_days if cfg else 60)
+                    self.l2r.dispose(lead.lead_id, {
+                        "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT",
+                        "followUpStatus": "SPOKE_TO_CUSTOMER", "leadStatus": "NOT_INTERESTED",
+                        "reason": d.reason, "subReason": d.sub_reason, "closeLead": True,
+                        "comment": note, "actor": "system:whatsapp-bot",
+                    }, key)
                 elif msg.outcome == Outcome.NURTURE:
                     d = decide_timeline(msg.reply_code, cfg.qualify_max_days if cfg else 60)
                     self.l2r.dispose(lead.lead_id, {

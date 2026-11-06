@@ -489,6 +489,10 @@ const QUALIFY = ["15D","1M","1_2M"];
 const SPAN = [["15D","15 Days",15],["1M","1 Month",30],["1_2M","1 - 2 Months",60],["GT2M","More than 2 Months",90]];
 const LEAD_STATUS = {NEW:"New", QUALIFIED:"Qualified", NOT_QUALIFIED_OPEN:"Not qualified · open", QUALIFIED_CLOSED:"Qualified · closed", BOOKED:"Booked", NOT_QUALIFIED_CLOSED:"Not qualified · closed"};
 const OPEN_STATUSES = ["NEW","QUALIFIED","NOT_QUALIFIED_OPEN"];
+const NOT_INTERESTED_REASONS = ["Bought competition brand","Bought from Multibrand dealership","Bought same vehicle from another dealer",
+  "Planning to buy competition brand","Planning to buy/bought used vehicle","Postponed/dropped purchase plan","Not interested in buying",
+  "Existing inquiry","Duplicate - Booking already tagged","No further Assistant Required"];
+const SUB_REASONS = {"Not interested in buying": ["Just researching","Other"]};
 const eagerness = code => ({"15D":"Hot","1M":"Hot","1_2M":"Warm","GT2M":"Normal"})[code] || null;
 const STATE_OF = {Chennai:"Tamil Nadu", Pune:"Maharashtra"};
 
@@ -590,7 +594,7 @@ const openCall = lead => lead.calls.find(c=>c.status==="OPEN");
 function createCall(lead, at, why){
   const c = {call_id:"CALL-"+(S.seq.call++), lead_id:lead.id, seq:lead.calls.length+1, status:"OPEN", created_at:simNow(lead).toISOString(),
     due_at:at.toISOString(), due_reason:why, disposed_at:null, disposed_by:null, call_status:null, followup_status:null, interest:null,
-    buying_span:null, td_required:null, td_at:null, comment:null, next_call_at:null};
+    buying_span:null, reason:null, sub_reason:null, td_required:null, td_at:null, comment:null, next_call_at:null};
   lead.calls.push(c);
   addFeed(lead, {icon:"call", title:`Call #${c.seq} created`, lines:[`Scheduled for ${fmtWall(at)}`, `Reason: ${why}`]});
   log("info","L2R",`call ${c.call_id} created for ${lead.id}, due ${fmtWall(at)} (${why})`, undefined, lead.id);
@@ -601,14 +605,16 @@ function disposeCall(lead, by, d){
   const span = SPAN.find(s=>s[0]===d.span);
   Object.assign(c, {status:"DISPOSED", disposed_at:simNow(lead).toISOString(), disposed_by:by, call_status:d.callStatus||"Connected",
     followup_status:d.followup||null, interest:d.interest||null, buying_span:span?span[1]:(d.spanLabel||null),
+    reason:d.reason||null, sub_reason:d.subReason||null,
     td_required:d.td==null?null:(d.td?"Yes":"No"), td_at:d.tdAt||null, comment:d.comment||null, next_call_at:d.next?d.next.at.toISOString():null});
   const lines = [d.comment&&`Comment: ${d.comment}`, `Call Status: ${c.call_status}`, c.followup_status&&`Follow-Up Status: ${c.followup_status}`,
     c.interest&&`Lead Status: ${c.interest}`, c.buying_span&&`Expected Buying Span: ${c.buying_span}`, d.eager&&`Eagerness: ${d.eager}`,
+    c.reason&&`Reason: ${c.reason}`, c.sub_reason&&`Sub Reason: ${c.sub_reason}`,
     c.td_required&&`TD Required: ${c.td_required}${c.td_at?` · ${c.td_at}`:""}`, d.extra,
     d.next ? `Next Call: ${fmtWall(d.next.at)} (${d.next.why})` : "Next Call: none, lead closed"].filter(Boolean);
   addFeed(lead, {icon:"follow", tone:"call", title:`Call #${c.seq} disposed by ${by}`, lines});
   l2r(lead, "dispose", {callId:c.call_id, disposedBy:by, callStatus:c.call_status, followUpStatus:c.followup_status, leadStatus:c.interest,
-    expectedBuyingSpan:c.buying_span, tdRequired:c.td_required, tdAt:c.td_at, nextCallAt:c.next_call_at, comment:c.comment});
+    expectedBuyingSpan:c.buying_span, reason:c.reason, subReason:c.sub_reason, tdRequired:c.td_required, tdAt:c.td_at, nextCallAt:c.next_call_at, comment:c.comment});
   if (d.next) createCall(lead, d.next.at, d.next.why);
   return c;
 }
@@ -765,8 +771,8 @@ async function handleReply(p){
       await wait(500);
       await sendMessage(lead, {kind:"text", step:"GT2M_ACK", text:`Thanks, ${lead.name}!\nWe'll check in closer to your timeline.\nNeed help before that? Call us anytime at ${dealer.virtual}.`, payload:{type:"text"}});
     } else {
-      lead.botState = "Researching";
-      botDispose(lead, null, t[1], "NOT_QUALIFIED_OPEN", "Still researching", nextCallAt(lead, null, null, 7));
+      lead.botState = "Closed · just researching";
+      botDispose(lead, null, t[1], "NOT_QUALIFIED_CLOSED", "Not interested", null, {reason:"Not interested in buying", subReason:"Just researching", spanLabel:null});
       await wait(500);
       await sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Please feel free to reach us at ${dealer.virtual} for any queries you might have.`, payload:{type:"text"}});
     }
@@ -793,14 +799,14 @@ async function handleReply(p){
   if (last && last.messageId && S.messages[last.messageId].status==="SUBMITTED") await deliver(last.messageId, true);
 }
 /* The bot disposes the open call only if no telecaller has spoken to the customer yet. */
-function botDispose(lead, spanCode, label, status, interest, next){
+function botDispose(lead, spanCode, label, status, interest, next, extra={}){
   if (lead.humanSpoke){
     addFeed(lead, {icon:"wa", tone:"waf", title:"WhatsApp reply received", lines:[`Customer chose '${label}'`, "The telecaller has already spoken to this customer, so the call was not changed."]});
     return;
   }
   setLeadStatus(lead, status, spanCode);
   disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected (WhatsApp)", followup:"Spoke to customer (WhatsApp)", interest, span:spanCode, spanLabel:spanCode?null:label,
-    eager: lead.eagerness, comment:`Customer chose '${label}' on WhatsApp`, next});
+    eager: lead.eagerness, comment:`Customer chose '${label}' on WhatsApp`, next, ...extra});
 }
 function l2r(lead, kind, body){
   const path = kind==="dispose" ? `/api/v1/leads/${lead.id}/dispositions` : kind==="visit" ? `/api/v1/leads/${lead.id}/visits` : `/api/v1/leads/${lead.id}/comments`;
@@ -891,7 +897,7 @@ const ICONS = {
   td:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M12 3v7M5 15l5-2M19 15l-5-2"/></svg>',
 };
 let F = null;   // follow-up form state (not persisted)
-function resetForm(lead){ F = {lead: lead && lead.id, followup:"SPOKE", interest:"INTERESTED", span:"", td:"", tdDate:"", tdTime:"", nextDate:"", nextTime:"", nextTouched:false, callStatus:"", comment:"", err:""}; }
+function resetForm(lead){ F = {lead: lead && lead.id, followup:"SPOKE", interest:"INTERESTED", span:"", td:"", tdDate:"", tdTime:"", nextDate:"", nextTime:"", nextTouched:false, callStatus:"", reason:"", subReason:"", comment:"", err:""}; }
 const isoOf = d => d.toISOString().slice(0,10);
 const hhmmOf = d => d.toISOString().slice(11,16);
 const at = (dateIso, time) => new Date(Date.parse(`${dateIso}T${time||"00:00"}:00Z`));
@@ -962,12 +968,19 @@ function formHtml(l, c){
   if (l.leadStatus==="QUALIFIED"){   // follow-up call on a qualified lead (second screenshot)
     return `<div class="lform">${callInfo}
       <div class="frow2"><label>Call Status<sup>*</sup></label><div class="opts2">${tog("callStatus","CONNECTED","Connected")}${tog("callStatus","NOT_CONNECTED","Not Connected")}</div></div>
+      ${F.callStatus==="CONNECTED" ? `<div class="frow2"><label>Next Call Date<sup>*</sup></label><div class="opts2"><input type="date" id="fNextDate" class="ldate" value="${F.nextDate}"><input type="time" id="fNextTime" class="ldate" value="${F.nextTime}"><span class="lhint">Set by the telecaller for now (rule to be decided with booking)</span></div></div>`
+        : F.callStatus==="NOT_CONNECTED" ? `<div class="frow2"><span></span><span class="lhint">The next call is scheduled for the next working day.</span></div>` : ""}
       ${comments}${submit}</div>`;
   }
   let h = `<div class="lform">${callInfo}
     <div class="frow2"><label>Follow-up Status<sup>*</sup></label><div class="opts2">${tog("followup","SPOKE","Spoke to Customer")}${tog("followup","BUSY","Customer was Busy")}</div></div>`;
   if (F.followup==="SPOKE"){
     h += `<div class="frow2"><label>Lead Status<sup>*</sup></label><div class="opts2">${tog("interest","INTERESTED","Interested")}${tog("interest","NOT_INTERESTED","Not Interested")}</div></div>`;
+    if (F.interest==="NOT_INTERESTED"){
+      h += `<div class="frow2"><label for="fReason">Reason<sup>*</sup></label><div class="opts2"><select id="fReason" class="lsel" style="width:260px"><option value="">Select</option>${NOT_INTERESTED_REASONS.map(r=>`<option ${F.reason===r?"selected":""}>${esc(r)}</option>`).join("")}</select></div></div>`;
+      if (SUB_REASONS[F.reason]) h += `<div class="frow2"><label for="fSubReason">Sub Reason<sup>*</sup></label><div class="opts2"><select id="fSubReason" class="lsel"><option value="">Select</option>${SUB_REASONS[F.reason].map(r=>`<option ${F.subReason===r?"selected":""}>${esc(r)}</option>`).join("")}</select></div></div>`;
+      h += `<div class="frow2"><span></span><span class="lhint">The lead is closed as Not qualified · closed. No further calls.</span></div>`;
+    }
     if (F.interest==="INTERESTED"){
       h += `<div class="frow2"><label for="fSpan">Exp. Buying Span<sup>*</sup></label><div class="opts2"><select id="fSpan" class="lsel"><option value="">Select expected span</option>${SPAN.map(s=>`<option value="${s[0]}" ${F.span===s[0]?"selected":""}>${s[1]}</option>`).join("")}</select>${F.span?`<span class="lhint">${QUALIFY.includes(F.span)?"Lead will be Qualified":"Lead stays Not qualified · open"}</span>`:""}</div></div>
         <div class="frow2"><label>TD Required?<sup>*</sup></label><div class="opts2">${tog("td","YES","Yes")}${tog("td","NO","No")}</div></div>`;
@@ -1016,16 +1029,19 @@ function submitForm(){
     if (!F.callStatus) return fail("Choose the call status.");
     if (!F.comment) return fail("Add a comment.");
     const connected = F.callStatus==="CONNECTED";
+    if (connected && (!F.nextDate || !F.nextTime)) return fail("Choose the next call date and time.");
     disposeCall(l, by, {callStatus: connected?"Connected":"Not connected", comment:F.comment,
-      next: connected ? nextCallAt(l, l.spanCode, l.visitDate) : nextCallAt(l, null, null, 1)});
+      next: connected ? {at: at(F.nextDate, F.nextTime), why:"set by telecaller"} : nextCallAt(l, null, null, 1)});
   } else if (F.followup==="BUSY"){
     if (!F.comment) return fail("Add a comment.");
     if (l.leadStatus==="NEW") setLeadStatus(l, "NOT_QUALIFIED_OPEN");
     disposeCall(l, by, {followup:"Customer was busy", comment:F.comment, next: nextCallAt(l, null, null, 1)});
   } else if (F.interest==="NOT_INTERESTED"){
+    if (!F.reason) return fail("Choose a reason.");
+    if (SUB_REASONS[F.reason] && !F.subReason) return fail("Choose a sub reason.");
     if (!F.comment) return fail("Add a comment.");
     l.humanSpoke = true; setLeadStatus(l, "NOT_QUALIFIED_CLOSED"); l.botState = "Not interested";
-    disposeCall(l, by, {followup:"Spoke to customer", interest:"Not interested", comment:F.comment, next:null});
+    disposeCall(l, by, {followup:"Spoke to customer", interest:"Not interested", reason:F.reason, subReason:SUB_REASONS[F.reason]?F.subReason:null, comment:F.comment, next:null});
   } else {
     if (!F.span) return fail("Choose the expected buying span.");
     if (!F.td) return fail("Choose whether a TD is required.");
@@ -1316,6 +1332,8 @@ $("#l2rBody").addEventListener("change", e=>{
   F.comment = ($("#fComment")||{}).value ?? F.comment;
   const id = e.target.id;
   if (id==="fSpan") F.span = e.target.value;
+  else if (id==="fReason"){ F.reason = e.target.value; F.subReason = ""; }
+  else if (id==="fSubReason") F.subReason = e.target.value;
   else if (id==="fTdDate") F.tdDate = e.target.value;
   else if (id==="fTdTime") F.tdTime = e.target.value;
   else if (id==="fNextDate"){ F.nextDate = e.target.value; F.nextTouched = true; }
