@@ -411,7 +411,17 @@ X-Webhook-Token: &lt;secret&gt;
 
 POST /api/v1/leads/{leadId}/visits         Idempotency-Key: wa-&lt;inbound id&gt;
 { "type":"SHOWROOM_VISIT", "date":"2026-11-07", "slotStart":"1130",
-  "assignee":"Sathya", "source":"WHATSAPP_BOT" }</code></pre>
+  "assignee":"Sathya", "source":"WHATSAPP_BOT" }
+
+POST /api/v1/leads/{leadId}/calls          Idempotency-Key: wa-&lt;inbound id&gt;
+{ "dueAt":"2026-11-06T09:30:00+05:30",     # now if open, else next opening
+  "reopen":true,                           # true when the lead was closed (Still Researching)
+  "purchaseTimeline":"1M", "reason":"Customer changed the answer ... on WhatsApp" }</code></pre>
+  <h3>Change confirmation (session quick-reply message)</h3>
+<pre class="code"><code>message={"type":"quick_reply",
+         "content":{"type":"text","text":"You earlier told us \"1 Month\". Do you want to change it to \"More than 2 Months\"?"},
+         "options":[{"type":"text","title":"Yes, change it","postbackText":"NWH_QUALIFIER|CONFIRM_CHANGE|YES:GT2M|L12345"},
+                    {"type":"text","title":"No, keep earlier answer","postbackText":"NWH_QUALIFIER|CONFIRM_CHANGE|NO|L12345"}]}</code></pre>
   <h3>6. Engagement</h3>
 <pre class="code"><code>GET /internal/engagement
 { "flow":"NWH_QUALIFIER", "templates":[{ "template_id":"tpl_nwh_timeline_v1",
