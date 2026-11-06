@@ -552,8 +552,8 @@ const VEHICLES = {
   "Maruti Suzuki": {type:"Cars", models:{"Brezza":["₹ 8.34 Lakh","1462 cc","19.8 kmpl","5 seats","48 L"]}},
 };
 const DEALERS = {
-  D101: {id:"D101", name:"Vishnu Motors TN", city:"Chennai", exec:"Sathya", team:["Sathya","Karthik","Meena"], virtual:"919403897047", open:"09:30", close:"17:30", off:0, template:"tpl_nwh_timeline_v1"},
-  D102: {id:"D102", name:"Sai Auto Pune", city:"Pune", exec:"Rohan", team:["Rohan","Neha","Amit"], virtual:"919898989898", open:"10:00", close:"19:00", off:2, template:"tpl_nwh_timeline_v2"},
+  D101: {id:"D101", name:"Vishnu Motors TN", city:"Chennai", exec:"Sathya", team:["Sathya","Karthik","Meena"], virtual:"919403897047", execNumber:"919840011223", open:"09:30", close:"17:30", off:0, template:"tpl_nwh_timeline_v1"},
+  D102: {id:"D102", name:"Sai Auto Pune", city:"Pune", exec:"Rohan", team:["Rohan","Neha","Amit"], virtual:"919898989898", execNumber:"919822033445", open:"10:00", close:"19:00", off:2, template:"tpl_nwh_timeline_v1"},
 };
 const WABA = {number:"918047104444", name:"BikeWale"};
 const TELECALLER = "Akshay";   // internal calling team member who owns the lead in L2R
@@ -562,17 +562,11 @@ const TEMPLATES = {
   tpl_nwh_timeline_v1: v =>
 `Hi ${v.name},
 
-Thank you for your interest in the ${v.make} ${v.model} from ${v.dealer}.
+Thank you for your interest in the ${v.make} ${v.model}.
 
-We are currently closed. Our sales executive ${v.exec} will contact you during working hours (${v.hours}) from ${v.virtual}.
+We are currently closed. Our team will contact you during working hours (${v.hours}).
 
 In the meantime, could you please tell us how soon you are planning to buy?`,
-  tpl_nwh_timeline_v2: v =>
-`Hi ${v.name} 👋 Thanks for checking out the ${v.make} ${v.model}!
-
-We're closed right now (open ${v.hours}). ${v.exec} will call you from ${v.virtual}.
-
-Quick question so we can help faster: when are you planning to buy?`,
 };
 const TIMELINE = [["15D","15 Days",15],["1M","1 Month",30],["1_2M","1 - 2 Months",60],["GT2M","More than 2 Months",90],["RESEARCH","Still Researching",null]];
 const OPT_COLORS = {"15D":"#147a4a","1M":"#2f9d6a","1_2M":"#7cc49b","GT2M":"#e0a640","RESEARCH":"#9aa4b5"};
@@ -605,7 +599,7 @@ const isOff = (c, day) => offDays(c).includes(day);
 const hoursText = d => `${hoursShort(d)}, ${offDays(d).length ? offDays(d).slice().sort((a,b)=>(a+6)%7-(b+6)%7).map(x=>DAYS[x].slice(0,3)).join(" & ")+" closed" : "open all days"}`;
 /* BikeWale's calling team qualifies first, so its working hours decide after-hours and call times.
    Dealer hours are used only for showroom visit dates and slots. */
-const BW = {name:"BikeWale", open:"10:00", close:"19:00", off:[0,6]};   // Mon–Fri, 10 AM – 7 PM
+const BW = {name:"BikeWale", open:"09:30", close:"18:30", off:[0]};   // Mon–Sat, 9:30 AM – 6:30 PM
 function isOpen(dealer, wall){
   if (isOff(dealer, wall.getUTCDay())) return false;
   const m = minsOf(wall); return m >= toMin(dealer.open) && m < toMin(dealer.close) - 15;
@@ -736,14 +730,14 @@ async function onLeadCreated(lead){
 /* The WhatsApp qualifier template for the lead's latest inquiry. */
 async function sendQualifierTemplate(lead){
   const dealer = DEALERS[lead.dealerId];
-  const vars = {name:lead.name, make:lead.make, model:lead.model, hours:hoursShort(BW), virtual:dealer.virtual, exec:dealer.exec, dealer:dealer.name};
+  const vars = {name:lead.name, make:lead.make, model:lead.model, hours:hoursShort(BW)};
   const request = {
     dealer_id: dealer.id, lead_id: lead.id, template_id: dealer.template, destination: lead.mobile, source: WABA.number,
-    variables: {customer_name:vars.name, vehicle_make:vars.make, vehicle_model:vars.model, working_hours:vars.hours, virtual_number:vars.virtual, sales_executive:vars.exec, dealer_name:vars.dealer},
+    variables: {customer_name:vars.name, vehicle_make:vars.make, vehicle_model:vars.model, working_hours:vars.hours},
   };
   const gupshupPayload = {
     source: WABA.number, destination: lead.mobile,
-    template: {id: dealer.template, params:[vars.name, vars.make, vars.model, vars.hours, vars.virtual, vars.exec, vars.dealer]},
+    template: {id: dealer.template, params:[vars.name, vars.make, vars.model, vars.hours]},
     postbackTexts: TIMELINE.map((t,i)=>({index:i, text:`${FLOW}|TIMELINE|${t[0]}|${lead.id}`})),
   };
   const messageId = await sendMessage(lead, {kind:"template", templateId:dealer.template, step:"TIMELINE",
@@ -816,7 +810,7 @@ async function handleText(p){
     await sendMessage(lead, {kind:"text", step:"ASK_HI", text:"Please type Hi to start the journey.", payload:{type:"text"}});
   } else if (["QUALIFIED","BOOKED","QUALIFIED_CLOSED"].includes(lead.leadStatus)){
     log("info","Processor",`Hi from qualified lead ${lead.id}: shared dealer and BikeWale numbers`, undefined, lead.id);
-    await sendMessage(lead, {kind:"text", step:"DEALER_INFO", text:`${dealer.name} dealership has been assigned to you. Call them at ${dealer.virtual} for assistance.\nTo connect with the ${WABA.name} team, call ${SUPPORT_NUMBER}.`, payload:{type:"text"}});
+    await sendMessage(lead, {kind:"text", step:"DEALER_INFO", text:`${dealer.name} dealership has been assigned to you. Call them at ${dealer.execNumber} for assistance.\nTo connect with the ${WABA.name} team, call ${SUPPORT_NUMBER}.`, payload:{type:"text"}});
   } else {
     log("info","Processor",`Hi from unqualified lead ${lead.id}: asked the buying timeline again`, undefined, lead.id);
     await sendMessage(lead, {kind:"buttons", step:"TIMELINE", text:`Thanks for connecting with ${WABA.name}. We can see you have shown interest in the ${lead.make} ${lead.model}. Can you tell us how soon you are planning to buy?`,
@@ -928,7 +922,7 @@ async function handleReply(p){
       time:`${option.slice(0,2)}:${option.slice(2)}`, slot:title, location:"Showroom", comments:"Booked by the customer on WhatsApp"}, "WhatsApp");
     await wait(400);
     await sendMessage(lead, {kind:"text", step:"VISIT_CONFIRM",
-      text:`✅ Your visit is booked\n\n📍 ${dealer.name}, ${dealer.city}\n📅 ${lead.visitDateLabel}\n🕒 ${title}\n\n${dealer.exec} will call you to confirm. Need help? Call ${dealer.virtual}.`, payload:{type:"text"}});
+      text:`✅ Your visit is booked\n\n📍 ${dealer.name}, ${dealer.city}\n📅 ${lead.visitDateLabel}\n🕒 ${title}\n\nTo connect with the dealership, call ${dealer.execNumber}.`, payload:{type:"text"}});
   }
   render();
   const last = lead.chat[lead.chat.length-1];
@@ -1372,7 +1366,7 @@ function feedHtml(l){
           <tr><td><span class="num1">3</span>Template ID</td><td>${esc(r.template_id)}</td></tr>
           <tr><td><span class="num1">4</span>Customer mobile</td><td>${esc(r.destination)}</td></tr>
           <tr><td><span class="num1">5</span>WABA number</td><td>${esc(r.source)} · ${esc(WABA.name)}</td></tr>
-          <tr><td><span class="num1">6</span>Variables</td><td>customer_name: ${esc(v.customer_name)}<br>vehicle_make: ${esc(v.vehicle_make)}<br>vehicle_model: ${esc(v.vehicle_model)}<br>working_hours: ${esc(v.working_hours)}<br>virtual_number: ${esc(v.virtual_number)}<br>sales_executive: ${esc(v.sales_executive)}<br>dealer_name: ${esc(v.dealer_name)}</td></tr>
+          <tr><td><span class="num1">6</span>Variables</td><td>customer_name: ${esc(v.customer_name)}<br>vehicle_make: ${esc(v.vehicle_make)}<br>vehicle_model: ${esc(v.vehicle_model)}<br>working_hours: ${esc(v.working_hours)}</td></tr>
           <tr><td>Response</td><td>messageId: <b>${esc(e.api.messageId)}</b><br>wamid: ${esc(msg.wamid||"arrives with first status callback")}<br>status: ${esc(msg.status)}</td></tr>
         </table><details><summary>Raw request body</summary><pre class="json">${esc(JSON.stringify(e.api.gupshupPayload,null,2))}</pre></details></div></details>`;
     }
@@ -1548,7 +1542,7 @@ function tables(){
     lead_inquiries: S.leads.flatMap(l=>l.inquiries.map(q=>({...q, lead_id:l.id}))),
     lead_calls: S.leads.flatMap(l=>l.calls),
     lead_tasks: S.leads.flatMap(l=>l.tasks),
-    dealer_config: Object.values(DEALERS).map(d=>({dealer_id:d.id, dealer_name:d.name, city:d.city, waba_number:WABA.number, virtual_number:d.virtual, sales_executive:d.exec, working_hours:`${d.open}-${d.close}`, weekly_off:d.off>=0?DAYS[d.off]:null, template_id:d.template})),
+    dealer_config: Object.values(DEALERS).map(d=>({dealer_id:d.id, dealer_name:d.name, city:d.city, waba_number:WABA.number, virtual_number:d.virtual, sales_executive:d.exec, sales_executive_number:d.execNumber, working_hours:`${d.open}-${d.close}`, weekly_off:d.off>=0?DAYS[d.off]:null, template_id:d.template})),
     wa_message: Object.values(S.messages),
     wa_interaction: S.interactions,
     wa_event: S.eventRows.map(r=>({...r, payload: JSON.stringify(r.payload)})),
@@ -1632,7 +1626,7 @@ async function simulate(n){
     await webhook(statusEvent(m,"read"));
     if (Math.random()<.15) await webhook({type:"message", timestamp:Date.now(), payload:{id:"wamid.IN"+(S.seq.inbound++), source:lead.mobile, type:"text",
       payload:{text: rnd(["What is the on-road price?","Is there any discount?","hi","Call me tomorrow","EMI options?"])}}});
-    const replyRate = dealer.template==="tpl_nwh_timeline_v2" ? .68 : .52; // v2 copy engages better
+    const replyRate = .55;
     if (Math.random()>replyRate) continue;
     const r=Math.random(), code=r<.18?"15D":r<.40?"1M":r<.58?"1_2M":r<.80?"GT2M":"RESEARCH";
     await tapButton(m.message_id, code, TIMELINE.find(t=>t[0]===code)[1]);

@@ -34,7 +34,7 @@ export const TABLES = {
   }],
   dealer_config: [["dealer_id"], {
     dealer_id: "text", dealer_name: "text", city: "text", waba_number: "text", virtual_number: "text",
-    sales_executive: "text", working_hours: "text", weekly_off: "text", template_id: "text",
+    sales_executive: "text", sales_executive_number: "text", working_hours: "text", weekly_off: "text", template_id: "text",
   }],
   // One row per outbound message. message_id is Gupshup's id from the send response.
   wa_message: [["message_id"], {

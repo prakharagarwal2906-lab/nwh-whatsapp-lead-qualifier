@@ -48,7 +48,7 @@ def in_holdout(lead_id: str, pct: int) -> bool:
     return bucket < pct
 
 
-DEFAULT_TEAM_HOURS = {d: [["10:00", "19:00"]] for d in ("mon", "tue", "wed", "thu", "fri")}
+DEFAULT_TEAM_HOURS = {d: [["09:30", "18:30"]] for d in ("mon", "tue", "wed", "thu", "fri", "sat")}
 
 
 def team_calendar(hours: dict | None = None, timezone_name: str = "Asia/Kolkata", name: str = "BikeWale") -> DealerCalendar:
@@ -59,14 +59,12 @@ def team_calendar(hours: dict | None = None, timezone_name: str = "Asia/Kolkata"
 
 
 def template_variables(lead: Lead, cfg: DealerConfig, cal: DealerCalendar | None = None) -> list[str]:
-    """Template params in order: customer name, make, model, working hours (BikeWale team),
-    virtual number, sales executive, dealer name."""
+    """Template params in order: customer name, make, model, working hours (BikeWale team)."""
     cal = cal or team_calendar()
     first = next((w for d in cal.next_open_days(lead.created_at, 1) for w in cal.windows(d)), None)
     fmt = lambda d: d.strftime("%I:%M %p").lstrip("0")  # noqa: E731
     hours = f"{fmt(first[0])} - {fmt(first[1])}" if first else "working hours"
-    return [lead.customer_name or "there", lead.make, lead.model_name, hours,
-            cfg.rep_phone, cfg.rep_name, cfg.dealer_name]
+    return [lead.customer_name or "there", lead.make, lead.model_name, hours]
 
 
 class QualifierService:
@@ -358,7 +356,7 @@ class QualifierService:
             slot = dict(cal.hourly_slots(day)).get(option, option) if day else option
             self._send_session(msg, cfg, "VISIT_CONFIRM", "text", lambda: send.send_text(
                 app, src, dst, visit_confirm_text(cfg.dealer_name, cfg.city, day_label(day) if day else "",
-                                                  slot, cfg.rep_name, cfg.rep_phone)))
+                                                  slot, cfg.sales_executive_number)))
 
     # ---- typed messages ---------------------------------------------------
     def _handle_text(self, p: dict) -> str:
@@ -392,7 +390,7 @@ class QualifierService:
         qualified = lead is not None and lead.stage in ("QUALIFICATION", "VISITS", "BOOKING")
         if qualified:
             self._text(tpl, cfg, "DEALER_INFO",
-                       dealer_assigned_text(cfg.dealer_name, cfg.rep_phone, self.brand_name, self.support_number))
+                       dealer_assigned_text(cfg.dealer_name, cfg.sales_executive_number, self.brand_name, self.support_number))
             return "reply:DEALER_INFO"
         vehicle = f"{lead.make} {lead.model_name}".strip() if lead else "vehicle"
         buttons = [ListRow(label, build_postback(STEP_TIMELINE, code, tpl.lead_id)) for code, label, _ in TIMELINE_OPTIONS]

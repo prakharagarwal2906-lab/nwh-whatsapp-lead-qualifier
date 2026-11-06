@@ -74,6 +74,7 @@ class DealerConfigIn(BaseModel):
     qualifyMaxDays: int = 60
     repName: str = "our representative"   # sales executive
     repPhone: str = ""                    # virtual number
+    salesExecutiveNumber: str = ""        # fixed sales executive number for this dealer
     city: str = ""
     holdoutPct: int = 0
 
@@ -153,7 +154,8 @@ def create_app(service: QualifierService | None = None, settings: Settings | Non
             gupshup_app_id=body.gupshupAppId, source_number=body.sourceNumber,
             template_id=body.templateId, timezone=body.timezone, working_hours=body.workingHours,
             holidays=body.holidays, pre_close_buffer_min=body.preCloseBufferMin,
-            qualify_max_days=body.qualifyMaxDays, rep_name=body.repName, rep_phone=body.repPhone, city=body.city,
+            qualify_max_days=body.qualifyMaxDays, rep_name=body.repName, rep_phone=body.repPhone,
+            sales_executive_number=body.salesExecutiveNumber, city=body.city,
             holdout_pct=body.holdoutPct,
         ))
         return {"ok": True, "db": service.repo.backend}

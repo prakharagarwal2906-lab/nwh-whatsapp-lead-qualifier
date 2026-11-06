@@ -160,7 +160,7 @@ footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:v
 
 <section id="journey">
   <h2>Customer journey <span class="pill pm">Product</span></h2>
-  <p class="sub">The template is sent from the BikeWale WABA number. Dealer name, make, model, working hours, virtual number and sales executive are variables, so one template serves every dealer.</p>
+  <p class="sub">The template is sent from the BikeWale WABA number. Customer name, make, model and BikeWale working hours are the only variables, so one template (<code>tpl_nwh_timeline_v1</code>) serves every dealer. No dealer name, sales executive or virtual number appears in it.</p>
   <div class="diagram"><pre class="mermaid">
 flowchart TD
   A["Customer enquires on the website<br/>lead created in L2R"] --> B{"Dealer closed?<br/>consent, valid mobile,<br/>not messaged in 24h"}
@@ -212,7 +212,7 @@ flowchart TD
   <p>More than 2 Months → Still Researching keeps the existing call and adds a note on the lead.</p>
   <h3>Working hours and repeat enquiries</h3>
   <ul>
-    <li><b>Whose hours:</b> BikeWale's calling team qualifies before the dealer sees the lead, so <b>BikeWale's working hours</b> (Mon–Fri, 10 AM – 7 PM, configurable) decide "after hours", the hours quoted in the template and when calls are scheduled. Dealer hours are used only for showroom visit dates and slots.</li>
+    <li><b>Whose hours:</b> BikeWale's calling team qualifies before the dealer sees the lead, so <b>BikeWale's working hours</b> (Mon–Sat, 9:30 AM – 6:30 PM, configurable) decide "after hours", the hours quoted in the template and when calls are scheduled. Dealer hours are used only for showroom visit dates and slots.</li>
     <li><b>Same customer, lead open, same vehicle version:</b> no new inquiry.</li>
     <li><b>Same customer, lead open, different version:</b> a new inquiry is added to the lead. The WhatsApp qualifier goes out for the new vehicle only if it is after BikeWale hours and the lead is not qualified yet (<code>POST /internal/leads/inquiry-added</code>).</li>
     <li><b>Lead closed (or booked):</b> the enquiry creates a new lead.</li>
@@ -225,7 +225,7 @@ flowchart TD
     <thead><tr><th>Customer types</th><th>Lead</th><th>Reply</th></tr></thead>
     <tbody>
       <tr><td>Anything other than "Hi"</td><td>Any</td><td>"Please type Hi to start the journey."</td></tr>
-      <tr><td>"Hi"</td><td>Qualified</td><td>"&lt;Dealer&gt; dealership has been assigned to you. Call them at &lt;dealer number&gt; for assistance. To connect with the BikeWale team, call &lt;BikeWale number&gt;."</td></tr>
+      <tr><td>"Hi"</td><td>Qualified</td><td>"&lt;Dealer&gt; dealership has been assigned to you. Call them at &lt;sales executive number&gt; for assistance. To connect with the BikeWale team, call &lt;BikeWale number&gt;."</td></tr>
       <tr><td>"Hi"</td><td>Not qualified (including closed)</td><td>"Thanks for connecting with BikeWale. We can see you have shown interest in the &lt;make model&gt;. Can you tell us how soon you are planning to buy?" with the same five buttons; the tap is handled like a template tap (including the changed-answer rules)</td></tr>
       <tr><td>"STOP"</td><td>Any</td><td>Opted out; no further bot messages</td></tr>
     </tbody>
@@ -366,7 +366,8 @@ sequenceDiagram
   dealer_id PK, enabled, gupshup_app_id, waba_number, template_id,
   timezone, working_hours JSONB  -- {"mon":[["09:30","17:30"]], ...}
   holidays DATE[], pre_close_buffer_min, qualify_max_days (60),
-  sales_executive, virtual_number, dealer_name, city, holdout_pct
+  sales_executive, sales_executive_number,   -- fixed number shared in visit-booked / dealer-assigned replies
+  virtual_number, dealer_name, city, holdout_pct
 
 wa_message                          -- one row per outbound message
   id PK, lead_id, dealer_id, mobile,
@@ -428,8 +429,7 @@ source=918047104444                  # (5) WABA number
 destination=919876543210             # (4) customer mobile
 template={"id":"tpl_nwh_timeline_v1", # (3) template id
           "params":["Prakhar","Royal Enfield","Classic 350",   # (6) variables: name, make, model,
-                    "9:30 AM - 5:30 PM","919403897047",         #     working hours, virtual number,
-                    "Sathya","Vishnu Motors TN"]}               #     sales executive, dealer name
+                    "9:30 AM - 6:30 PM"]}                        #     BikeWale working hours
 postbackTexts=[{"index":0,"text":"NWH_QUALIFIER|TIMELINE|15D|L12345"}, ...]   # (2) lead id
 # (1) dealer id stays on our side: wa_message.dealer_id, keyed by the messageId below
 

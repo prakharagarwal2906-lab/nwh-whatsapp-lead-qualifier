@@ -33,9 +33,8 @@ def test_template_has_six_inputs_and_flow_postbacks(env):
     assert req.template_id == "tpl-nwh-1"             # template id
     assert req.destination == "919876543210"          # customer mobile
     assert req.source == "919403897047"               # WABA number
-    # customer name, make, model, working hours, virtual number, sales executive, dealer name
-    assert req.params == ["Prakhar", "Royal Enfield", "Classic 350", "10:00 AM - 7:00 PM",   # BikeWale team hours
-                          "919403897047", "Sathya", "Vishnu Motors TN"]
+    # customer name, make, model, working hours (no dealer name, executive or rotating virtual number)
+    assert req.params == ["Prakhar", "Royal Enfield", "Classic 350", "9:30 AM - 6:30 PM"]   # BikeWale team hours
     assert req.postbacks[1] == "NWH_QUALIFIER|TIMELINE|1M|L1"   # lead id travels with every tap
     msg = env.repo.get_message(r.message_id)
     assert msg.gs_message_id == "gs-1" and msg.step == "TIMELINE" and msg.msg_type == "template"
@@ -110,6 +109,9 @@ def test_one_month_qualifies_then_books_a_visit(env):
     assert lead_id == "L1" and task["type"] == "SHOWROOM_VISIT" and task["createdBy"] == "WHATSAPP"
     assert task["date"] == day_iso and task["slotStart"] == "1130" and task["salesExecutive"] == "Sathya"
     assert "Your visit is booked" in env.gs.texts[-1][1] and slot.title in env.gs.texts[-1][1]
+    # no executive name, no "will call to confirm"; the fixed sales executive number kept against the dealer
+    assert env.gs.texts[-1][1].endswith("To connect with the dealership, call 919840011223.")
+    assert "Sathya" not in env.gs.texts[-1][1] and "confirm" not in env.gs.texts[-1][1]
 
     # every tap is tracked against the template that started the flow
     rows = env.client.get("/internal/db/wa_interaction").json()["rows"]
@@ -319,7 +321,7 @@ def test_hi_from_qualified_lead_shares_dealer_and_brand_numbers(env):
     post(env, quick_reply("1M", "L1", "gs-1"))
     typed(env, "hii", msg_id="wamid.t3")
     assert env.repo.event_result("wamid.t3") == "reply:DEALER_INFO"
-    assert env.gs.texts[-1][1] == ("Vishnu Motors TN dealership has been assigned to you. Call them at 919403897047 "
+    assert env.gs.texts[-1][1] == ("Vishnu Motors TN dealership has been assigned to you. Call them at 919840011223 "
                                    "for assistance.\nTo connect with the BikeWale team, call 918047104444.")
 
 
@@ -410,11 +412,11 @@ def test_qualified_lead_cannot_be_closed_after_gt2m_then_research(env):
 
 def test_after_hours_uses_bikewale_team_hours_not_dealer_hours(env):
     from datetime import datetime
-    # 6:30 PM Friday: the dealer (9:30-5:30) is closed but the BikeWale team (10-7) is working
-    r = send(env, created=datetime(2026, 11, 6, 18, 30, tzinfo=IST))
+    # 6 PM Friday: the dealer (9:30-5:30) is closed but the BikeWale team (Mon-Sat 9:30-6:30) is working
+    r = send(env, created=datetime(2026, 11, 6, 18, 0, tzinfo=IST))
     assert (r.sent, r.reason) == (False, "working_hours")
-    # Saturday 11 AM: the dealer is open but the BikeWale team is off -> WhatsApp goes out
-    r2 = send(env, lead_id="L2", mobile="919800000002", created=datetime(2026, 11, 7, 11, 0, tzinfo=IST))
+    # Sunday 11 AM: the BikeWale team is off -> WhatsApp goes out
+    r2 = send(env, lead_id="L2", mobile="919800000002", created=datetime(2026, 11, 8, 11, 0, tzinfo=IST))
     assert r2.sent
 
 

@@ -69,8 +69,9 @@ class DealerConfig:
     holidays: list[str] = field(default_factory=list)  # ISO dates
     pre_close_buffer_min: int = 15
     qualify_max_days: int = 60
-    rep_name: str = "our representative"   # sales executive name (template variable)
-    rep_phone: str = ""                    # virtual number (template variable)
+    rep_name: str = "our representative"   # sales executive name (L2R visit task owner)
+    rep_phone: str = ""                    # virtual number (check-in and research replies)
+    sales_executive_number: str = ""       # fixed number kept against the dealer (visit booked, dealer assigned)
     city: str = ""
     holdout_pct: int = 0
 

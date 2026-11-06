@@ -88,7 +88,8 @@ def dealer(**kw) -> DealerConfig:
         dealer_id="D1", enabled=True, dealer_name="Vishnu Motors TN", gupshup_app_id="app1",
         source_number="919403897047", template_id="tpl-nwh-1", timezone="Asia/Kolkata",
         working_hours={d: [["09:30", "17:30"]] for d in ["mon", "tue", "wed", "thu", "fri", "sat"]},
-        holidays=[], rep_name="Sathya", rep_phone="919403897047", city="Chennai",
+        holidays=[], rep_name="Sathya", rep_phone="919403897047",
+        sales_executive_number="919840011223", city="Chennai",
     )
     base.update(kw)
     return DealerConfig(**base)

@@ -124,10 +124,10 @@ def research_text(virtual_number: str) -> str:
 
 
 def visit_confirm_text(dealer: str, city: str, day_label: str, slot_label: str,
-                       exec_name: str, virtual_number: str) -> str:
+                       sales_executive_number: str) -> str:
     where = f"{dealer}, {city}" if city else dealer
-    return (f"Your visit is booked\n\n{where}\n{day_label}\n{slot_label}\n\n"
-            f"{exec_name} will call you to confirm. Need help? Call {virtual_number}.")
+    return (f"\u2705 Your visit is booked\n\n\U0001F4CD {where}\n\U0001F4C5 {day_label}\n\U0001F552 {slot_label}\n\n"
+            f"To connect with the dealership, call {sales_executive_number}.")
 
 
 # ---- changed answers (the customer taps the template again) -------------
@@ -160,8 +160,8 @@ def ask_hi_text() -> str:
     return "Please type Hi to start the journey."
 
 
-def dealer_assigned_text(dealer: str, dealer_number: str, brand: str, support_number: str) -> str:
-    return (f"{dealer} dealership has been assigned to you. Call them at {dealer_number} for assistance.\n"
+def dealer_assigned_text(dealer: str, sales_executive_number: str, brand: str, support_number: str) -> str:
+    return (f"{dealer} dealership has been assigned to you. Call them at {sales_executive_number} for assistance.\n"
             f"To connect with the {brand} team, call {support_number}.")
 
 

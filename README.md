@@ -114,7 +114,7 @@ flowchart TD
   C -- "Still Researching" --> R["Help message, lead closed (just researching)"]
 ```
 
-**Template send (Gupshup) carries:** (1) dealer ID, (2) lead ID, (3) template ID, (4) customer mobile, (5) WABA number, (6) variables: customer name, make, model, working hours, virtual number, sales executive, dealer name.
+**Template send (Gupshup) carries:** (1) dealer ID, (2) lead ID, (3) template ID, (4) customer mobile, (5) WABA number, (6) variables: customer name, make, model, working hours. No dealer name, sales executive or virtual number in the template (virtual numbers rotate). One template only: `tpl_nwh_timeline_v1`.
 
 **Postbacks:** every button and list row carries `NWH_QUALIFIER|STEP|OPTION|LEAD_ID`, e.g. `NWH_QUALIFIER|TIMELINE|1M|L12345`, `NWH_QUALIFIER|VISIT_DATE|2026-11-07|L12345`, `NWH_QUALIFIER|VISIT_TIME|1130|L12345`.
 
@@ -142,7 +142,7 @@ flowchart TD
 
 **Visits:** a visit is a task against the lead, created by WhatsApp (date + time), by the telecaller ("Visit Required? Yes") or with **Schedule Visit** (date, time, comments). **View Visit** offers Edit, Cancel and Complete; All Tasks lists tasks with Complete / Edit / Delete. The visit shows at the top and on the Visits step in orange (scheduled), red (time passed, not completed) or green (completed).
 
-**Working hours:** BikeWale's calling team hours (Mon–Fri, 10 AM – 7 PM; `TEAM_WORKING_HOURS`) decide after-hours, the template's hours and call times; dealer hours only set visit slots.
+**Working hours:** BikeWale's calling team hours (Mon–Sat, 9:30 AM – 6:30 PM; `TEAM_WORKING_HOURS`) decide after-hours, the template's hours and call times; dealer hours only set visit slots.
 
 **Repeat enquiries:** lead open + same version → no new inquiry; lead open + different version → new inquiry, and the WhatsApp qualifier goes out only after hours on an unqualified lead (`POST /internal/leads/inquiry-added`); lead closed or booked → new lead. Leads qualified on WhatsApp are marked `qualifiedBy: WHATSAPP` and tagged "WhatsApp Qualified".
 
