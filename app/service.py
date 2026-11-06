@@ -15,9 +15,9 @@ from .rules import (
     FLOW, QUALIFYING, STEP_CONFIRM, STEP_TIMELINE, STEP_VISIT_DATE, STEP_VISIT_TIME, TIMELINE_LABEL,
     TIMELINE_DAYS, TIMELINE_OPTIONS, build_postback, classify_text, confirm_change_text, decide_timeline,
     ask_hi_text, dealer_assigned_text, gt2m_text, is_hi, kept_text, parse_postback, reengage_text,
-    research_text, same_answer_text, updated_text, visit_confirm_text,
+    research_text, same_answer_text, updated_text, visit_confirm_text, visit_date_text, visit_time_text,
 )
-from .working_hours import DealerCalendar, day_label
+from .working_hours import DealerCalendar, day_label, hours_summary
 
 log = logging.getLogger("qualifier")
 audit_log = logging.getLogger("qualifier.audit")
@@ -75,10 +75,7 @@ def master_dealer(hours: dict | None = None, timezone_name: str = "Asia/Kolkata"
 def template_variables(lead: Lead, cfg: DealerConfig, cal: DealerCalendar | None = None) -> list[str]:
     """Template params in order: customer name, make, model, working hours (BikeWale team)."""
     cal = cal or team_calendar()
-    first = next((w for d in cal.next_open_days(lead.created_at, 1) for w in cal.windows(d)), None)
-    fmt = lambda d: d.strftime("%I:%M %p").lstrip("0")  # noqa: E731
-    hours = f"{fmt(first[0])} - {fmt(first[1])}" if first else "working hours"
-    return [lead.customer_name or "there", lead.make, lead.model_name, hours]
+    return [lead.customer_name or "there", lead.make, lead.model_name, hours_summary(cal.cfg)]
 
 
 class QualifierService:
@@ -119,6 +116,12 @@ class QualifierService:
         """BikeWale's working hours, read from the master dealer row on every use."""
         m = self.master
         return DealerCalendar(m) if m else team_calendar(name=self.brand_name)
+
+    @property
+    def team_hours(self) -> str:
+        """BikeWale's working hours as quoted to customers, e.g. "Mon–Sat, 9:30 AM – 6:30 PM"."""
+        m = self.master
+        return hours_summary(m) if m else "working hours"
 
     @property
     def support_number(self) -> str:
@@ -380,19 +383,19 @@ class QualifierService:
                 rows = [ListRow(day_label(d), build_postback(STEP_VISIT_DATE, d.isoformat(), msg.lead_id)) for d in days]
                 self._send_session(msg, cfg, STEP_VISIT_DATE, "list", lambda: send.send_list(
                     app, src, dst, "Plan your visit",
-                    f"Great! When would you like to visit {cfg.dealer_name}?",
+                    visit_date_text(cfg.dealer_name, self._lead_model(msg.lead_id)),
                     "Choose date", "Choose your preferred date", rows))
             elif option == "GT2M":
                 self._send_session(msg, cfg, "GT2M_ACK", "text",
-                                   lambda: send.send_text(app, src, dst, gt2m_text(lead_name, self.support_number)))
+                                   lambda: send.send_text(app, src, dst, gt2m_text(lead_name, self.support_number, self.team_hours)))
             elif option == "RESEARCH":
                 self._send_session(msg, cfg, "RESEARCH_ACK", "text",
-                                   lambda: send.send_text(app, src, dst, research_text(self.support_number)))
+                                   lambda: send.send_text(app, src, dst, research_text(self.support_number, self.team_hours)))
         elif step == STEP_VISIT_DATE:
             day = date.fromisoformat(option)
             rows = [ListRow(label, build_postback(STEP_VISIT_TIME, code, msg.lead_id)) for code, label in cal.hourly_slots(day)]
             self._send_session(msg, cfg, STEP_VISIT_TIME, "list", lambda: send.send_list(
-                app, src, dst, day_label(day), f"{day_label(day)} it is. What time suits you?",
+                app, src, dst, day_label(day), visit_time_text(day_label(day)),
                 "Choose time", "Choose your preferred time", rows))
         elif step == STEP_VISIT_TIME:
             chosen = self.repo.latest_interaction(msg.lead_id, STEP_VISIT_DATE)
@@ -400,7 +403,7 @@ class QualifierService:
             slot = dict(cal.hourly_slots(day)).get(option, option) if day else option
             self._send_session(msg, cfg, "VISIT_CONFIRM", "text", lambda: send.send_text(
                 app, src, dst, visit_confirm_text(cfg.dealer_name, cfg.city, day_label(day) if day else "",
-                                                  slot, cfg.sales_executive_number)))
+                                                  slot, cfg.sales_executive_number, hours_summary(cfg))))
 
     # ---- typed messages ---------------------------------------------------
     def _handle_text(self, p: dict) -> str:
@@ -434,7 +437,7 @@ class QualifierService:
         qualified = lead is not None and lead.stage in ("QUALIFICATION", "VISITS", "BOOKING")
         if qualified:
             self._text(tpl, cfg, "DEALER_INFO",
-                       dealer_assigned_text(cfg.dealer_name, cfg.sales_executive_number, self.brand_name, self.support_number))
+                       dealer_assigned_text(cfg.dealer_name, cfg.sales_executive_number))
             return "reply:DEALER_INFO"
         vehicle = f"{lead.make} {lead.model_name}".strip() if lead else "vehicle"
         buttons = [ListRow(label, build_postback(STEP_TIMELINE, code, tpl.lead_id)) for code, label, _ in TIMELINE_OPTIONS]
@@ -528,7 +531,7 @@ class QualifierService:
                 "leadStatus": "NOT_INTERESTED", "reason": d.reason, "subReason": d.sub_reason, "closeLead": True,
                 "comment": f"Customer confirmed changing the buying timeline to '{new_label}' on WhatsApp",
                 "actor": "system:whatsapp-bot"}, key)
-            self._text(tpl, cfg, "RESEARCH_ACK", research_text(self.support_number))
+            self._text(tpl, cfg, "RESEARCH_ACK", research_text(self.support_number, self.team_hours))
             return "reply:CHANGED_TO_RESEARCH"
         reopen = prev == "RESEARCH"
         if option in QUALIFYING:
@@ -568,6 +571,13 @@ class QualifierService:
             self._text(confirm, cfg, "CHANGE_ACK", kept_text())
             return "reply:KEPT"
         return self._apply_change(tpl, cfg, target, key)
+
+    def _lead_model(self, lead_id: str) -> str:
+        try:
+            lead = self.l2r.get_lead(lead_id)
+            return (lead.model_name if lead else "") or ""
+        except Exception:
+            return ""
 
     def _lead_name(self, lead_id: str) -> str:
         try:

@@ -597,6 +597,15 @@ function hoursShort(c){
   if (uniq.length<=1) return uniq[0] || "closed";
   return [1,2,3,4,5,6,0].filter(d=>winOf(c,d)).map(d=>`${DAYS[d].slice(0,3)} ${fmtWin(winOf(c,d))}`).join(", ");
 }
+/* Hours as customers read them in WhatsApp, e.g. "Mon–Sat, 9:30 AM – 6:30 PM" (same as the service). */
+function hoursSummary(c){
+  const order=[1,2,3,4,5,6,0], days=order.filter(d=>winOf(c,d));
+  if (!days.length) return "working hours";
+  const w = d => fmtWin(winOf(c,d)), ab = d => DAYS[d].slice(0,3);
+  if (new Set(days.map(w)).size>1) return days.map(d=>`${ab(d)} ${w(d)}`).join(", ");
+  const idx=days.map(d=>order.indexOf(d)), contig=idx.every((v,i)=>v===idx[0]+i);
+  return `${contig&&days.length>2 ? `${ab(days[0])}–${ab(days[days.length-1])}` : days.map(ab).join(", ")}, ${w(days[0])}`;
+}
 const hoursText = d => `${hoursShort(d)}, ${offDays(d).length ? offDays(d).slice().sort((a,b)=>(a+6)%7-(b+6)%7).map(x=>DAYS[x].slice(0,3)).join(" & ")+" closed" : "open all days"}`;
 /* BikeWale's calling team qualifies first, so its working hours decide after-hours and call times.
    Dealer hours are used only for showroom visit dates and slots. */
@@ -741,7 +750,7 @@ async function onLeadCreated(lead){
 /* The WhatsApp qualifier template for the lead's latest inquiry. */
 async function sendQualifierTemplate(lead){
   const dealer = DEALERS[lead.dealerId];
-  const vars = {name:lead.name, make:lead.make, model:lead.model, hours:hoursShort(BW)};
+  const vars = {name:lead.name, make:lead.make, model:lead.model, hours:hoursSummary(BW)};
   const request = {
     dealer_id: dealer.id, lead_id: lead.id, template_id: TPL(), destination: lead.mobile, source: S.master.waba_number,
     variables: {customer_name:vars.name, vehicle_make:vars.make, vehicle_model:vars.model, working_hours:vars.hours},
@@ -821,7 +830,7 @@ async function handleText(p){
     await sendMessage(lead, {kind:"text", step:"ASK_HI", text:"Please type Hi to start the journey.", payload:{type:"text"}});
   } else if (["QUALIFIED","BOOKED","QUALIFIED_CLOSED"].includes(lead.leadStatus)){
     log("info","Processor",`Hi from qualified lead ${lead.id}: shared dealer and BikeWale numbers`, undefined, lead.id);
-    await sendMessage(lead, {kind:"text", step:"DEALER_INFO", text:`${dealer.name} dealership has been assigned to you. Call them at ${dealer.execNumber} for assistance.\nTo connect with the ${WABA.name} team, call ${supportNumber()}.`, payload:{type:"text"}});
+    await sendMessage(lead, {kind:"text", step:"DEALER_INFO", text:`${dealer.name} dealership has been assigned to you. For any assistance, you can reach them at ${dealer.execNumber}.`, payload:{type:"text"}});
   } else {
     log("info","Processor",`Hi from unqualified lead ${lead.id}: asked the buying timeline again`, undefined, lead.id);
     await sendMessage(lead, {kind:"buttons", step:"TIMELINE", text:`Thanks for connecting with ${WABA.name}. We can see you have shown interest in the ${lead.make} ${lead.model}. Can you tell us how soon you are planning to buy?`,
@@ -885,12 +894,12 @@ async function handleReply(p){
       lead.botState = "Nurture";
       botDispose(lead, option, t[1], "NOT_QUALIFIED_OPEN", null, nextCallAt(lead, option, null));
       await wait(500);
-      await sendMessage(lead, {kind:"text", step:"GT2M_ACK", text:`Thanks, ${lead.name}!\nWe'll check in closer to your timeline.\nNeed help before that? Call us anytime at ${supportNumber()}.`, payload:{type:"text"}});
+      await sendMessage(lead, {kind:"text", step:"GT2M_ACK", text:`Thanks, ${lead.name}!\nWe'll check in closer to your timeline.\nNeed help before that? Call us at ${supportNumber()} during working hours (${hoursSummary(BW)}).`, payload:{type:"text"}});
     } else {
       lead.botState = "Closed · just researching";
       botDispose(lead, null, t[1], "NOT_QUALIFIED_CLOSED", "Not interested", null, {reason:"Not interested in buying", subReason:"Just researching", spanLabel:null});
       await wait(500);
-      await sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at ${supportNumber()}.`, payload:{type:"text"}});
+      await sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Thanks for the confirmation. If you need any assistance in future, please call us at ${supportNumber()} during working hours (${hoursSummary(BW)}).`, payload:{type:"text"}});
     }
   } else if (step==="CONFIRM_CHANGE"){
     // The new answer travels in the button itself (YES:<option>), like the service, so a page refresh or a
@@ -922,7 +931,7 @@ async function handleReply(p){
       time:`${option.slice(0,2)}:${option.slice(2)}`, slot:title, location:"Showroom", comments:"Booked by the customer on WhatsApp"}, "WhatsApp");
     await wait(400);
     await sendMessage(lead, {kind:"text", step:"VISIT_CONFIRM",
-      text:`✅ Your visit is booked\n\n📍 ${dealer.name}, ${dealer.city}\n📅 ${lead.visitDateLabel}\n🕒 ${title}\n\nTo connect with the dealership, call ${dealer.execNumber}.`, payload:{type:"text"}});
+      text:`✅ Your visit is booked\n\n📍 ${dealer.name}, ${dealer.city}\n📅 ${lead.visitDateLabel}\n🕒 ${title}\n\nTo connect with the dealership (${hoursSummary(dealer)}), call ${dealer.execNumber}.`, payload:{type:"text"}});
   }
   render();
   const last = lead.chat[lead.chat.length-1];
@@ -1008,7 +1017,7 @@ async function timelineChanged(lead, option, dealer){
   }
   lead.pendingChange = option;
   await wait(300);
-  return sendMessage(lead, {kind:"buttons", step:"CONFIRM_CHANGE", text:`You earlier told us "${P}". Do you want to change it to "${N}"?`,
+  return sendMessage(lead, {kind:"buttons", step:"CONFIRM_CHANGE", text:`Earlier, you selected ‘${P}’. Would you like to change it to ‘${N}’?`,
     buttons:[{code:`YES:${option}`, label:"Yes, change it"}, {code:"NO", label:"No, keep earlier answer"}], payload:{type:"quick_reply", options:["Yes, change it","No, keep earlier answer"]}});
 }
 
@@ -1042,7 +1051,7 @@ async function applyTimelineChange(lead, option, dealer){
     disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected", followup:"Spoke to customer", interest:"Not interested",
       reason:"Not interested in buying", subReason:"Just researching", comment:`Customer changed the answer to '${N}' on WhatsApp`, next:null});
     await wait(400);
-    return sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at ${supportNumber()}.`, payload:{type:"text"}});
+    return sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Thanks for the confirmation. If you need any assistance in future, please call us at ${supportNumber()} during working hours (${hoursSummary(BW)}).`, payload:{type:"text"}});
   }
   // Earlier More than 2 Months, or Just Researching (closed).
   const reopened = !OPEN_STATUSES.includes(lead.leadStatus);

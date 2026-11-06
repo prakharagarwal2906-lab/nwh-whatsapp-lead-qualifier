@@ -15,6 +15,25 @@ def _parse(t: str) -> time:
     return time(int(h), int(m))
 
 
+def _fmt12(t: str) -> str:
+    return _parse(t).strftime("%I:%M %p").lstrip("0")
+
+
+def hours_summary(cfg: DealerConfig) -> str:
+    """Working hours as customers read them, e.g. "Mon–Sat, 9:30 AM – 6:30 PM"."""
+    days = [d for d in DAYS if cfg.working_hours.get(d)]
+    if not days:
+        return "working hours"
+    wins = {d: " – ".join(map(_fmt12, cfg.working_hours[d][0])) for d in days}
+    if len(set(wins.values())) > 1:
+        return ", ".join(f"{d.title()} {wins[d]}" for d in days)
+    idx = [DAYS.index(d) for d in days]
+    contiguous = idx == list(range(idx[0], idx[0] + len(idx)))
+    span = (f"{days[0].title()}–{days[-1].title()}" if contiguous and len(days) > 2
+            else ", ".join(d.title() for d in days))
+    return f"{span}, {wins[days[0]]}"
+
+
 class DealerCalendar:
     def __init__(self, cfg: DealerConfig):
         self.cfg = cfg

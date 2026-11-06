@@ -34,7 +34,7 @@ def test_template_has_six_inputs_and_flow_postbacks(env):
     assert req.destination == "919876543210"          # customer mobile
     assert req.source == "919403897047"               # WABA number
     # customer name, make, model, working hours (no dealer name, executive or rotating virtual number)
-    assert req.params == ["Prakhar", "Royal Enfield", "Classic 350", "9:30 AM - 6:30 PM"]   # BikeWale team hours
+    assert req.params == ["Prakhar", "Royal Enfield", "Classic 350", "Mon–Sat, 9:30 AM – 6:30 PM"]   # BikeWale team hours
     assert req.postbacks[1] == "NWH_QUALIFIER|TIMELINE|1M|L1"   # lead id travels with every tap
     msg = env.repo.get_message(r.message_id)
     assert msg.gs_message_id == "gs-1" and msg.step == "TIMELINE" and msg.msg_type == "template"
@@ -110,7 +110,7 @@ def test_one_month_qualifies_then_books_a_visit(env):
     assert task["date"] == day_iso and task["slotStart"] == "1130" and task["salesExecutive"] == "Sathya"
     assert "Your visit is booked" in env.gs.texts[-1][1] and slot.title in env.gs.texts[-1][1]
     # no executive name, no "will call to confirm"; the fixed sales executive number kept against the dealer
-    assert env.gs.texts[-1][1].endswith("To connect with the dealership, call 919840011223.")
+    assert env.gs.texts[-1][1].endswith("To connect with the dealership (Mon–Sat, 9:30 AM – 5:30 PM), call 919840011223.")
     assert "Sathya" not in env.gs.texts[-1][1] and "confirm" not in env.gs.texts[-1][1]
 
     # every tap is tracked against the template that started the flow
@@ -126,7 +126,7 @@ def test_more_than_two_months_gets_check_in_message(env):
     body = env.l2r.dispositions[0][1]
     assert body["targetStage"] == "FIRST_CALL" and body["followUpInDays"] == 60
     assert env.gs.texts[-1][1] == ("Thanks, Prakhar!\nWe'll check in closer to your timeline.\n"
-                                   "Need help before that? Call us anytime at 918047105555.")   # BikeWale support number
+                                   "Need help before that? Call us at 918047105555 during working hours (Mon–Sat, 9:30 AM – 6:30 PM).")   # BikeWale support number
     assert env.gs.lists == []
 
 
@@ -136,7 +136,8 @@ def test_just_researching_closes_lead_and_gets_help_message(env):
     body = env.l2r.dispositions[0][1]
     assert body["leadStatus"] == "NOT_INTERESTED" and body["closeLead"] is True
     assert (body["reason"], body["subReason"]) == ("Not interested in buying", "Just researching")
-    assert env.gs.texts[-1][1] == "Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at 918047105555."
+    assert env.gs.texts[-1][1] == ("Thanks for the confirmation. If you need any assistance in future, please call us at 918047105555 "
+                                   "during working hours (Mon–Sat, 9:30 AM – 6:30 PM).")
 
 
 def test_date_postback_against_template_is_rejected(env):
@@ -204,7 +205,7 @@ def test_any_timeline_change_is_reconfirmed_before_it_applies(env):
     n, texts = len(env.l2r.dispositions), len(env.gs.texts)
     post(env, quick_reply("1_2M", "L1", "gs-1", msg_id="wamid.in9"))
     assert env.repo.event_result("wamid.in9") == "reply:CONFIRMATION_ASKED"
-    assert env.gs.buttons[-1]["body"] == 'You earlier told us "15 Days". Do you want to change it to "1 - 2 Months"?'
+    assert env.gs.buttons[-1]["body"] == "Earlier, you selected ‘15 Days’. Would you like to change it to ‘1 - 2 Months’?"
     assert [b.title for b in env.gs.buttons[-1]["buttons"]] == ["Yes, change it", "No, keep earlier answer"]
     # nothing changes until the customer says yes
     assert len(env.l2r.dispositions) == n and len(env.gs.texts) == texts
@@ -279,7 +280,7 @@ def test_gt2m_to_research_confirms_then_closes(env):
     n = len(env.l2r.dispositions)
     post(env, quick_reply("RESEARCH", "L1", "gs-1", msg_id="wamid.in9"))
     assert env.repo.event_result("wamid.in9") == "reply:CONFIRMATION_ASKED"
-    assert env.gs.buttons[-1]["body"] == 'You earlier told us "More than 2 Months". Do you want to change it to "Just Researching"?'
+    assert env.gs.buttons[-1]["body"] == "Earlier, you selected ‘More than 2 Months’. Would you like to change it to ‘Just Researching’?"
     assert len(env.l2r.dispositions) == n
     confirm(env, "YES")
     body = env.l2r.dispositions[-1][1]
@@ -349,8 +350,8 @@ def test_hi_from_qualified_lead_shares_dealer_and_brand_numbers(env):
     post(env, quick_reply("1M", "L1", "gs-1"))
     typed(env, "hii", msg_id="wamid.t3")
     assert env.repo.event_result("wamid.t3") == "reply:DEALER_INFO"
-    assert env.gs.texts[-1][1] == ("Vishnu Motors TN dealership has been assigned to you. Call them at 919840011223 "
-                                   "for assistance.\nTo connect with the BikeWale team, call 918047105555.")
+    assert env.gs.texts[-1][1] == ("Vishnu Motors TN dealership has been assigned to you. "
+                                   "For any assistance, you can reach them at 919840011223.")
 
 
 def test_stop_opts_out(env):
@@ -499,7 +500,7 @@ def test_master_dealer_holds_bikewale_hours_and_is_configurable(env):
     assert r.status_code == 200
     # Same Saturday time now counts as after hours -> WhatsApp goes out, quoting the master's hours
     r2 = send(env, lead_id="L2", mobile="919800000002", created=datetime(2026, 11, 7, 11, 0, tzinfo=IST))
-    assert r2.sent and env.gs.templates[-1].params[3] == "9:30 AM - 6:30 PM"
+    assert r2.sent and env.gs.templates[-1].params[3] == "Mon–Fri, 9:30 AM – 6:30 PM"
     assert env.svc.support_number == "918000000000"
     # every message goes out from the master's WABA number and template, never a dealer's
     assert env.gs.templates[-1].source == "918047104444" and env.gs.templates[-1].template_id == "tpl_nwh_timeline_v1"

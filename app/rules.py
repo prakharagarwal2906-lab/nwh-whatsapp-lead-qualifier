@@ -117,20 +117,30 @@ def decide_timeline(option: str, qualify_max_days: int = QUALIFY_MAX_DAYS) -> De
 
 
 # ---- messages sent back to the customer (session messages, free inside 24h) ----
-def gt2m_text(name: str, virtual_number: str) -> str:
+def visit_date_text(dealer: str, model: str) -> str:
+    return f"Great! When would you like to visit {dealer} to see the {model}?" if model else \
+        f"Great! When would you like to visit {dealer}?"
+
+
+def visit_time_text(day_label: str) -> str:
+    return f"{day_label} it is. What time suits you?"
+
+
+def gt2m_text(name: str, support_number: str, working_hours: str) -> str:
     return (f"Thanks, {name}!\nWe'll check in closer to your timeline.\n"
-            f"Need help before that? Call us anytime at {virtual_number}.")
+            f"Need help before that? Call us at {support_number} during working hours ({working_hours}).")
 
 
-def research_text(virtual_number: str) -> str:
-    return f"Thanks for the confirmation. If you need any assistance in future, please feel free to reach us at {virtual_number}."
+def research_text(support_number: str, working_hours: str) -> str:
+    return (f"Thanks for the confirmation. If you need any assistance in future, please call us at "
+            f"{support_number} during working hours ({working_hours}).")
 
 
 def visit_confirm_text(dealer: str, city: str, day_label: str, slot_label: str,
-                       sales_executive_number: str) -> str:
+                       sales_executive_number: str, dealer_working_hours: str) -> str:
     where = f"{dealer}, {city}" if city else dealer
     return (f"\u2705 Your visit is booked\n\n\U0001F4CD {where}\n\U0001F4C5 {day_label}\n\U0001F552 {slot_label}\n\n"
-            f"To connect with the dealership, call {sales_executive_number}.")
+            f"To connect with the dealership ({dealer_working_hours}), call {sales_executive_number}.")
 
 
 # ---- changed answers (the customer taps the template again) -------------
@@ -143,7 +153,7 @@ def updated_text(label: str) -> str:
 
 
 def confirm_change_text(prev_label: str, new_label: str) -> str:
-    return f'You earlier told us "{prev_label}". Do you want to change it to "{new_label}"?'
+    return f"Earlier, you selected ‘{prev_label}’. Would you like to change it to ‘{new_label}’?"
 
 
 def kept_text() -> str:
@@ -163,9 +173,9 @@ def ask_hi_text() -> str:
     return "Please type Hi to start the journey."
 
 
-def dealer_assigned_text(dealer: str, sales_executive_number: str, brand: str, support_number: str) -> str:
-    return (f"{dealer} dealership has been assigned to you. Call them at {sales_executive_number} for assistance.\n"
-            f"To connect with the {brand} team, call {support_number}.")
+def dealer_assigned_text(dealer: str, sales_executive_number: str) -> str:
+    return (f"{dealer} dealership has been assigned to you. "
+            f"For any assistance, you can reach them at {sales_executive_number}.")
 
 
 def reengage_text(brand: str, vehicle: str) -> str:
