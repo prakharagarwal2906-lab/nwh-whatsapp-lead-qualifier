@@ -146,6 +146,3 @@ def confirm_change_text(prev_label: str, new_label: str) -> str:
 def kept_text() -> str:
     return "No problem, we've kept your earlier answer."
 
-
-def still_researching_ack_text() -> str:
-    return "Thanks for letting us know. Feel free to reach us anytime if you need help."

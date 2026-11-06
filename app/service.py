@@ -14,8 +14,8 @@ from .models import DealerConfig, Lead, MsgStatus, Outcome, WaMessage
 from .rules import (
     FLOW, QUALIFYING, STEP_CONFIRM, STEP_TIMELINE, STEP_VISIT_DATE, STEP_VISIT_TIME, TIMELINE_LABEL,
     TIMELINE_DAYS, TIMELINE_OPTIONS, build_postback, classify_text, confirm_change_text, decide_timeline,
-    gt2m_text, kept_text, parse_postback, research_text, same_answer_text, still_researching_ack_text,
-    updated_text, visit_confirm_text,
+    gt2m_text, kept_text, parse_postback, research_text, same_answer_text, updated_text,
+    visit_confirm_text,
 )
 from .working_hours import DealerCalendar, day_label
 
@@ -343,7 +343,7 @@ class QualifierService:
         earlier 15D/1M/1-2M -> another of these: thank-you confirming the update
         earlier 15D/1M/1-2M -> GT2M / RESEARCH: ask for confirmation first
         earlier GT2M / RESEARCH -> 15D/1M/1-2M: qualify straight away (form tagged in L2R), visit date next
-        earlier GT2M -> RESEARCH: keep the existing call, note the change
+        earlier GT2M -> RESEARCH: ask for confirmation first, then close the lead
         earlier RESEARCH (lead closed) -> GT2M: reopen the lead, next call by the new span, thanks
         """
         prev = tpl.reply_code
@@ -351,7 +351,7 @@ class QualifierService:
         if option == prev:
             self._text(tpl, cfg, "CHANGE_ACK", same_answer_text(new_label))
             return "reply:SAME_ANSWER"
-        if prev in QUALIFYING:
+        if prev in QUALIFYING or (prev == "GT2M" and option == "RESEARCH"):
             if option in QUALIFYING:
                 d = decide_timeline(option, cfg.qualify_max_days)
                 self.repo.set_answer(tpl.id, option, d.outcome)
@@ -386,15 +386,11 @@ class QualifierService:
             return "reply:QUALIFIED_ON_CHANGE"
         self.repo.set_answer(tpl.id, option, decide_timeline(option, cfg.qualify_max_days).outcome)
         reason = f"Customer changed the answer from '{prev_label}' to '{new_label}' on WhatsApp"
-        span = option if option != "RESEARCH" else ("GT2M" if reopen else None)
-        if span:
-            self._l2r(self.l2r.schedule_call, tpl.lead_id, {
-                "dueAt": self._span_call(cfg, span, tpl.lead_id).isoformat(), "reopen": reopen,
-                "purchaseTimeline": option, "reason": reason, "actor": "system:whatsapp-bot"}, key)
-        else:  # GT2M -> Still Researching: keep the existing call, note the change
-            self._safe_comment(tpl.lead_id, reason, key)
-        self._text(tpl, cfg, "CHANGE_ACK",
-                   still_researching_ack_text() if option == "RESEARCH" else updated_text(new_label))
+        # Only remaining case: Still Researching (closed) -> More than 2 Months: reopen, span-based call.
+        self._l2r(self.l2r.schedule_call, tpl.lead_id, {
+            "dueAt": self._span_call(cfg, option, tpl.lead_id).isoformat(), "reopen": reopen,
+            "purchaseTimeline": option, "reason": reason, "actor": "system:whatsapp-bot"}, key)
+        self._text(tpl, cfg, "CHANGE_ACK", updated_text(new_label))
         return "reply:REOPENED" if reopen else "reply:TIMELINE_CHANGED"
 
     def _confirm_change(self, confirm: WaMessage, cfg: DealerConfig, option: str, key: str) -> str:

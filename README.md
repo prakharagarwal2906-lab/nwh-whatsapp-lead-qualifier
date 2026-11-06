@@ -134,7 +134,7 @@ flowchart TD
 | 15 Days / 1 Month / 1–2 Months | another of these three | Thank-you confirming the update |
 | 15 Days / 1 Month / 1–2 Months | More than 2 Months / Still Researching | Confirmation first, then handle the new answer |
 | More than 2 Months | 15 Days / 1 Month / 1–2 Months | Qualified straight away (dealer panel via L2R), thanks, visit date |
-| More than 2 Months | Still Researching | Existing call kept, change noted, thanks |
+| More than 2 Months | Still Researching | Confirmation first; on Yes the lead is closed (Not interested in buying · Just researching) |
 | Still Researching (closed) | 15 Days / 1 Month / 1–2 Months | Reopened and qualified straight away, thanks, visit date |
 | Still Researching (closed) | More than 2 Months | Reopened, next call by the buying span, thanks |
 

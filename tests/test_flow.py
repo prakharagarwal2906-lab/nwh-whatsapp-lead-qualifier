@@ -256,14 +256,19 @@ def test_research_to_gt2m_reopens_with_span_call(env):
     assert body["reopen"] is True and body["purchaseTimeline"] == "GT2M"
 
 
-def test_gt2m_to_research_keeps_call_and_notes_change(env):
+def test_gt2m_to_research_confirms_then_closes(env):
     send(env)
     post(env, quick_reply("GT2M", "L1", "gs-1"))
+    n = len(env.l2r.dispositions)
     post(env, quick_reply("RESEARCH", "L1", "gs-1", msg_id="wamid.in9"))
+    assert env.repo.event_result("wamid.in9") == "reply:CONFIRMATION_ASKED"
+    assert env.gs.buttons[-1]["body"] == 'You earlier told us "More than 2 Months". Do you want to change it to "Still Researching"?'
+    assert len(env.l2r.dispositions) == n
+    confirm(env, "YES")
+    body = env.l2r.dispositions[-1][1]
+    assert body["closeLead"] is True and body["subReason"] == "Just researching"
+    assert "Please feel free to reach us" in env.gs.texts[-1][1]
     assert env.l2r.calls == []
-    assert "Still Researching" in env.l2r.comments[-1][1]
-    assert env.gs.texts[-1][1].startswith("Thanks for letting us know")
-
 
 def test_research_to_fifteen_days_reopens_and_qualifies(env):
     send(env)

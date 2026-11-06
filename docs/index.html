@@ -872,6 +872,7 @@ function scheduleNext(lead, n){
    - earlier More than 2 Months -> any other tap: thanks, next call by the new buying span
    - earlier Still Researching (lead closed as Not interested) -> any other tap: reopen the lead,
        next call by the new buying span, thanks message
+   - earlier More than 2 Months -> Still Researching: confirm first, then close the lead
    - in both cases a tap on 15 Days / 1 Month / 1-2 Months qualifies the lead straight away
      (follow-up form tagged, dealer panel via L2R) and continues to the visit date */
 async function timelineChanged(lead, option, dealer){
@@ -897,6 +898,14 @@ async function timelineChanged(lead, option, dealer){
     return sendMessage(lead, {kind:"buttons", step:"CONFIRM_CHANGE", text:`You earlier told us "${P}". Do you want to change it to "${N}"?`,
       buttons:[{code:"YES", label:"Yes, change it"}, {code:"NO", label:"No, keep earlier answer"}], payload:{type:"quick_reply", options:["Yes, change it","No, keep earlier answer"]}});
   }
+  // Earlier More than 2 Months -> Still Researching: confirm first, then close the lead.
+  if (prev==="GT2M" && option==="RESEARCH"){
+    lead.pendingChange = option;
+    addFeed(lead, {icon:"wa", tone:"waf", title:"WhatsApp: customer wants to change the answer", lines:[`From '${P}' to '${N}'`, "Waiting for the customer to confirm"]});
+    await wait(300);
+    return sendMessage(lead, {kind:"buttons", step:"CONFIRM_CHANGE", text:`You earlier told us "${P}". Do you want to change it to "${N}"?`,
+      buttons:[{code:"YES", label:"Yes, change it"}, {code:"NO", label:"No, keep earlier answer"}], payload:{type:"quick_reply", options:["Yes, change it","No, keep earlier answer"]}});
+  }
   // Earlier More than 2 Months, or Still Researching (closed).
   const reopened = !OPEN_STATUSES.includes(lead.leadStatus);
   lead.waAnswer = option; lead.timeline = N;
@@ -913,16 +922,14 @@ async function timelineChanged(lead, option, dealer){
     if (!lead.visitSlot){ await wait(300); await sendDateList(lead, dealer); }
     return;
   }
-  // option is More than 2 Months (from a closed Still Researching lead) or Still Researching (from GT2M)
+  // option is More than 2 Months (from a closed Still Researching lead): reopen, span-based call
   if (reopened) setLeadStatus(lead, "NOT_QUALIFIED_OPEN");
-  if (option!=="RESEARCH"){ lead.spanCode = option; lead.eagerness = eagerness(option); }
+  lead.spanCode = option; lead.eagerness = eagerness(option);
   addFeed(lead, {icon:"wa", tone:"waf", title: reopened ? "Lead reopened via WhatsApp" : "Buying timeline changed via WhatsApp",
     lines:[`From '${P}' to '${N}'`, reopened ? "Lead Status: Not qualified · open" : null].filter(Boolean)});
   l2r(lead, "dispose", {source:"WHATSAPP_BOT", reopen:reopened, expectedBuyingSpan:N});
-  if (option!=="RESEARCH") scheduleNext(lead, nextCallAt(lead, option, lead.visitDate));
-  else if (reopened || !openCall(lead)) scheduleNext(lead, nextCallAt(lead, "GT2M", lead.visitDate));
-  return say(option==="RESEARCH" ? "Thanks for letting us know. Feel free to reach us anytime if you need help."
-                                 : `Thanks for confirming! We've updated your buying timeline to ${N}.`);
+  scheduleNext(lead, nextCallAt(lead, option, lead.visitDate));
+  return say(`Thanks for confirming! We've updated your buying timeline to ${N}.`);
 }
 
 /* The bot disposes the open call only if no telecaller has spoken to the customer yet. */
