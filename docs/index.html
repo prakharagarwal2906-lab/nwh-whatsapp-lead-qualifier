@@ -209,6 +209,49 @@ main.screen{max-width:1240px;margin:0 auto;padding-block:18px 40px}
 pre.json{margin:0;padding:10px;background:var(--log-bg);color:#c9d2df;font-family:var(--f-mono);font-size:11.5px;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow:auto}
 details summary{padding:6px 10px;cursor:pointer;font-size:12px;color:var(--muted)}
 
+/* visits: status colours, pop-ups, task list */
+.lt-vsched{background:#fff1e0;color:#c25e00;border:1px solid #f5c98d}.lt-vlate{background:#fdeceb;color:#c62828;border:1px solid #f2b8b5}.lt-vdone{background:#e3f4e8;color:#1e7d32;border:1px solid #a8dbb6}
+.lstep .s.sched{color:#e8890c}.lstep .s.sched i{background:#f5a623}.lstep .bar.sched{background:#f5a623}
+.lstep .s.late{color:#c62828}.lstep .s.late i{background:#e53935}.lstep .bar.late{background:#e53935}
+.lact{cursor:default}.lact.btn2{cursor:pointer;position:relative}
+.lact .vdot{position:absolute;top:-3px;right:4px;width:9px;height:9px;border-radius:50%;border:2px solid #fff}
+.vdot.sched{background:#f5a623}.vdot.late{background:#e53935}.vdot.done{background:#1e9e3e}
+.ltabs span[data-tab]{cursor:pointer}
+.vmodal{position:fixed;inset:0;background:rgba(20,30,45,.45);z-index:50;display:grid;place-items:center;padding:16px;font-family:"Lato",var(--f-body);color:#1e2a3a}
+.vcard{background:#fff;border-radius:8px;width:min(440px,100%);max-height:calc(100vh - 32px);overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.25)}
+.vhead{display:flex;align-items:center;gap:10px;padding:18px 20px 10px}
+.vhead h3{margin:0;font-size:19px;font-weight:700;flex:1}
+.vhead button{border:0;background:none;font-size:20px;line-height:1;color:#3b4656;cursor:pointer}
+.vbody{padding:6px 20px 18px;display:grid;gap:14px}
+.vfield{position:relative;border:1px solid #c9d1dc;border-radius:4px;padding:16px 12px 8px}
+.vfield>span{position:absolute;top:-8px;left:10px;background:#fff;padding:0 4px;font-size:11.5px;color:#3b4656}
+.vfield>span sup{color:#e10b0b}
+.vfield input,.vfield select,.vfield textarea{border:0;outline:0;width:100%;font:inherit;font-size:15px;background:transparent;color:#1e2a3a}
+.vfield textarea{min-height:56px;resize:vertical}
+.vradios{display:flex;gap:36px;flex-wrap:wrap;font-size:14px}
+.vradios label{display:flex;align-items:center;gap:8px;cursor:pointer}
+.vradios input{width:18px;height:18px;accent-color:#1d5c96}
+.vlabel{font-size:13px;font-weight:700}.vlabel sup{color:#e10b0b}
+.vprimary{border:0;background:#e10b0b;color:#fff;font-weight:700;font-size:15px;padding:12px;border-radius:3px;cursor:pointer;width:100%}
+.voutline{border:1px solid #1d5c96;background:#fff;color:#1d5c96;font-weight:700;font-size:13px;padding:8px;border-radius:3px;cursor:pointer;flex:1}
+.vbtns{display:flex;gap:12px}
+.vrows{display:grid;border-top:1px solid #edf0f4}
+.vrow{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;padding:10px 0;border-bottom:1px solid #edf0f4;font-size:13.5px}
+.vrow span{color:#5b6778}.vrow b{font-weight:600}
+.vfoot{padding:12px 20px 18px;border-top:1px solid #edf0f4}
+.verr{color:#e10b0b;font-size:12.5px;font-weight:700}
+.vconfirm{background:#fff5f5;border:1px solid #f2b8b5;border-radius:4px;padding:10px 12px;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.vstatus{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:3px}
+.tasksbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;flex-wrap:wrap}
+.tasksbar select{border:1px solid #c9d1dc;border-radius:3px;padding:6px 10px;font-size:12.5px;min-width:150px;background:#fff}
+.tasksbar .add{border:0;background:#e10b0b;color:#fff;font-weight:700;padding:9px 40px;border-radius:2px;cursor:pointer}
+.tgroup{background:#f4f6f9;padding:12px 18px 14px}
+.tgroup h4{margin:0 0 10px;font-size:13px}
+.trow{background:#fff;border:1px solid #dfe5ec;border-radius:4px;display:grid;grid-template-columns:90px minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:10px 12px;margin-bottom:8px}
+@media (max-width:620px){.trow{grid-template-columns:minmax(0,1fr) auto}}
+.trow .tm{font-size:12.5px;color:#3b4656;border-right:1px solid #dfe5ec;padding-right:10px}
+.trow b{display:block;font-size:13.5px}.trow small{font-size:12px;color:#5b6778}
+.trow select{border:1px solid #c9d1dc;border-radius:3px;padding:6px 8px;font-size:12.5px;background:#fff;cursor:pointer}
 /* combined L2R + WhatsApp screen */
 main.screen.wide{max-width:1600px}
 .combo{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;align-items:start}
@@ -399,6 +442,7 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
       </div>
       <div id="l2rBody" class="l2rbody"></div>
     </div>
+    <div class="vmodal" id="vModal" hidden></div>
     <div class="combo-side">
       <div class="phone">
         <div class="screenp">
@@ -502,8 +546,8 @@ const VEHICLES = {
   "Maruti Suzuki": {type:"Cars", models:{"Brezza":["₹ 8.34 Lakh","1462 cc","19.8 kmpl","5 seats","48 L"]}},
 };
 const DEALERS = {
-  D101: {id:"D101", name:"Vishnu Motors TN", city:"Chennai", exec:"Sathya", virtual:"919403897047", open:"09:30", close:"17:30", off:0, template:"tpl_nwh_timeline_v1"},
-  D102: {id:"D102", name:"Sai Auto Pune", city:"Pune", exec:"Rohan", virtual:"919898989898", open:"10:00", close:"19:00", off:2, template:"tpl_nwh_timeline_v2"},
+  D101: {id:"D101", name:"Vishnu Motors TN", city:"Chennai", exec:"Sathya", team:["Sathya","Karthik","Meena"], virtual:"919403897047", open:"09:30", close:"17:30", off:0, template:"tpl_nwh_timeline_v1"},
+  D102: {id:"D102", name:"Sai Auto Pune", city:"Pune", exec:"Rohan", team:["Rohan","Neha","Amit"], virtual:"919898989898", open:"10:00", close:"19:00", off:2, template:"tpl_nwh_timeline_v2"},
 };
 const WABA = {number:"918047104444", name:"BikeWale"};
 const TELECALLER = "Akshay";   // internal calling team member who owns the lead in L2R
@@ -611,7 +655,7 @@ function disposeCall(lead, by, d){
   const lines = [d.comment&&`Comment: ${d.comment}`, `Call Status: ${c.call_status}`, c.followup_status&&`Follow-Up Status: ${c.followup_status}`,
     c.interest&&`Lead Status: ${c.interest}`, c.buying_span&&`Expected Buying Span: ${c.buying_span}`,
     c.reason&&`Reason: ${c.reason}`, c.sub_reason&&`Sub Reason: ${c.sub_reason}`,
-    c.td_required&&`TD Required: ${c.td_required}${c.td_at?` · ${c.td_at}`:""}`, d.extra,
+    c.td_required&&`Visit Required: ${c.td_required}${c.td_at?` · ${c.td_at}`:""}`, d.extra,
     d.next ? `Next Call: ${fmtWall(d.next.at)}` : null].filter(Boolean);
   const title = by!=="WhatsApp Bot" ? `Follow up added by ${by}`
     : lead.leadStatus==="QUALIFIED" ? "WhatsApp has qualified the lead"
@@ -853,7 +897,7 @@ async function handleReply(p){
       await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text:"No problem, we've kept your earlier answer.", payload:{type:"text"}});
     }
   } else if (step==="VISIT_DATE"){
-    lead.visitDate = option; lead.visitDateLabel = title;
+    lead.pendingVisitDate = option;
     l2r(lead, "comment", {comment:`Preferred visit date: ${title}`});
     await wait(400);
     const rows = slots(dealer).map(([a,b])=>({id:`${FLOW}|VISIT_TIME|${hhmm(a)}|${lead.id}`, title:`${fmtMin(a)} – ${fmtMin(b)}`, desc:""}));
@@ -862,17 +906,10 @@ async function handleReply(p){
       payload:{type:"list", title, body:"Choose your preferred time", items:[{title:"Working hours", options: rows.map(r=>({title:r.title, postbackText:r.id}))}]}});
   } else if (step==="VISIT_TIME"){
     // Both date and time are known: create (or move) the Showroom Visit task against the lead.
-    lead.visitSlot = title; lead.botState = "Visit booked";
-    let task = lead.tasks.find(t=>t.type==="Showroom Visit" && t.status==="OPEN");
-    const again = !!task;
-    if (!task){ task = {task_id:"TASK-"+(S.seq.task++), lead_id:lead.id, type:"Showroom Visit", status:"OPEN", created_by:"WhatsApp",
-      created_at:simNow(lead).toISOString(), dealer_id:dealer.id, sales_executive:dealer.exec}; lead.tasks.push(task); }
-    Object.assign(task, {date:lead.visitDate, date_label:lead.visitDateLabel, slot:title, changed_at:simNow(lead).toISOString()});
-    addFeed(lead, {icon:"td", tone:"task", title: again ? "WhatsApp has rescheduled the Showroom Visit task" : "WhatsApp has created a Showroom Visit task",
-      lines:[`Date: ${lead.visitDateLabel}`, `Time: ${title}`]});
-    l2r(lead, "task", {taskId:task.task_id, type:"SHOWROOM_VISIT", date:lead.visitDate, slot:title, createdBy:"WHATSAPP", dealerId:dealer.id});
-    rescheduleForVisit(lead);
-    l2rDealerEvent(lead, "VISIT_BOOKED");
+    lead.botState = "Visit booked";
+    const existing = [...lead.tasks].reverse().find(t=>VISIT_OPEN(t) && t.created_by==="WhatsApp");
+    saveVisit(lead, {task_id: existing && existing.task_id, assigned_to:dealer.exec, date: lead.pendingVisitDate || lead.visitDate,
+      time:`${option.slice(0,2)}:${option.slice(2)}`, slot:title, location:"Showroom", comments:"Booked by the customer on WhatsApp"}, "WhatsApp");
     await wait(400);
     await sendMessage(lead, {kind:"text", step:"VISIT_CONFIRM",
       text:`✅ Your visit is booked\n\n📍 ${dealer.name}, ${dealer.city}\n📅 ${lead.visitDateLabel}\n🕒 ${title}\n\n${dealer.exec} will call you to confirm. Need help? Call ${dealer.virtual}.`, payload:{type:"text"}});
@@ -881,6 +918,49 @@ async function handleReply(p){
   const last = lead.chat[lead.chat.length-1];
   if (last && last.messageId && S.messages[last.messageId].status==="SUBMITTED") await deliver(last.messageId, true);
 }
+/* ---------------- visits (tasks against the lead) ---------------- */
+const VISIT_OPEN = t => t.status==="SCHEDULED";
+const activeVisit = l => [...l.tasks].reverse().find(VISIT_OPEN) || [...l.tasks].reverse().find(t=>t.status==="COMPLETED");
+const visitAt = v => at(v.date, v.time || "00:00");
+const visitWhen = v => `${dayLabel(at(v.date))}, ${v.slot || fmtTime(v.time)}`;
+function visitState(l){
+  const v = activeVisit(l); if (!v) return null;
+  if (v.status==="COMPLETED") return {v, state:"done"};
+  return {v, state: visitAt(v) < simNow(l) ? "late" : "sched"};       // pending = time passed, not completed
+}
+function syncVisitFields(l){
+  const v = [...l.tasks].reverse().find(VISIT_OPEN);
+  l.visitDate = v ? v.date : null; l.visitDateLabel = v ? dayLabel(at(v.date)) : null; l.visitSlot = v ? (v.slot || fmtTime(v.time)) : null;
+}
+/* Create or update a Visit task. `by` is "WhatsApp" or the telecaller's name. */
+function saveVisit(lead, data, by){
+  const dealer = DEALERS[lead.dealerId];
+  let v = data.task_id ? lead.tasks.find(t=>t.task_id===data.task_id) : null; const isNew = !v;
+  if (isNew){ v = {task_id:"TASK-"+(S.seq.task++), lead_id:lead.id, status:"SCHEDULED", created_by:by, created_at:simNow(lead).toISOString(), dealer_id:dealer.id}; lead.tasks.push(v); }
+  Object.assign(v, {type: data.location==="Customer's Place" ? "Home Visit" : "Showroom Visit", assigned_to:data.assigned_to, date:data.date, time:data.time,
+    slot: data.slot || fmtTime(data.time), location:data.location, comments:data.comments||"", changed_at:simNow(lead).toISOString()});
+  syncVisitFields(lead);
+  const wa = by==="WhatsApp";
+  addFeed(lead, {icon:"td", tone:"task",
+    title: wa ? (isNew ? `WhatsApp has created a ${v.type} task` : `WhatsApp has rescheduled the ${v.type} task`) : (isNew ? `Visit scheduled by ${by}` : `Visit rescheduled by ${by}`),
+    lines:[`Date: ${dayLabel(at(v.date))}`, `Time: ${v.slot}`, wa ? null : `Location: ${v.location}`].filter(Boolean)});
+  l2r(lead, "task", {taskId:v.task_id, type:v.type.toUpperCase().replace(/ /g,"_"), date:v.date, time:v.time, location:v.location, assignedTo:v.assigned_to, createdBy: wa ? "WHATSAPP" : by});
+  rescheduleForVisit(lead);
+  l2rDealerEvent(lead, "VISIT_BOOKED");
+  return v;
+}
+function cancelVisit(lead, v, by){
+  v.status = "CANCELLED"; v.changed_at = simNow(lead).toISOString(); syncVisitFields(lead);
+  addFeed(lead, {icon:"td", title:`Visit cancelled by ${by}`, lines:[`Was: ${visitWhen(v)}`]});
+  l2r(lead, "task", {taskId:v.task_id, status:"CANCELLED"});
+}
+function completeVisit(lead, v, by){
+  v.status = "COMPLETED"; v.completed_at = simNow(lead).toISOString(); syncVisitFields(lead);
+  if (["FIRST_CALL","QUALIFICATION"].includes(lead.stage)) lead.stage = "VISITS";
+  addFeed(lead, {icon:"td", tone:"conv", title:`Visit completed`, lines:[visitWhen(v), `Marked by ${by}`]});
+  l2r(lead, "task", {taskId:v.task_id, status:"COMPLETED"});
+}
+
 /* Visit date list (next 7 days the dealer is open). */
 async function sendDateList(lead, dealer){
   const days = nextOpenDays(dealer, simNow(lead));
@@ -1079,6 +1159,10 @@ function leadTags(l){
   else t.push(`<span class="ltag lt-closed">Closed</span>`);
   if (l.leadStatus!=="NEW" && l.leadStatus!=="BOOKED") t.push(`<span class="ltag lt-closed">${esc(LEAD_STATUS[l.leadStatus])}</span>`);
   if (openCall(l)) t.push(`<span class="ltag lt-pend">Followup pending</span>`);
+  const vs = visitState(l);
+  if (vs) t.push(vs.state==="done" ? `<span class="ltag lt-vdone">Visit completed</span>`
+    : vs.state==="late" ? `<span class="ltag lt-vlate">Visit pending · ${esc(visitWhen(vs.v))}</span>`
+    : `<span class="ltag lt-vsched">Visit scheduled · ${esc(visitWhen(vs.v))}</span>`);
   return t.join("");
 }
 function renderLms(){
@@ -1090,7 +1174,9 @@ function renderLms(){
   const st = ["FIRST_CALL","QUALIFICATION","VISITS","BOOKING"], idx = st.indexOf(l.stage);
   // First Call is done only once the customer replied on WhatsApp or a call was tagged (connected or busy).
   const done = i => i===0 ? !!l.firstCallDone : i<=idx;
-  const stepper = `<div class="lstep">${["First Call","Qualification","Visits","Booking"].map((n,i)=>`${i?`<span class="bar ${done(i)?"on":""}"></span>`:""}<span class="s ${done(i)?"on":""}">${n}<i>${done(i)?"✓":""}</i></span>`).join("")}</div>`;
+  const vs = visitState(l);
+  const cls = i => done(i) ? "on" : (i===2 && vs && vs.state!=="done") ? vs.state : "";
+  const stepper = `<div class="lstep">${["First Call","Qualification","Visits","Booking"].map((n,i)=>`${i?`<span class="bar ${cls(i)}"></span>`:""}<span class="s ${cls(i)}">${n}<i>${done(i)?"✓":""}</i></span>`).join("")}</div>`;
   const created = new Date(l.createdAt);
   const left = `
     <div class="lcard"><div class="lead-top">
@@ -1103,7 +1189,7 @@ function renderLms(){
         <span>ACTIVE SINCE ${isoOf(created)===isoOf(simNow(l))?"Today":fmtWall(created)} &nbsp;<span class="ltag lt-src">WEBSITE</span></span>
       </div>
       <div class="lactions">
-        <span class="lact wapp"><i>${ICONS.wa}</i>Whatsapp</span><span class="lact"><i>⇪</i>Share</span><span class="lact"><i>${ICONS.td}</i>Add TD</span><span class="lact"><i>⋮</i>&nbsp;</span>
+        <span class="lact wapp"><i>${ICONS.wa}</i>Whatsapp</span><span class="lact"><i>⇪</i>Share</span><span class="lact btn2" data-act="visit" role="button" tabindex="0"><i>${ICONS.td}</i>${vs && vs.state!=="done" ? `<span class="vdot ${vs.state}"></span>View Visit` : "Add Visit"}</span><span class="lact"><i>⋮</i>&nbsp;</span>
         <button type="button" class="lbook" data-act="book" ${OPEN_STATUSES.includes(l.leadStatus)?"":"disabled"}>▤ Book</button>
       </div>
     </div></div>
@@ -1112,14 +1198,18 @@ function renderLms(){
       <div class="inq">
         <div class="t"><input type="checkbox" aria-label="Select inquiry"> <span style="flex:1">${esc(l.make)} ${esc(l.model)}</span><span style="color:var(--l-navy)">✎</span><span style="color:#c77">✕</span></div>
         <div class="d">${created.getUTCDate()} ${MONTHS[created.getUTCMonth()]} ${created.getUTCFullYear()}, ${fmtMin(minsOf(created))} <span class="ltag lt-src">WEBSITE</span></div>
-        <div class="links"><button type="button">Send Files</button><button type="button">Schedule TD</button><button type="button" data-act="book">Book</button></div>
+        <div class="links"><button type="button">Send Files</button><button type="button" data-act="visit">${vs && vs.state!=="done" ? "View Visit" : "Schedule Visit"}</button><button type="button" data-act="book">Book</button></div>
       </div>
     </div>`;
   const c = openCall(l);
   const owner = `<span class="owner">Lead Owner: <b>${esc(TELECALLER)}</b> <span style="color:var(--l-navy)">✎</span></span>`;
-  const tabs = `<div class="ltabs"><span class="on">Follow Up</span><span>My Tasks<em>0</em></span><span>All Tasks<em>${l.calls.filter(x=>x.status==="OPEN").length + l.tasks.filter(x=>x.status==="OPEN").length}</em></span>${owner}</div>`;
-  const right = `<div class="lcard">${tabs}${formHtml(l, c)}${feedHtml(l)}</div>`;
+  const openTasks = l.tasks.filter(VISIT_OPEN);
+  const tab = (k, label, n) => `<span data-tab="${k}" class="${TAB===k?"on":""}">${label}${n==null?"":`<em>${n}</em>`}</span>`;
+  const tabs = `<div class="ltabs">${tab("follow","Follow Up")}${tab("my","My Tasks", openTasks.filter(t=>t.assigned_to===TELECALLER).length)}${tab("all","All Tasks", openTasks.length)}${owner}</div>`;
+  const body = TAB==="follow" ? formHtml(l, c) : tasksHtml(l, TAB==="my" ? l.tasks.filter(t=>t.assigned_to===TELECALLER) : l.tasks);
+  const right = `<div class="lcard">${tabs}${body}${feedHtml(l)}</div>`;
   box.innerHTML = `<div style="min-width:0">${left}</div><div style="min-width:0">${stepper}${right}</div>`;
+  renderVisitModal();
 }
 function tog(name, val, label, small){ return `<button type="button" class="tog ${small?"sm":""} ${F[name]===val?"on":""}" data-f="${name}" data-v="${val}">${label}</button>`; }
 function formHtml(l, c){
@@ -1146,10 +1236,10 @@ function formHtml(l, c){
     }
     if (F.interest==="INTERESTED"){
       h += `<div class="frow2"><label for="fSpan">Exp. Buying Span<sup>*</sup></label><div class="opts2"><select id="fSpan" class="lsel"><option value="">Select expected span</option>${SPAN.map(s=>`<option value="${s[0]}" ${F.span===s[0]?"selected":""}>${s[1]}</option>`).join("")}</select>${F.span?`<span class="lhint">${QUALIFY.includes(F.span)?"Lead will be Qualified":"Lead stays Not qualified · open"}</span>`:""}</div></div>
-        <div class="frow2"><label>TD Required?<sup>*</sup></label><div class="opts2">${tog("td","YES","Yes")}${tog("td","NO","No")}</div></div>`;
+        <div class="frow2"><label>Visit Required?<sup>*</sup></label><div class="opts2">${tog("td","YES","Yes")}${tog("td","NO","No")}</div></div>`;
       if (F.td==="YES"){
-        h += `<div class="frow2"><label>TD Date<sup>*</sup></label><div class="opts2"><button type="button" class="tog sm ${F.tdDate===isoOf(today)?"on":""}" data-date="tdDate" data-v="${isoOf(today)}">Today</button><button type="button" class="tog sm ${F.tdDate===isoOf(tomorrow)?"on":""}" data-date="tdDate" data-v="${isoOf(tomorrow)}">Tomorrow</button><input type="date" id="fTdDate" class="ldate" value="${F.tdDate}" min="${isoOf(today)}"></div></div>
-          <div class="frow2"><label>TD Time<sup>*</sup></label><div class="opts2">${[["11:00","Morning"],["14:00","Afternoon"],["17:00","Evening"]].map(([v,n])=>`<button type="button" class="tog sm ${F.tdTime===v?"on":""}" data-date="tdTime" data-v="${v}">${n}</button>`).join("")}<input type="time" id="fTdTime" class="ldate" value="${F.tdTime}"></div></div>`;
+        h += `<div class="frow2"><label>Visit Date<sup>*</sup></label><div class="opts2"><button type="button" class="tog sm ${F.tdDate===isoOf(today)?"on":""}" data-date="tdDate" data-v="${isoOf(today)}">Today</button><button type="button" class="tog sm ${F.tdDate===isoOf(tomorrow)?"on":""}" data-date="tdDate" data-v="${isoOf(tomorrow)}">Tomorrow</button><input type="date" id="fTdDate" class="ldate" value="${F.tdDate}" min="${isoOf(today)}"></div></div>
+          <div class="frow2"><label>Visit Time<sup>*</sup></label><div class="opts2">${[["11:00","Morning"],["14:00","Afternoon"],["17:00","Evening"]].map(([v,n])=>`<button type="button" class="tog sm ${F.tdTime===v?"on":""}" data-date="tdTime" data-v="${v}">${n}</button>`).join("")}<input type="time" id="fTdTime" class="ldate" value="${F.tdTime}"></div></div>`;
       }
       suggestNext(l);
       h += `<div class="frow2"><label>Next Call Date<sup>*</sup></label><div class="opts2"><input type="date" id="fNextDate" class="ldate" value="${F.nextDate}"><input type="time" id="fNextTime" class="ldate" value="${F.nextTime}"><span class="lhint">${F.nextTouched?"Set manually":`Suggested: ${esc(F.nextWhy||"")}`}</span></div></div>`;
@@ -1158,6 +1248,96 @@ function formHtml(l, c){
     h += `<div class="frow2"><span></span><span class="lhint">Customer picked up but couldn't talk. The call is disposed and a new call is scheduled for the next working day.</span></div>`;
   }
   return h + comments + submit + `</div>`;
+}
+let TAB = "follow";          // Follow Up | My Tasks | All Tasks
+let MV = null;               // visit pop-up state
+function tasksHtml(l, list){
+  const row = t => {
+    const st = t.status==="COMPLETED" ? `<span class="vstatus lt-vdone">Completed</span>` : t.status==="CANCELLED" ? `<span class="vstatus lt-closed">Cancelled</span>`
+      : visitAt(t) < simNow(l) ? `<span class="vstatus lt-vlate">Pending</span>` : `<span class="vstatus lt-vsched">Scheduled</span>`;
+    const act = VISIT_OPEN(t) ? `<select data-task-action="${t.task_id}" aria-label="Action"><option value="">Action</option><option value="complete">Complete</option><option value="edit">Edit</option><option value="delete">Delete</option></select>` : "";
+    return `<div class="trow"><span class="tm">${esc(t.slot||fmtTime(t.time))}</span><div><b>${esc(t.type)}</b><small>${esc(l.make)} ${esc(l.model)} · ${esc(dayLabel(at(t.date)))} · ${esc(t.assigned_to||"")}</small></div>${st}${act}</div>`;
+  };
+  const open = list.filter(VISIT_OPEN), past = list.filter(t=>!VISIT_OPEN(t));
+  return `<div class="tasksbar"><select aria-label="Users"><option>All Users</option></select><button type="button" class="add" data-act="visit-new" ${OPEN_STATUSES.includes(l.leadStatus)?"":"disabled"}>Add Task</button></div>
+    <div class="tgroup"><h4>Upcoming Tasks (${open.length})</h4>${open.map(row).join("") || `<div class="hint">No upcoming tasks.</div>`}</div>
+    ${past.length ? `<div class="tgroup"><h4>Past Tasks (${past.length})</h4>${past.map(row).join("")}</div>` : ""}`;
+}
+function openVisit(mode, taskId){
+  const l = leadById(S.selected), d = DEALERS[l.dealerId], v = taskId ? l.tasks.find(t=>t.task_id===taskId) : null;
+  MV = {mode, taskId: v && v.task_id, err:"", confirmCancel:false,
+    form: v ? {assigned_to:v.assigned_to, date:v.date, time:v.time, location:v.location, comments:v.comments}
+            : {assigned_to:"", date:"", time:"", location:"Showroom", comments:""}};
+  renderVisitModal();
+}
+function renderVisitModal(){
+  const box = $("#vModal"); if (!box) return;
+  const l = leadById(S.selected);
+  if (!MV || !l){ box.hidden = true; box.innerHTML = ""; return; }
+  const d = DEALERS[l.dealerId], f = MV.form, v = MV.taskId ? l.tasks.find(t=>t.task_id===MV.taskId) : null;
+  box.hidden = false;
+  if (MV.mode==="view" && v){
+    const where = v.location==="Showroom" ? `${d.name}, ${d.city}` : `Customer's place, ${l.city}`;
+    const open = VISIT_OPEN(v);
+    box.innerHTML = `<div class="vcard" role="dialog" aria-label="View Visit">
+      <div class="vhead"><button type="button" data-v="close" aria-label="Back">←</button><h3>View Visit</h3><button type="button" data-v="close" aria-label="Close">✕</button></div>
+      <div class="vbody">
+        ${open ? `<div class="vbtns"><button type="button" class="voutline" data-v="edit">Edit Visit</button><button type="button" class="voutline" data-v="cancel">Cancel Visit</button></div>` : ""}
+        ${MV.confirmCancel ? `<div class="vconfirm">Cancel this visit? <button type="button" class="voutline" style="flex:none;padding:5px 12px" data-v="cancel-yes">Yes, cancel</button><button type="button" class="voutline" style="flex:none;padding:5px 12px" data-v="cancel-no">No</button></div>` : ""}
+        <div class="vlabel">Customer Details</div>
+        <div class="vrows">
+          <div class="vrow"><span>Customer Name</span><b>${esc(l.name)}</b></div>
+          <div class="vrow"><span>Mobile Number</span><b>${esc(l.mobile)}</b></div>
+          <div class="vrow"><span>MMV</span><b>${esc(l.make)} ${esc(l.model)}</b></div>
+          <div class="vrow"><span>Scheduled</span><b>${esc(visitWhen(v))}</b></div>
+          <div class="vrow"><span>Assigned To</span><b>${esc(v.assigned_to||"")}</b></div>
+          <div class="vrow"><span>Location</span><b>${esc(where)}</b></div>
+          <div class="vrow"><span>Comments</span><b>${esc(v.comments||"—")}</b></div>
+          <div class="vrow"><span>Status</span><b>${v.status==="COMPLETED" ? "Completed" : v.status==="CANCELLED" ? "Cancelled" : visitAt(v) < simNow(l) ? "Pending" : "Scheduled"}</b></div>
+        </div>
+      </div>
+      ${open ? `<div class="vfoot"><button type="button" class="vprimary" data-v="complete">Complete Visit</button></div>` : ""}
+    </div>`;
+    return;
+  }
+  const today = isoOf(simNow(l));
+  box.innerHTML = `<div class="vcard" role="dialog" aria-label="Schedule Visit">
+    <div class="vhead"><h3>${MV.mode==="edit" ? "Edit Visit" : "Schedule Visit"}</h3><button type="button" data-v="close" aria-label="Close">✕</button></div>
+    <div class="vbody">
+      <label class="vfield"><span>Assign To<sup>*</sup></span><select id="vAssign"><option value="">Select Assignee</option>${d.team.map(n=>`<option ${f.assigned_to===n?"selected":""}>${esc(n)}</option>`).join("")}</select></label>
+      <label class="vfield"><span>Scheduled Date<sup>*</sup></span><input type="date" id="vDate" value="${f.date}" min="${today}"></label>
+      <label class="vfield"><span>Scheduled Time<sup>*</sup></span><input type="time" id="vTime" value="${f.time}"></label>
+      <div><div class="vlabel" style="margin-bottom:8px">Location<sup>*</sup></div>
+        <div class="vradios"><label><input type="radio" name="vLoc" value="Showroom" ${f.location==="Showroom"?"checked":""}> Showroom</label><label><input type="radio" name="vLoc" value="Customer's Place" ${f.location==="Customer's Place"?"checked":""}> Customer's Place</label></div></div>
+      <label class="vfield"><span>Comments</span><textarea id="vComments" placeholder="Comments">${esc(f.comments)}</textarea></label>
+      ${MV.err ? `<div class="verr">${esc(MV.err)}</div>` : ""}
+      <button type="button" class="vprimary" data-v="save">${MV.mode==="edit" ? "Update Visit" : "Schedule Visit"}</button>
+    </div>
+  </div>`;
+}
+function readVisitForm(){
+  if (!MV || !$("#vAssign")) return;
+  MV.form = {assigned_to:$("#vAssign").value, date:$("#vDate").value, time:$("#vTime").value,
+    location:(document.querySelector('input[name="vLoc"]:checked')||{}).value || "Showroom", comments:$("#vComments").value.trim()};
+}
+function visitAction(action){
+  const l = leadById(S.selected); if (!l || !MV) return;
+  const v = MV.taskId ? l.tasks.find(t=>t.task_id===MV.taskId) : null;
+  if (action==="close"){ MV = null; return renderVisitModal(); }
+  if (action==="edit"){ return openVisit("edit", v.task_id); }
+  if (action==="cancel"){ MV.confirmCancel = true; return renderVisitModal(); }
+  if (action==="cancel-no"){ MV.confirmCancel = false; return renderVisitModal(); }
+  if (action==="cancel-yes"){ cancelVisit(l, v, TELECALLER); MV = null; return render(); }
+  if (action==="complete"){ completeVisit(l, v, TELECALLER); MV = null; return render(); }
+  if (action==="save"){
+    readVisitForm(); const f = MV.form;
+    if (!f.assigned_to) { MV.err = "Choose who the visit is assigned to."; return renderVisitModal(); }
+    if (!f.date || !f.time) { MV.err = "Choose the scheduled date and time."; return renderVisitModal(); }
+    if (at(f.date, f.time) < simNow(l)) { MV.err = "Choose a date and time in the future."; return renderVisitModal(); }
+    const saved = saveVisit(l, {...f, task_id: MV.mode==="edit" ? MV.taskId : null}, TELECALLER);
+    MV = {mode:"view", taskId:saved.task_id, err:"", confirmCancel:false, form:f};
+    return render();
+  }
 }
 function feedHtml(l){
   let out = `<div class="afeed"><h3>${ICONS.follow} Activity Feed</h3>`, month = "";
@@ -1211,29 +1391,26 @@ function submitForm(){
     disposeCall(l, by, {followup:"Spoke to customer", interest:"Not interested", reason:F.reason, subReason:SUB_REASONS[F.reason]?F.subReason:null, comment:F.comment, next:null});
   } else {
     if (!F.span) return fail("Choose the expected buying span.");
-    if (!F.td) return fail("Choose whether a TD is required.");
-    if (F.td==="YES" && (!F.tdDate || !F.tdTime)) return fail("Choose the TD date and time.");
+    if (!F.td) return fail("Choose whether a visit is required.");
+    if (F.td==="YES" && (!F.tdDate || !F.tdTime)) return fail("Choose the visit date and time.");
     if (!F.nextDate || !F.nextTime) return fail("Choose the next call date and time.");
     if (!F.comment) return fail("Add a comment.");
     l.humanSpoke = true;
     const span = SPAN.find(x=>x[0]===F.span), qualified = QUALIFY.includes(F.span);
     setLeadStatus(l, qualified ? "QUALIFIED" : "NOT_QUALIFIED_OPEN", F.span);
     l.timeline = span[1]; l.priority = qualified ? (span[2]<=30?"P1":"P2") : null; l.botState = qualified ? "Qualified by telecaller" : "Nurture";
-    let tdAt = null;
-    if (F.td==="YES"){
-      const d = at(F.tdDate); l.visitDate = F.tdDate; l.visitDateLabel = dayLabel(d); l.visitSlot = fmtTime(F.tdTime);
-      tdAt = `${dayLabel(d)}, ${fmtTime(F.tdTime)}`;
-    }
+    const tdAt = F.td==="YES" ? `${dayLabel(at(F.tdDate))}, ${fmtTime(F.tdTime)}` : null;
     const next = {at: at(F.nextDate, F.nextTime), why: F.nextTouched ? "set by telecaller" : (F.nextWhy||"suggested")};
     disposeCall(l, by, {followup:"Spoke to customer", interest:"Interested", span:F.span, eager:l.eagerness, td:F.td==="YES", tdAt, comment:F.comment, next});
-    if (tdAt) addFeed(l, {icon:"td", title:"Test drive scheduled", lines:[tdAt, `Dealer sales executive: ${dealer.exec}`]});
+    if (F.td==="YES") saveVisit(l, {assigned_to:dealer.exec, date:F.tdDate, time:F.tdTime, location:"Showroom", comments:F.comment}, TELECALLER);
     if (qualified) l2rDealerEvent(l, "QUALIFIED");
   }
   resetForm(l); render();
 }
 function closeLead(kind){
   const l = leadById(S.selected); if (!l || !OPEN_STATUSES.includes(l.leadStatus)) return;
-  l.tasks.forEach(t=>{ if (t.status==="OPEN") t.status = kind==="book" ? "DONE" : "CANCELLED"; });
+  l.tasks.forEach(t=>{ if (t.status==="SCHEDULED") t.status = kind==="book" ? "COMPLETED" : "CANCELLED"; });
+  syncVisitFields(l);
   const by = TELECALLER;
   if (kind==="book"){
     setLeadStatus(l, "BOOKED"); l.botState = "Booked";
@@ -1438,7 +1615,8 @@ function applyState(d){
   REMOTE.applying=true;
   S=Object.assign(fresh(), d);
   S.seq.call ||= 5001; S.seq.task ||= 7001;
-  S.leads.forEach(l=>{ l.createdAt=new Date(l.createdAt); l.calls ||= []; l.tasks ||= []; });
+  S.leads.forEach(l=>{ l.createdAt=new Date(l.createdAt); l.calls ||= []; l.tasks ||= [];
+    l.tasks.forEach(t=>{ if (t.status==="OPEN") t.status="SCHEDULED"; if (t.status==="DONE") t.status="COMPLETED"; t.time ||= "10:00"; t.location ||= "Showroom"; t.assigned_to ||= t.sales_executive; }); });
   F = null; render(); REMOTE.applying=false; return true;
 }
 function setBadge(text){
@@ -1495,7 +1673,25 @@ $("#l2rBody").addEventListener("click", e=>{
   else if (t.dataset.date){ F[t.dataset.date] = t.dataset.v; F.err=""; renderLms(); }
   else if (t.dataset.act==="submit") submitForm();
   else if (t.dataset.act==="book" || t.dataset.act==="close") closeLead(t.dataset.act);
+  else if (t.dataset.act==="visit"){ const vs = visitState(l); vs && vs.state!=="done" ? openVisit("view", vs.v.task_id) : openVisit("schedule"); }
+  else if (t.dataset.act==="visit-new") openVisit("schedule");
 });
+$("#l2rBody").addEventListener("click", e=>{
+  const t = e.target.closest("[data-tab]"); if (!t) return;
+  TAB = t.dataset.tab; renderLms();
+});
+$("#l2rBody").addEventListener("change", e=>{
+  const sel = e.target.closest("[data-task-action]"); if (!sel || !sel.value) return;
+  const l = leadById(S.selected), v = l.tasks.find(t=>t.task_id===sel.dataset.taskAction), a = sel.value; sel.value = "";
+  if (a==="complete") { completeVisit(l, v, TELECALLER); render(); }
+  else if (a==="edit") openVisit("edit", v.task_id);
+  else if (a==="delete") { openVisit("view", v.task_id); MV.confirmCancel = true; renderVisitModal(); }
+});
+$("#vModal").addEventListener("click", e=>{
+  if (e.target.id==="vModal") return visitAction("close");
+  const b = e.target.closest("[data-v]"); if (b) visitAction(b.dataset.v);
+});
+$("#vModal").addEventListener("input", ()=>readVisitForm());
 $("#l2rBody").addEventListener("change", e=>{
   if (!F) return;
   F.comment = ($("#fComment")||{}).value ?? F.comment;

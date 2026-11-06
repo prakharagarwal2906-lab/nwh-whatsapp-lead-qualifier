@@ -47,7 +47,8 @@ export const TABLES = {
   // Tasks against a lead, e.g. a Showroom Visit created by WhatsApp once date and time are known.
   lead_tasks: [["task_id"], {
     task_id: "text", lead_id: "text", type: "text", status: "text", created_by: "text", created_at: "text",
-    dealer_id: "text", sales_executive: "text", date: "text", date_label: "text", slot: "text", changed_at: "text",
+    dealer_id: "text", assigned_to: "text", date: "text", time: "text", slot: "text", location: "text",
+    comments: "text", changed_at: "text", completed_at: "text",
   }],
   wa_event: [["event_id"], {
     event_id: "text", type: "text", received_at: "text", lead_id: "text", payload: "jsonb",
