@@ -98,7 +98,7 @@ def test_one_month_qualifies_then_books_a_visit(env):
     day_iso = picked_day.postback.split("|")[2]
 
     post(env, list_reply("VISIT_DATE", day_iso, picked_day.title, "L1", gs_of(env, "VISIT_DATE"), msg_id="wamid.in2"))
-    assert "Preferred visit date" in env.l2r.comments[-1][1]
+    assert not any("visit date" in c[1].lower() for c in env.l2r.comments)   # nothing until the time is picked
     time_list = env.gs.lists[1]
     assert time_list["section"] == "Choose your preferred time"
     assert time_list["rows"][0].title == "9:30 AM - 10:30 AM"
@@ -106,8 +106,9 @@ def test_one_month_qualifies_then_books_a_visit(env):
     slot = time_list["rows"][2]
     post(env, list_reply("VISIT_TIME", slot.postback.split("|")[2], slot.title, "L1",
                          gs_of(env, "VISIT_TIME"), msg_id="wamid.in3"))
-    lead_id, visit, _ = env.l2r.visits[0]
-    assert lead_id == "L1" and visit["date"] == day_iso and visit["slotStart"] == "1130" and visit["assignee"] == "Sathya"
+    lead_id, task, _ = env.l2r.visits[0]
+    assert lead_id == "L1" and task["type"] == "SHOWROOM_VISIT" and task["createdBy"] == "WHATSAPP"
+    assert task["date"] == day_iso and task["slotStart"] == "1130" and task["salesExecutive"] == "Sathya"
     assert "Your visit is booked" in env.gs.texts[-1][1] and slot.title in env.gs.texts[-1][1]
 
     # every tap is tracked against the template that started the flow

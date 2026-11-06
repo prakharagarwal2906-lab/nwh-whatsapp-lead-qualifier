@@ -170,7 +170,7 @@ flowchart TD
   D -- "15 Days / 1 Month / 1–2 Months" --> Q["Lead → Qualification (P1 / P2)"]
   Q --> V1["List: Choose your preferred date<br/>next 7 days the dealer is open"]
   V1 --> V2["List: Choose your preferred time<br/>hourly slots in working hours"]
-  V2 --> V3["Visit scheduled in L2R<br/>confirmation message"]
+  V2 --> V3["WhatsApp creates a Showroom Visit task<br/>in L2R · confirmation message"]
   D -- "More than 2 Months" --> N["Stays in First Call, follow-up in 60 days<br/>'Thanks! We'll check in closer to your timeline.<br/>Need help before that? Call us anytime at …'"]
   D -- "Still Researching" --> R["Lead closed: Not interested in buying · Just researching<br/>'Please feel free to reach us at … for any queries'"]
   D -- "No reply in 24h" --> E["No Response<br/>normal callback"]
@@ -188,8 +188,8 @@ flowchart TD
       <tr><td>Timeline · 1 – 2 Months</td><td><code>…|TIMELINE|1_2M|…</code></td><td><span class="tag q">Qualified · P2</span></td><td>Same · ask visit date</td></tr>
       <tr><td>Timeline · More than 2 Months</td><td><code>…|TIMELINE|GT2M|…</code></td><td><span class="tag n">Nurture</span></td><td>Follow-up task +60 days · check-in message</td></tr>
       <tr><td>Timeline · Still Researching</td><td><code>…|TIMELINE|RESEARCH|…</code></td><td><span class="tag x">Closed</span></td><td>Lead closed: Not interested · reason "Not interested in buying" · sub reason "Just researching" · help message</td></tr>
-      <tr><td>Visit date · e.g. Sat, 7 Nov</td><td><code>…|VISIT_DATE|2026-11-07|…</code></td><td><span class="tag h">Date chosen</span></td><td>Comment on lead · ask time slot</td></tr>
-      <tr><td>Visit time · e.g. 11:30 AM – 12:30 PM</td><td><code>…|VISIT_TIME|1130|…</code></td><td><span class="tag q">Visit booked</span></td><td>Schedule showroom visit for the sales executive · confirmation</td></tr>
+      <tr><td>Visit date · e.g. Sat, 7 Nov</td><td><code>…|VISIT_DATE|2026-11-07|…</code></td><td><span class="tag h">Date chosen</span></td><td>Nothing in L2R yet · ask time slot</td></tr>
+      <tr><td>Visit time · e.g. 11:30 AM – 12:30 PM</td><td><code>…|VISIT_TIME|1130|…</code></td><td><span class="tag q">Visit booked</span></td><td><b>Showroom Visit task</b> created against the lead with the date and time · confirmation</td></tr>
       <tr><td>Typed "STOP"</td><td>none</td><td><span class="tag x">Opt-out</span></td><td>No more bot messages for that mobile and dealer</td></tr>
     </tbody>
   </table></div>
@@ -334,7 +334,7 @@ sequenceDiagram
   B->>G: List "Choose your preferred time" (working-hour slots)
   C->>G: Picks "11:30 AM – 12:30 PM"
   G->>B: list_reply · NWH_QUALIFIER|VISIT_TIME|1130|L123
-  B->>L: Schedule showroom visit (date, slot, sales executive)
+  B->>L: Create Showroom Visit task (date, time, dealer, sales executive)
   B->>G: Confirmation text
   </pre></div>
   <p>Gupshup delays inbound events by about 5 seconds so the sender can save the outbound ID first. We still write each <code>messageId</code> synchronously when the send API responds, for templates and session messages alike.</p>
@@ -438,9 +438,10 @@ X-Webhook-Token: &lt;secret&gt;
 { "callStatus":"CONNECTED", "disposition":"WHATSAPP_BOT", "targetStage":"QUALIFICATION",
   "purchaseTimeline":"1M", "priority":"P1", "actor":"system:whatsapp-bot" }
 
-POST /api/v1/leads/{leadId}/visits         Idempotency-Key: wa-&lt;inbound id&gt;
-{ "type":"SHOWROOM_VISIT", "date":"2026-11-07", "slotStart":"1130",
-  "assignee":"Sathya", "source":"WHATSAPP_BOT" }
+POST /api/v1/leads/{leadId}/tasks          Idempotency-Key: wa-&lt;inbound id&gt;
+# Showroom Visit task, created only once the customer has given both date and time
+{ "type":"SHOWROOM_VISIT", "date":"2026-11-07", "slotStart":"1130", "dealerId":"D101",
+  "salesExecutive":"Sathya", "createdBy":"WHATSAPP" }
 
 POST /api/v1/leads/{leadId}/calls          Idempotency-Key: wa-&lt;inbound id&gt;
 { "dueAt":"2026-11-30T09:30:00+05:30",

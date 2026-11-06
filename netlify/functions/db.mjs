@@ -44,6 +44,11 @@ export const TABLES = {
     dealer_id: "text", template_id: "text", flow: "text", step: "text", option_code: "text",
     option_title: "text", postback: "text", received_at: "text",
   }],
+  // Tasks against a lead, e.g. a Showroom Visit created by WhatsApp once date and time are known.
+  lead_tasks: [["task_id"], {
+    task_id: "text", lead_id: "text", type: "text", status: "text", created_by: "text", created_at: "text",
+    dealer_id: "text", sales_executive: "text", date: "text", date_label: "text", slot: "text", changed_at: "text",
+  }],
   wa_event: [["event_id"], {
     event_id: "text", type: "text", received_at: "text", lead_id: "text", payload: "jsonb",
   }],

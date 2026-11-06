@@ -109,7 +109,7 @@ flowchart TD
   A["Website enquiry → lead in L2R"] --> B{"Dealer closed?"}
   B -- No --> Z["Sales executive calls"]
   B -- Yes --> C["Template from WABA number<br/>How soon are you planning to buy?"]
-  C -- "15 Days / 1 Month / 1–2 Months" --> Q["Lead → Qualification"] --> D["Choose date<br/>(next 7 open days)"] --> T["Choose time<br/>(working-hour slots)"] --> V["Visit scheduled in L2R"]
+  C -- "15 Days / 1 Month / 1–2 Months" --> Q["Lead → Qualification"] --> D["Choose date<br/>(next 7 open days)"] --> T["Choose time<br/>(working-hour slots)"] --> V["Showroom Visit task in L2R"]
   C -- "More than 2 Months" --> N["Check-in message, follow-up in 60 days"]
   C -- "Still Researching" --> R["Help message, lead closed (just researching)"]
 ```
@@ -124,8 +124,8 @@ flowchart TD
 | Timeline · 1–2 Months | Qualified · P2 | Stage → Qualification · ask visit date |
 | Timeline · More than 2 Months | Nurture | Follow-up +60 days · "Thanks! We'll check in closer to your timeline…" |
 | Timeline · Still Researching | Closed | Not interested · "Not interested in buying" · "Just researching" · "Please feel free to reach us at … for any queries…" |
-| Visit date | Date chosen | Comment · ask time slot |
-| Visit time | Visit booked | Schedule showroom visit · confirmation |
+| Visit date | Date chosen | Nothing in L2R yet · ask time slot |
+| Visit time | Visit booked | Showroom Visit task created against the lead · confirmation |
 
 **When the customer taps again** (WhatsApp keeps buttons active), based on the answer already given:
 

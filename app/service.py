@@ -437,16 +437,17 @@ class QualifierService:
             cfg = self.repo.get_dealer(msg.dealer_id)
 
             if msg.outcome == Outcome.DATE_CHOSEN:
-                day = date.fromisoformat(msg.reply_code)
-                self.l2r.add_comment(lead.lead_id, f"Preferred visit date on WhatsApp: {day_label(day)}", key)
+                pass  # nothing goes to L2R until the customer has also picked a time
             elif msg.outcome == Outcome.VISIT_BOOKED:
+                # Date and time are both known: create the Showroom Visit task against the lead.
                 chosen = self.repo.latest_interaction(msg.lead_id, STEP_VISIT_DATE)
-                self.l2r.schedule_visit(lead.lead_id, {
+                self.l2r.create_task(lead.lead_id, {
                     "type": "SHOWROOM_VISIT",
                     "date": chosen["option_code"] if chosen else None,
                     "slotStart": msg.reply_code,
-                    "assignee": cfg.rep_name if cfg else None,
-                    "source": "WHATSAPP_BOT",
+                    "dealerId": msg.dealer_id,
+                    "salesExecutive": cfg.rep_name if cfg else None,
+                    "createdBy": "WHATSAPP",
                     "actor": "system:whatsapp-bot",
                 }, key)
             else:

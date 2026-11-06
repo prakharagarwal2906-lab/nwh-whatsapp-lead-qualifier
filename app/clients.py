@@ -51,7 +51,7 @@ class L2RClient(Protocol):
     def get_lead(self, lead_id: str) -> Lead | None: ...
     def dispose(self, lead_id: str, body: dict, idempotency_key: str) -> None: ...
     def add_comment(self, lead_id: str, text: str, idempotency_key: str) -> None: ...
-    def schedule_visit(self, lead_id: str, body: dict, idempotency_key: str) -> None: ...
+    def create_task(self, lead_id: str, body: dict, idempotency_key: str) -> None: ...
     def schedule_call(self, lead_id: str, body: dict, idempotency_key: str) -> None: ...
 
 
@@ -160,8 +160,9 @@ class HttpL2RClient:
                            headers={"Idempotency-Key": idempotency_key})
         r.raise_for_status()
 
-    def schedule_visit(self, lead_id: str, body: dict, idempotency_key: str) -> None:
-        r = self.http.post(f"/api/v1/leads/{lead_id}/visits", json=body,
+    def create_task(self, lead_id: str, body: dict, idempotency_key: str) -> None:
+        """Task against the lead, e.g. a Showroom Visit with the date and time the customer chose."""
+        r = self.http.post(f"/api/v1/leads/{lead_id}/tasks", json=body,
                            headers={"Idempotency-Key": idempotency_key})
         r.raise_for_status()
 

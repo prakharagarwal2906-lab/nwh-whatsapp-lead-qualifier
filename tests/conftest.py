@@ -77,7 +77,7 @@ class FakeL2R:
     def schedule_call(self, lead_id, body, idempotency_key):
         self.calls.append((lead_id, body, idempotency_key))
 
-    def schedule_visit(self, lead_id, body, idempotency_key):
+    def create_task(self, lead_id, body, idempotency_key):
         if self.down:
             raise ConnectionError("L2R down")
         self.visits.append((lead_id, body, idempotency_key))
