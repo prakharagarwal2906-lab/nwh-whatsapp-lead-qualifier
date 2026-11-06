@@ -58,7 +58,7 @@ cp .env.example .env   # fill in tokens, then export the variables
 
 **See every table and the log**
 
-*Prototype (Netlify):* open step 4, **Tracking & engagement**, and scroll to **Database & logs**. It shows `leads_l2r`, `dealer_config`, `wa_message`, `wa_interaction`, `wa_event`, `audit_log` and the live log, with a filter box, **Export table CSV** and **Export full DB JSON**. Everything is kept in Postgres (or the browser) and survives a refresh. **Reset demo** only starts a fresh walkthrough; it never deletes leads, messages or tracking.
+*Prototype (Netlify):* open step 4, **Tracking & engagement**, and scroll to **Database & logs**. It shows `leads_l2r`, `dealer_config`, `wa_message`, `wa_interaction`, `wa_event`, `audit_log` and the live log, with a filter box, **Export table CSV** and **Export full DB JSON**. Everything is kept in Postgres (or the browser) and survives a refresh. Nothing in the prototype deletes leads, messages or tracking.
 
 *Python service:* every step writes a row to the `audit_log` table and a JSON line to `logs/qualifier.log` (rotated at 10 MB, 5 files; path set by `LOG_FILE`). Read them with:
 

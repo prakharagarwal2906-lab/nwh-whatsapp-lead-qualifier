@@ -430,9 +430,6 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
   <div class="screen-head">
     <div><h1>2 · L2R and the customer's WhatsApp, side by side</h1>
       <p>Tap the options on the phone as the customer and watch L2R update. Our telecaller, or the WhatsApp bot through the L2R API, tags the follow-up form; when the lead is <b>qualified</b>, L2R sends it to the <b>dealer panel</b>. Our team keeps calling until the customer books.</p></div>
-    <div class="next">
-      <button class="btn ghost" id="resetAll" type="button">Reset demo</button>
-    </div>
   </div>
   <div class="combo">
     <div class="l2r">
@@ -1209,9 +1206,8 @@ function leadTags(l){
   return t.join("");
 }
 function renderLms(){
-  if ($("#leadPick")) $("#leadPick").innerHTML = S.leads.length ? S.leads.map(l=>`<option value="${l.id}" ${l.id===S.selected?"selected":""}>${l.id} · ${esc(l.name)} · ${esc(LEAD_STATUS[l.leadStatus]||"")}</option>`).join("") : `<option>No leads yet</option>`;
   const l = leadById(S.selected), box = $("#l2rBody");
-  if (!l){ box.innerHTML = `<div class="lcard" style="grid-column:1/-1"><div class="empty">No leads yet. Submit an enquiry on the <a href="#website">customer website</a>.</div></div>`; return; }
+  if (!l){ box.innerHTML = ""; return; }
   if (!F || F.lead!==l.id) resetForm(l);
   const dealer = DEALERS[l.dealerId];
   const st = ["FIRST_CALL","QUALIFICATION","VISITS","BOOKING"], idx = st.indexOf(l.stage);
@@ -1915,11 +1911,6 @@ $("#masterFields").addEventListener("input", ()=>{ MASTER_DIRTY = true; $("#mast
 $("#masterSave").addEventListener("click", ()=>saveMaster(false));
 $("#masterDefault").addEventListener("click", ()=>{ MASTER_DIRTY = false; saveMaster(true); });
 
-// Reset demo starts a fresh walkthrough but keeps every lead, message and tracking row.
-$("#resetAll").addEventListener("click", ()=>{
-  S.selected = null; F = null; MV = null; TAB = "follow";
-  location.hash="#website"; render();
-});
 
 render();
 startStorage();
