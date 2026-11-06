@@ -342,8 +342,9 @@ class QualifierService:
         """Rules keyed by the answer the customer already gave:
         earlier 15D/1M/1-2M -> another of these: thank-you confirming the update
         earlier 15D/1M/1-2M -> GT2M / RESEARCH: ask for confirmation first
-        earlier GT2M -> any other: thanks, next call by the new buying span
-        earlier RESEARCH (lead closed) -> any other: reopen the lead, next call by the new span, thanks
+        earlier GT2M / RESEARCH -> 15D/1M/1-2M: qualify straight away (form tagged in L2R), visit date next
+        earlier GT2M -> RESEARCH: keep the existing call, note the change
+        earlier RESEARCH (lead closed) -> GT2M: reopen the lead, next call by the new span, thanks
         """
         prev = tpl.reply_code
         prev_label, new_label = TIMELINE_LABEL[prev], TIMELINE_LABEL[option]
@@ -366,6 +367,23 @@ class QualifierService:
                 cfg.gupshup_app_id, cfg.source_number, tpl.mobile, confirm_change_text(prev_label, new_label), buttons))
             return "reply:CONFIRMATION_ASKED"
         reopen = prev == "RESEARCH"
+        if option in QUALIFYING:
+            # Qualify straight away instead of waiting for a call: tag the follow-up form in L2R
+            # (L2R disposes the call, schedules the next one and sends the lead to the dealer panel),
+            # then continue to the visit date question.
+            d = decide_timeline(option, cfg.qualify_max_days)
+            self.repo.set_answer(tpl.id, option, d.outcome)
+            self._l2r(self.l2r.dispose, tpl.lead_id, {
+                "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT",
+                "followUpStatus": "SPOKE_TO_CUSTOMER", "leadStatus": "INTERESTED",
+                "expectedBuyingSpan": option, "eagerness": "HOT" if d.priority == "P1" else "WARM",
+                "targetStage": "QUALIFICATION", "purchaseTimeline": option, "priority": d.priority,
+                "reopen": reopen, "comment": f"Customer changed the answer from '{prev_label}' to '{new_label}' on WhatsApp",
+                "actor": "system:whatsapp-bot"}, key)
+            self._text(tpl, cfg, "CHANGE_ACK", updated_text(new_label))
+            if not self.repo.latest_interaction(tpl.lead_id, STEP_VISIT_TIME):
+                self._next_step(tpl, cfg, STEP_TIMELINE, option)
+            return "reply:QUALIFIED_ON_CHANGE"
         self.repo.set_answer(tpl.id, option, decide_timeline(option, cfg.qualify_max_days).outcome)
         reason = f"Customer changed the answer from '{prev_label}' to '{new_label}' on WhatsApp"
         span = option if option != "RESEARCH" else ("GT2M" if reopen else None)

@@ -234,19 +234,26 @@ def test_qualified_to_gt2m_yes_moves_to_not_qualified_open(env):
     assert env.gs.texts[-1][1].startswith("Thanks, Prakhar!")
 
 
-def test_gt2m_to_one_month_schedules_call_by_new_span(env):
-    from datetime import datetime, timedelta, timezone
+def test_gt2m_to_one_month_qualifies_straight_away(env):
     send(env)
     post(env, quick_reply("GT2M", "L1", "gs-1"))
     post(env, quick_reply("1M", "L1", "gs-1", msg_id="wamid.in9"))
-    assert env.repo.event_result("wamid.in9") == "reply:TIMELINE_CHANGED"
-    lead_id, body, _ = env.l2r.calls[-1]
-    assert lead_id == "L1" and body["reopen"] is False
-    due = datetime.fromisoformat(body["dueAt"])
-    days = (due - datetime.now(timezone.utc)).days
-    assert 22 <= days <= 25            # 30-day span - 7 days, moved to an open day's opening time
-    assert due.astimezone(timezone(timedelta(hours=5, minutes=30))).strftime("%H:%M") == "09:30"
+    assert env.repo.event_result("wamid.in9") == "reply:QUALIFIED_ON_CHANGE"
+    body = env.l2r.dispositions[-1][1]
+    assert body["targetStage"] == "QUALIFICATION" and body["leadStatus"] == "INTERESTED"
+    assert body["expectedBuyingSpan"] == "1M" and body["reopen"] is False
     assert env.gs.texts[-1][1] == "Thank you for confirming! We've updated your buying timeline to 1 Month."
+    assert env.gs.lists[-1]["section"] == "Choose your preferred date"   # continues to the visit
+    assert env.l2r.calls == []
+
+
+def test_research_to_gt2m_reopens_with_span_call(env):
+    send(env)
+    post(env, quick_reply("RESEARCH", "L1", "gs-1"))
+    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.in9"))
+    assert env.repo.event_result("wamid.in9") == "reply:REOPENED"
+    body = env.l2r.calls[-1][1]
+    assert body["reopen"] is True and body["purchaseTimeline"] == "GT2M"
 
 
 def test_gt2m_to_research_keeps_call_and_notes_change(env):
@@ -258,14 +265,14 @@ def test_gt2m_to_research_keeps_call_and_notes_change(env):
     assert env.gs.texts[-1][1].startswith("Thanks for letting us know")
 
 
-def test_research_to_anything_reopens_lead(env):
+def test_research_to_fifteen_days_reopens_and_qualifies(env):
     send(env)
     post(env, quick_reply("RESEARCH", "L1", "gs-1"))
     post(env, quick_reply("15D", "L1", "gs-1", msg_id="wamid.in9"))
-    assert env.repo.event_result("wamid.in9") == "reply:REOPENED"
-    body = env.l2r.calls[-1][1]
-    assert body["reopen"] is True and body["purchaseTimeline"] == "15D"
-    assert env.gs.texts[-1][1] == "Thank you for confirming! We've updated your buying timeline to 15 Days."
+    assert env.repo.event_result("wamid.in9") == "reply:QUALIFIED_ON_CHANGE"
+    body = env.l2r.dispositions[-1][1]
+    assert body["reopen"] is True and body["targetStage"] == "QUALIFICATION" and body["priority"] == "P1"
+    assert env.gs.lists[-1]["section"] == "Choose your preferred date"
 
 
 def test_same_answer_again_changes_nothing(env):

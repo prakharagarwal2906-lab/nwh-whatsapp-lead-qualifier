@@ -871,7 +871,9 @@ function scheduleNext(lead, n){
        new tap is More than 2 Months / Still Researching -> ask for confirmation first, then handle it
    - earlier More than 2 Months -> any other tap: thanks, next call by the new buying span
    - earlier Still Researching (lead closed as Not interested) -> any other tap: reopen the lead,
-       next call by the new buying span, thanks message */
+       next call by the new buying span, thanks message
+   - in both cases a tap on 15 Days / 1 Month / 1-2 Months qualifies the lead straight away
+     (follow-up form tagged, dealer panel via L2R) and continues to the visit date */
 async function timelineChanged(lead, option, dealer){
   const prev = lead.waAnswer, P = TIMELINE.find(x=>x[0]===prev)[1], t = TIMELINE.find(x=>x[0]===option), N = t[1];
   const say = async text => { await wait(300); await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text, payload:{type:"text"}}); };
@@ -895,10 +897,23 @@ async function timelineChanged(lead, option, dealer){
     return sendMessage(lead, {kind:"buttons", step:"CONFIRM_CHANGE", text:`You earlier told us "${P}". Do you want to change it to "${N}"?`,
       buttons:[{code:"YES", label:"Yes, change it"}, {code:"NO", label:"No, keep earlier answer"}], payload:{type:"quick_reply", options:["Yes, change it","No, keep earlier answer"]}});
   }
-  // Earlier More than 2 Months, or Still Researching (closed): thanks, and the next call
-  // follows the new answer's buying span (7 days before it ends, or 1 day after a visit).
+  // Earlier More than 2 Months, or Still Researching (closed).
   const reopened = !OPEN_STATUSES.includes(lead.leadStatus);
   lead.waAnswer = option; lead.timeline = N;
+  if (QUALIFY.includes(option)){
+    // Qualify straight away (saves a call): the bot tags the follow-up form, L2R disposes the call,
+    // schedules the next one and its lead-qualified event sends the lead to the dealer panel.
+    lead.priority = t[2]<=30 ? "P1" : "P2"; lead.botState = "Qualified by bot";
+    addFeed(lead, {icon:"wa", tone:"waf", title: reopened ? "Lead reopened via WhatsApp" : "Buying timeline changed via WhatsApp", lines:[`From '${P}' to '${N}'`]});
+    setLeadStatus(lead, "QUALIFIED", option);
+    disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected (WhatsApp)", followup:"Spoke to customer (WhatsApp)", interest:"Interested", span:option,
+      eager:lead.eagerness, comment:`Customer changed the answer from '${P}' to '${N}' on WhatsApp`, next: nextCallAt(lead, option, lead.visitDate)});
+    l2rDealerEvent(lead, "QUALIFIED");
+    await say(`Thanks for confirming! We've updated your buying timeline to ${N}.`);
+    if (!lead.visitSlot){ await wait(300); await sendDateList(lead, dealer); }
+    return;
+  }
+  // option is More than 2 Months (from a closed Still Researching lead) or Still Researching (from GT2M)
   if (reopened) setLeadStatus(lead, "NOT_QUALIFIED_OPEN");
   if (option!=="RESEARCH"){ lead.spanCode = option; lead.eagerness = eagerness(option); }
   addFeed(lead, {icon:"wa", tone:"waf", title: reopened ? "Lead reopened via WhatsApp" : "Buying timeline changed via WhatsApp",
