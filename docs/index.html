@@ -63,11 +63,6 @@ main.screen{max-width:1240px;margin:0 auto;padding-block:18px 40px}
 .panel>h2{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0;padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .panel>h2 .right{margin-left:auto;text-transform:none;letter-spacing:0}
 .pad{padding:14px}
-.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px 22px}
-.mdays{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px 10px;align-items:center;font-size:13.5px}
-.mdays input[type=time],.mfield input,.mfield select{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:var(--surface);color:inherit;font:inherit;min-width:0;width:100%}
-.mfield{display:grid;gap:4px;font-size:13px;margin-bottom:10px}
-.mfield span{color:var(--muted)}
 .hint{font-size:12px;color:var(--muted)}
 .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:6px}
 .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap}
@@ -498,22 +493,6 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
   <section class="panel" style="margin-top:14px">
     <h2>Every click (wa_interaction) <span class="right hint" id="clickCount"></span></h2>
     <div class="tablewrap scroll" id="clicks"></div>
-  </section>
-
-  <section class="panel" style="margin-top:14px">
-    <h2>Master dealer (dealer_config · MASTER) <span class="right hint" id="masterNote"></span></h2>
-    <div class="pad">
-      <p class="hint" style="margin:0 0 12px">BikeWale's own row in <code>dealer_config</code>. Its working hours decide after-hours, the hours quoted in the template and when calls are scheduled. Dealer rows only set showroom visit dates and slots.</p>
-      <div class="mgrid">
-        <div><div class="mdays" id="masterDays"></div></div>
-        <div id="masterFields"></div>
-      </div>
-      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn primary small" id="masterSave" type="button">Save master dealer</button>
-        <button class="btn ghost small" id="masterDefault" type="button">Mon–Sat, 9:30 AM – 6:30 PM</button>
-        <span class="hint" id="masterMsg"></span>
-      </div>
-    </div>
   </section>
 
   <section class="panel" style="margin-top:14px">
@@ -1588,41 +1567,7 @@ function stats(){
   for (const i of S.interactions){ const m=ownerOf(i); if (!m) continue; const t=by[m.template_id]; if (i.step==="TIMELINE") t.clicks++; if (i.step==="FREE_TEXT") t.texts++; }
   return {by:Object.values(by).sort((a,b)=>a.template.localeCompare(b.template)), clicks, uniq, texts};
 }
-let MASTER_DIRTY = false;
-function renderMaster(){
-  const m = S.master, box = $("#masterDays"); if (!box) return;
-  box.innerHTML = `<b>Day</b><b>Opens</b><b>Closes</b>` + [1,2,3,4,5,6,0].map(d=>{
-    const w = (m.working_hours[DKEY[d]]||[])[0];
-    return `<label><input type="checkbox" data-mday="${DKEY[d]}" ${w?"checked":""}> ${DAYS[d]}</label>
-      <input type="time" data-mopen="${DKEY[d]}" value="${w?w[0]:"09:30"}" ${w?"":"disabled"} aria-label="${DAYS[d]} opens">
-      <input type="time" data-mclose="${DKEY[d]}" value="${w?w[1]:"18:30"}" ${w?"":"disabled"} aria-label="${DAYS[d]} closes">`;
-  }).join("");
-  const f = (id, label, val, type="text") => `<label class="mfield"><span>${label}</span><input id="${id}" type="${type}" value="${esc(String(val??""))}"></label>`;
-  $("#masterFields").innerHTML = f("mName","Name", m.dealer_name) + f("mWaba","WABA number (sender)", m.waba_number) + f("mSupport","BikeWale support number", m.support_number)
-    + `<label class="mfield"><span>Template</span><select id="mTpl">${Object.keys(TEMPLATES).map(t=>`<option ${t===m.template_id?"selected":""}>${t}</option>`).join("")}</select></label>`
-    + f("mTz","Time zone", m.timezone) + f("mMax","Qualify if buying within (days)", m.qualify_max_days, "number") + f("mBuf","Stop new work this many minutes before closing", m.pre_close_buffer_min, "number");
-  $("#masterNote").textContent = hoursText(BW);
-}
-function saveMaster(hoursOnly){
-  const hours = {};
-  if (hoursOnly) Object.assign(hours, MASTER_DEFAULT().working_hours);
-  else for (const k of DKEY){
-    const on = $(`[data-mday="${k}"]`).checked, o = $(`[data-mopen="${k}"]`).value, c = $(`[data-mclose="${k}"]`).value;
-    if (!on) continue;
-    if (!o || !c || toMin(c) <= toMin(o)) { $("#masterMsg").textContent = `Check the hours for ${DAYS[DKEY.indexOf(k)]}: closing must be after opening.`; return; }
-    hours[k] = [[o, c]];
-  }
-  if (!Object.keys(hours).length) { $("#masterMsg").textContent = "Add at least one working day."; return; }
-  const v = id => $(id).value.trim();
-  if (!hoursOnly) Object.assign(S.master, {dealer_name:v("#mName")||"BikeWale (master dealer)", waba_number:v("#mWaba"), support_number:v("#mSupport"), template_id:v("#mTpl"),
-    timezone:v("#mTz")||"Asia/Kolkata", qualify_max_days:Number(v("#mMax"))||60, pre_close_buffer_min:Number(v("#mBuf"))||0});
-  S.master.working_hours = hours; BW = masterCal();
-  log("info","DB",`UPDATE dealer_config MASTER · ${hoursText(BW)}`, {...S.master});
-  MASTER_DIRTY = false; save(); render();
-  $("#masterMsg").textContent = `Saved · ${hoursText(BW)}`;
-}
 function renderTracking(){
-  if (!MASTER_DIRTY) renderMaster();   // never overwrite unsaved edits (the page refreshes from Postgres every few seconds)
   const {by, clicks, uniq, texts} = stats();
   const tot=by.reduce((a,t)=>{ for (const k of ["sent","delivered","read","replied"]) a[k]+=t[k]; return a; }, {sent:0,delivered:0,read:0,replied:0});
   $("#kpis").innerHTML = [
@@ -1914,13 +1859,6 @@ $("#exportCsv").addEventListener("click", ()=>{
   download(`${dbTable}.csv`, [cols.join(","),...rows.map(r=>cols.map(c=>cell(r[c])).join(","))].join("\n"), "text/csv");
 });
 $("#exportJson").addEventListener("click", ()=>download("qualifier-db.json", JSON.stringify(tables(),null,2), "application/json"));
-$("#masterDays").addEventListener("change", e=>{
-  const k = e.target.dataset.mday; MASTER_DIRTY = true; $("#masterMsg").textContent = "Unsaved changes";
-  if (k){ $(`[data-mopen="${k}"]`).disabled = !e.target.checked; $(`[data-mclose="${k}"]`).disabled = !e.target.checked; }
-});
-$("#masterFields").addEventListener("input", ()=>{ MASTER_DIRTY = true; $("#masterMsg").textContent = "Unsaved changes"; });
-$("#masterSave").addEventListener("click", ()=>saveMaster(false));
-$("#masterDefault").addEventListener("click", ()=>{ MASTER_DIRTY = false; saveMaster(true); });
 
 
 render();
