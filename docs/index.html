@@ -105,13 +105,13 @@ main.screen{max-width:1240px;margin:0 auto;padding-block:18px 40px}
 .democtl{margin-top:14px;border:1px dashed var(--line);border-radius:10px;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--surface)}
 .democtl b{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 
-/* LMS: L2R look */
+/* LMS: lead management system look */
 .l2r{--l-navy:#1d5c96;--l-ink:#1e2a3a;--l-muted:#5b6778;--l-line:#d3dae4;--l-red:#e10b0b;--l-green:#1e9e3e;--l-step:#c5d6ea;
   font-family:"Lato",var(--f-body);color:var(--l-ink);background:#f4f6f9;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .l2r button,.l2r input,.l2r select,.l2r textarea{font-family:inherit}
 .l2rnav{background:#fff;display:flex;align-items:center;gap:26px;padding:8px 22px;border-bottom:1px solid var(--l-line);flex-wrap:wrap}
-.l2rlogo{background:#0d2d5a;color:#fff;display:flex;flex-direction:column;align-items:center;padding:4px 10px 0;line-height:1;border-radius:2px}
-.l2rlogo b{font-size:26px;font-weight:900;letter-spacing:-.02em}
+.l2rlogo{background:#0d2d5a;color:#fff;display:flex;flex-direction:column;align-items:center;padding:7px 12px;line-height:1;border-radius:2px}
+.l2rlogo b{font-size:15px;font-weight:800;letter-spacing:0}
 .l2rlogo span{background:var(--l-red);font-size:7.5px;letter-spacing:.18em;padding:2px 6px;margin-top:3px;align-self:stretch;text-align:center}
 .l2rnav .menu{display:flex;gap:26px;font-size:15px;color:#4a5566}
 .l2rnav .menu .on{color:var(--l-ink);font-weight:700;border-bottom:3px solid #0d2d5a;padding-bottom:6px}
@@ -254,7 +254,7 @@ details summary{padding:6px 10px;cursor:pointer;font-size:12px;color:var(--muted
 .trow .tm{font-size:12.5px;color:#3b4656;border-right:1px solid #dfe5ec;padding-right:10px}
 .trow b{display:block;font-size:13.5px}.trow small{font-size:12px;color:#5b6778}
 .trow select{border:1px solid #c9d1dc;border-radius:3px;padding:6px 8px;font-size:12.5px;background:#fff;cursor:pointer}
-/* combined L2R + WhatsApp screen */
+/* combined lead management system + WhatsApp screen */
 main.screen.wide{max-width:1600px}
 .combo{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;align-items:start}
 @media (max-width:1100px){.combo{grid-template-columns:minmax(0,1fr)}}
@@ -365,7 +365,7 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
 <body>
 
 <header class="topbar wrapx">
-  <div class="brand">L2R <span>×</span> WhatsApp</div>
+  <div class="brand">Lead management system <span>×</span> WhatsApp</div>
   <div class="sub">After-hours lead qualifier · working prototype</div>
   <nav class="links">
     <span class="store" id="storeBadge" title="Where the prototype's data is stored">Storage: checking…</span>
@@ -377,7 +377,7 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
 <nav class="journey wrapx" aria-label="Journey">
   <div class="steps">
     <a href="#website" data-step="website"><span class="n">1</span><span><b>Customer website</b><small>Customer submits an enquiry</small></span></a>
-    <a href="#lms" data-step="lms"><span class="n">2</span><span><b>L2R + customer's WhatsApp</b><small>Customer replies, L2R updates</small></span></a>
+    <a href="#lms" data-step="lms"><span class="n">2</span><span><b>Lead management system + customer's WhatsApp</b><small>Customer replies, lead management system updates</small></span></a>
     <a href="#tracking" data-step="tracking"><span class="n">3</span><span><b>Tracking &amp; engagement</b><small>Every click, per template</small></span></a>
   </div>
 </nav>
@@ -421,16 +421,15 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
   </div>
 </main>
 
-<!-- ================= 2. L2R + WHATSAPP ================= -->
+<!-- ================= 2. lead management system + WHATSAPP ================= -->
 <main class="screen wrapx wide" id="s-lms" hidden>
   <div class="screen-head">
-    <div><h1>2 · L2R and the customer's WhatsApp, side by side</h1>
-      <p>Tap the options on the phone as the customer and watch L2R update. Our telecaller, or the WhatsApp bot through the L2R API, tags the follow-up form; when the lead is <b>qualified</b>, L2R sends it to the <b>dealer panel</b>. Our team keeps calling until the customer books.</p></div>
+    <div><h1>2 · Lead management system and the customer's WhatsApp, side by side</h1></div>
   </div>
   <div class="combo">
     <div class="l2r">
       <div class="l2rnav">
-        <div class="l2rlogo"><b>L2R</b><span>LEAD TO RETAIL</span></div>
+        <div class="l2rlogo"><b>Lead management system</b></div>
         <div class="menu"><span>Dashboard</span><span class="on">My Leads</span><span>Reports</span><span>More ▾</span></div>
         <div class="srch">Name, Mobile No.</div>
         <span class="unav">Unavailable ▾</span>
@@ -510,7 +509,7 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
 <script>
 "use strict";
 /* =====================================================================
-   Simulated: the website, L2R, Gupshup and Meta.
+   Simulated: the website, lead management system, Gupshup and Meta.
    Real logic: working-hours check, template send with the 6 fields,
    message-id mapping, webhook dedupe, flow engine, engagement tracking.
    ===================================================================== */
@@ -542,7 +541,7 @@ const DEALERS = {
   D102: {id:"D102", name:"Sai Auto Pune", city:"Pune", exec:"Rohan", team:["Rohan","Neha","Amit"], execNumber:"919822033445", open:"10:00", close:"19:00", off:2, whatsapp:true},
 };
 const WABA = {number:"918047104444", name:"BikeWale"};
-const TELECALLER = "Akshay";   // internal calling team member who owns the lead in L2R
+const TELECALLER = "Akshay";   // internal calling team member who owns the lead in lead management system
 const supportNumber = () => S.master.support_number;   // BikeWale team number, from the master dealer
 const TPL = () => TEMPLATES[S.master.template_id] ? S.master.template_id : "tpl_nwh_timeline_v1";
 const TEMPLATES = {
@@ -626,7 +625,7 @@ function log(kind, src, text, detail, leadId){
   S.audit.push({id:S.seq.audit++, ts:new Date().toISOString(), level:{bad:"ERROR",warn:"WARN"}[kind]||"INFO", kind, source:src,
     lead_id: leadId || (text.match(/\bL\d{5}\b/)||[null])[0], message:text, detail: detail===undefined?null:detail});
 }
-/* ---------------- L2R activity feed + calls ---------------- */
+/* ---------------- lead management system activity feed + calls ---------------- */
 function simNow(lead){ return new Date(new Date(lead.createdAt).getTime() + Math.max(0, Date.now() - (lead.createdReal || Date.now()))); }
 function addFeed(lead, e){ lead.feed.unshift({ts: simNow(lead).toISOString(), icon:e.icon||"note", title:e.title, lines:e.lines||[], tone:e.tone||"", api:e.api||null}); }
 function feed(lead, text){ addFeed(lead, {title:text}); }
@@ -649,7 +648,7 @@ function createCall(lead, at, why){
     due_at:at.toISOString(), due_reason:why, disposed_at:null, disposed_by:null, call_status:null, followup_status:null, interest:null,
     buying_span:null, reason:null, sub_reason:null, td_required:null, td_at:null, comment:null, next_call_at:null};
   lead.calls.push(c);
-  log("info","L2R",`call ${c.call_id} created for ${lead.id}, due ${fmtWall(at)} (${why})`, undefined, lead.id);
+  log("info","Lead management system",`call ${c.call_id} created for ${lead.id}, due ${fmtWall(at)} (${why})`, undefined, lead.id);
   return c;
 }
 function disposeCall(lead, by, d){
@@ -680,8 +679,8 @@ function disposeCall(lead, by, d){
   return c;
 }
 /* Dealers work in their own panel. Neither the bot nor the telecaller calls it: when the follow-up
-   form is tagged in L2R (by a telecaller, or by the bot through the L2R API) and the lead becomes
-   qualified, L2R's own event calls the dealer panel API. Later changes go out the same way. */
+   form is tagged in lead management system (by a telecaller, or by the bot through the lead management system API) and the lead becomes
+   qualified, the lead management system's own event calls the dealer panel API. Later changes go out the same way. */
 function l2rDealerEvent(lead, event){
   const dealer = DEALERS[lead.dealerId], first = !lead.dealerPushedAt;
   if (first && event!=="QUALIFIED") return;             // only qualified leads reach the dealer
@@ -689,7 +688,7 @@ function l2rDealerEvent(lead, event){
   const body = {event, dealerId:dealer.id, leadId:lead.id, customerName:lead.name, mobile:lead.mobile,
     vehicle:`${lead.make} ${lead.model}`, expectedBuyingSpan:lead.timeline||null, eagerness:lead.eagerness||null,
     visit: lead.visitSlot ? `${lead.visitDateLabel}, ${lead.visitSlot}` : null, taggedBy: by};
-  log("info","L2R event → Dealer panel API",`${first?"POST":"PATCH"} /dealer-panel/v1/leads${first?"":"/"+lead.id}  (${event})`, body, lead.id);
+  log("info","Lead management system event → Dealer panel API",`${first?"POST":"PATCH"} /dealer-panel/v1/leads${first?"":"/"+lead.id}  (${event})`, body, lead.id);
   if (first) lead.dealerPushedAt = simNow(lead).toISOString();
   const label = {QUALIFIED:"Lead sent to dealer panel", VISIT_BOOKED:"Dealer panel updated: visit booked", SPAN_UPDATED:"Dealer panel updated: buying timeline changed",
     WITHDRAWN:"Dealer panel updated: lead no longer qualified", BOOKED:"Dealer panel updated: booking"}[event] || "Dealer panel updated";
@@ -708,7 +707,7 @@ function rescheduleForVisit(lead){
   if (n.at < new Date(c.due_at)){
     const old = new Date(c.due_at); c.due_at = n.at.toISOString(); c.due_reason = n.why;
     addFeed(lead, {icon:"call", title:`Next call rescheduled`, lines:[`From ${fmtWall(old)} to ${fmtWall(n.at)}`]});
-    log("info","L2R",`call ${c.call_id} moved to ${fmtWall(n.at)} (${n.why})`, undefined, lead.id);
+    log("info","Lead management system",`call ${c.call_id} moved to ${fmtWall(n.at)} (${n.why})`, undefined, lead.id);
   }
 }
 const leadById = id => S.leads.find(l=>l.id===id);
@@ -719,7 +718,7 @@ const firstMsgId = lead => (lead.chat.find(c=>c.kind==="template")||{}).messageI
    ===================================================================== */
 async function onLeadCreated(lead){
   const dealer = DEALERS[lead.dealerId];
-  log("step","L2R",`LeadCreated ${lead.id} · ${lead.name} · ${lead.make} ${lead.model} · ${fmtWall(lead.createdAt)}`, undefined, lead.id);
+  log("step","Lead management system",`LeadCreated ${lead.id} · ${lead.name} · ${lead.make} ${lead.model} · ${fmtWall(lead.createdAt)}`, undefined, lead.id);
   createCall(lead, isOpen(BW, lead.createdAt) ? lead.createdAt : atOpen(BW, nextOpenDays(BW, lead.createdAt, 1)[0] || lead.createdAt), "first call on a new lead");
   render();
   await wait(500);
@@ -998,7 +997,7 @@ function scheduleNext(lead, n){
        next call by the new buying span, thanks message
    - earlier More than 2 Months -> Just Researching: confirm first, then close the lead
    - in both cases a tap on 15 Days / 1 Month / 1-2 Months qualifies the lead straight away
-     (follow-up form tagged, dealer panel via L2R) and continues to the visit date */
+     (follow-up form tagged, dealer panel via lead management system) and continues to the visit date */
 /* The customer tapped the timeline again. Any change of buying timeline is reconfirmed first;
    the change is applied only after "Yes, change it". */
 async function timelineChanged(lead, option, dealer){
@@ -1049,7 +1048,7 @@ async function applyTimelineChange(lead, option, dealer){
   const reopened = !OPEN_STATUSES.includes(lead.leadStatus);
   lead.waAnswer = option; lead.timeline = N;
   if (QUALIFY.includes(option)){
-    // Qualify straight away (saves a call): the bot tags the follow-up form, L2R disposes the call,
+    // Qualify straight away (saves a call): the bot tags the follow-up form, lead management system disposes the call,
     // schedules the next one and its lead-qualified event sends the lead to the dealer panel.
     lead.priority = t[2]<=30 ? "P1" : "P2"; lead.botState = "Qualified by bot";
     setLeadStatus(lead, "QUALIFIED", option); lead.qualifiedBy ||= "WhatsApp";
@@ -1083,7 +1082,7 @@ function botDispose(lead, spanCode, label, status, interest, next, extra={}){
 }
 function l2r(lead, kind, body){
   const path = kind==="dispose" ? `/api/v1/leads/${lead.id}/dispositions` : kind==="task" ? `/api/v1/leads/${lead.id}/tasks` : `/api/v1/leads/${lead.id}/comments`;
-  log("info","L2R API",`POST ${path}`, {...body, actor:"system:whatsapp-bot"}, lead.id);
+  log("info","Lead management system API",`POST ${path}`, {...body, actor:"system:whatsapp-bot"}, lead.id);
 }
 
 /* ---------------- customer actions on the phone ---------------- */
@@ -1160,7 +1159,7 @@ function renderWebsite(){
   $("#timeVerdict").innerHTML = `${esc(fmtWall(t))} · BikeWale calling team is <b style="color:var(${open?"--ok":"--accent"})">${open?"working, so no WhatsApp":"off, so WhatsApp flow runs"}</b> · ${esc(hoursText(BW))}`;
 }
 
-/* ---------- 2. LMS (L2R design) ---------- */
+/* ---------- 2. LMS (lead management system design) ---------- */
 const ICONS = {
   note:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
   call:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>',
@@ -1672,13 +1671,13 @@ function submitEnquiry(o){
   }
   S.selected = existing.id;
   if (existing.inquiries.some(q=>q.make===o.make && q.model===o.model)){
-    log("info","L2R",`repeat enquiry for ${o.make} ${o.model} on ${existing.id}: same version, no new inquiry`, undefined, existing.id);
+    log("info","Lead management system",`repeat enquiry for ${o.make} ${o.model} on ${existing.id}: same version, no new inquiry`, undefined, existing.id);
     return {lead:existing, note:`Already enquired for this vehicle (lead ${existing.id}); no new inquiry.`, after:()=>render()};
   }
   const inq = {inq_id:"INQ-"+(S.seq.inq++), make:o.make, model:o.model, created_at:o.createdAt.toISOString(), source:"WEBSITE"};
   existing.inquiries.push(inq); existing.make = o.make; existing.model = o.model;
   addFeed(existing, {icon:"note", title:"New inquiry added", lines:[`${o.make} ${o.model} · Website enquiry`]});
-  log("info","L2R",`InquiryAdded ${inq.inq_id} on ${existing.id}: ${o.make} ${o.model}`, undefined, existing.id);
+  log("info","Lead management system",`InquiryAdded ${inq.inq_id} on ${existing.id}: ${o.make} ${o.model}`, undefined, existing.id);
   const dealer = DEALERS[existing.dealerId];
   const notQualified = ["NEW","NOT_QUALIFIED_OPEN"].includes(existing.leadStatus);
   const sendWa = existing.consent && notQualified && !isOpen(BW, o.createdAt) && DEALERS[existing.dealerId].whatsapp;
