@@ -36,7 +36,8 @@ def test_postback_round_trip():
     assert parse_postback("NWH_QUALIFIER|VISIT_TIME|1130|L1").step == "VISIT_TIME"
     assert parse_postback("NWH_QUALIFIER|CONFIRM_CHANGE|YES:GT2M|L1").option == "YES:GT2M"
     assert parse_postback("NWH_QUALIFIER|CONFIRM_CHANGE|NO|L1").option == "NO"
-    assert parse_postback("NWH_QUALIFIER|CONFIRM_CHANGE|YES:1M|L1") is None
+    assert parse_postback("NWH_QUALIFIER|CONFIRM_CHANGE|YES:1M|L1").option == "YES:1M"   # every change is reconfirmed
+    assert parse_postback("NWH_QUALIFIER|CONFIRM_CHANGE|YES:BOGUS|L1") is None
 
 
 @pytest.mark.parametrize("bad", [None, "", "TIMELINE_1M|L1", "OTHER_FLOW|TIMELINE|1M|L1",

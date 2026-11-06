@@ -190,11 +190,43 @@ def confirm(env, answer, lead_id="L1", msg_id="wamid.c1"):
     return post(env, evt)
 
 
+def change(env, option, msg_id="wamid.in9", confirm_id="wamid.c1"):
+    """Customer taps a different timeline: it is reconfirmed first, then they tap Yes."""
+    post(env, quick_reply(option, "L1", "gs-1", msg_id=msg_id))
+    assert env.repo.event_result(msg_id) == "reply:CONFIRMATION_ASKED"
+    confirm(env, "YES", msg_id=confirm_id)
+    return env.repo.event_result(confirm_id)
+
+
+def test_any_timeline_change_is_reconfirmed_before_it_applies(env):
+    send(env)
+    post(env, quick_reply("15D", "L1", "gs-1"))
+    n, texts = len(env.l2r.dispositions), len(env.gs.texts)
+    post(env, quick_reply("1_2M", "L1", "gs-1", msg_id="wamid.in9"))
+    assert env.repo.event_result("wamid.in9") == "reply:CONFIRMATION_ASKED"
+    assert env.gs.buttons[-1]["body"] == 'You earlier told us "15 Days". Do you want to change it to "1 - 2 Months"?'
+    assert [b.title for b in env.gs.buttons[-1]["buttons"]] == ["Yes, change it", "No, keep earlier answer"]
+    # nothing changes until the customer says yes
+    assert len(env.l2r.dispositions) == n and len(env.gs.texts) == texts
+    assert env.repo.find_template("L1").reply_code == "15D"
+
+
+def test_no_keeps_the_earlier_answer(env):
+    send(env)
+    post(env, quick_reply("1M", "L1", "gs-1"))
+    n = len(env.l2r.dispositions)
+    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.in9"))
+    confirm(env, "NO")
+    assert env.repo.event_result("wamid.c1") == "reply:KEPT"
+    assert env.gs.texts[-1][1] == "No problem, we've kept your earlier answer."
+    assert len(env.l2r.dispositions) == n and env.l2r.calls == []
+    assert env.repo.find_template("L1").reply_code == "1M"
+
+
 def test_qualified_to_qualified_sends_thank_you(env):
     send(env)
     post(env, quick_reply("15D", "L1", "gs-1"))
-    post(env, quick_reply("1_2M", "L1", "gs-1", msg_id="wamid.in9"))
-    assert env.repo.event_result("wamid.in9") == "reply:TIMELINE_UPDATED"
+    assert change(env, "1_2M") == "reply:TIMELINE_UPDATED"
     assert env.l2r.dispositions[-1][1]["purchaseTimeline"] == "1_2M"
     assert env.l2r.dispositions[-1][1]["priority"] == "P2"
     assert env.gs.texts[-1][1] == "Thank you for the confirmation."
@@ -205,9 +237,8 @@ def test_qualified_lead_is_never_disqualified_by_research(env):
     send(env)
     post(env, quick_reply("1M", "L1", "gs-1"))
     n = len(env.l2r.dispositions)
-    post(env, quick_reply("RESEARCH", "L1", "gs-1", msg_id="wamid.in9"))
-    assert env.repo.event_result("wamid.in9") == "reply:NOTED_STAYS_QUALIFIED"
-    assert len(env.l2r.dispositions) == n and env.gs.buttons == []      # no close, no confirmation
+    assert change(env, "RESEARCH") == "reply:NOTED_STAYS_QUALIFIED"
+    assert len(env.l2r.dispositions) == n                                 # never closed
     assert "lead stays qualified" in env.l2r.comments[-1][1]
     assert env.gs.texts[-1][1] == "Thank you for the confirmation."
 
@@ -215,7 +246,7 @@ def test_qualified_lead_tapping_gt2m_stays_qualified_with_span_call(env):
     send(env)
     post(env, quick_reply("1M", "L1", "gs-1"))
     n = len(env.l2r.dispositions)
-    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.in9"))
+    assert change(env, "GT2M") == "reply:NOTED_STAYS_QUALIFIED"
     assert len(env.l2r.dispositions) == n
     body = env.l2r.calls[-1][1]
     assert body["reopen"] is False and body["purchaseTimeline"] == "GT2M"
@@ -225,8 +256,7 @@ def test_qualified_lead_tapping_gt2m_stays_qualified_with_span_call(env):
 def test_gt2m_to_one_month_qualifies_straight_away(env):
     send(env)
     post(env, quick_reply("GT2M", "L1", "gs-1"))
-    post(env, quick_reply("1M", "L1", "gs-1", msg_id="wamid.in9"))
-    assert env.repo.event_result("wamid.in9") == "reply:QUALIFIED_ON_CHANGE"
+    assert change(env, "1M") == "reply:QUALIFIED_ON_CHANGE"
     body = env.l2r.dispositions[-1][1]
     assert body["targetStage"] == "QUALIFICATION" and body["leadStatus"] == "INTERESTED"
     assert body["expectedBuyingSpan"] == "1M" and body["reopen"] is False
@@ -238,8 +268,7 @@ def test_gt2m_to_one_month_qualifies_straight_away(env):
 def test_research_to_gt2m_reopens_with_span_call(env):
     send(env)
     post(env, quick_reply("RESEARCH", "L1", "gs-1"))
-    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.in9"))
-    assert env.repo.event_result("wamid.in9") == "reply:REOPENED"
+    assert change(env, "GT2M") == "reply:REOPENED"
     body = env.l2r.calls[-1][1]
     assert body["reopen"] is True and body["purchaseTimeline"] == "GT2M"
 
@@ -261,8 +290,7 @@ def test_gt2m_to_research_confirms_then_closes(env):
 def test_research_to_fifteen_days_reopens_and_qualifies(env):
     send(env)
     post(env, quick_reply("RESEARCH", "L1", "gs-1"))
-    post(env, quick_reply("15D", "L1", "gs-1", msg_id="wamid.in9"))
-    assert env.repo.event_result("wamid.in9") == "reply:QUALIFIED_ON_CHANGE"
+    assert change(env, "15D") == "reply:QUALIFIED_ON_CHANGE"
     body = env.l2r.dispositions[-1][1]
     assert body["reopen"] is True and body["targetStage"] == "QUALIFICATION" and body["priority"] == "P1"
     assert env.gs.lists[-1]["section"] == "Choose your preferred date"
@@ -402,10 +430,8 @@ def test_qualified_lead_cannot_be_closed_after_gt2m_then_research(env):
     send(env)
     post(env, quick_reply("1M", "L1", "gs-1"))
     env.l2r.leads["L1"].stage = "QUALIFICATION"
-    post(env, quick_reply("GT2M", "L1", "gs-1", msg_id="wamid.a1"))
-    post(env, quick_reply("RESEARCH", "L1", "gs-1", msg_id="wamid.a2"))
-    assert env.repo.event_result("wamid.a2") == "reply:NOTED_STAYS_QUALIFIED"
-    assert env.gs.buttons == []
+    assert change(env, "GT2M", msg_id="wamid.a1", confirm_id="wamid.c1") == "reply:NOTED_STAYS_QUALIFIED"
+    assert change(env, "RESEARCH", msg_id="wamid.a2", confirm_id="wamid.c2") == "reply:NOTED_STAYS_QUALIFIED"
     assert not any(d[1].get("closeLead") for d in env.l2r.dispositions)
 
 

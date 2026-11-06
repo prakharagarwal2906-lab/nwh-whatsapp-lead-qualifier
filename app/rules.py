@@ -64,7 +64,7 @@ def parse_postback(text: str | None) -> Postback | None:
         return None
     if step == STEP_VISIT_TIME and not re.fullmatch(r"\d{4}", option):
         return None
-    if step == STEP_CONFIRM and not re.fullmatch(r"YES:(GT2M|RESEARCH)|NO", option):
+    if step == STEP_CONFIRM and not re.fullmatch(r"YES:(15D|1M|1_2M|GT2M|RESEARCH)|NO", option):
         return None
     return Postback(FLOW, step, option, parts[3] if len(parts) > 3 and parts[3] else None)
 

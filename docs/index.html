@@ -883,25 +883,8 @@ async function handleReply(p){
     }
   } else if (step==="CONFIRM_CHANGE"){
     const target = lead.pendingChange; lead.pendingChange = null;
-    if (option==="YES" && target){
-      const P = lead.timeline, t = TIMELINE.find(x=>x[0]===target);
-      lead.waAnswer = target; lead.timeline = t[1]; lead.priority = null;
-      if (target==="GT2M"){
-        setLeadStatus(lead, "NOT_QUALIFIED_OPEN", "GT2M"); lead.botState = "Nurture";
-        addFeed(lead, {icon:"wa", tone:"waf", title:"WhatsApp has updated the lead", lines:[`Customer confirmed the change from '${P}' to '${t[1]}'`]});
-        l2rDealerEvent(lead, "WITHDRAWN");
-        l2r(lead, "dispose", {source:"WHATSAPP_BOT", leadStatus:"NOT_QUALIFIED_OPEN", expectedBuyingSpan:t[1]});
-        scheduleNext(lead, nextCallAt(lead, "GT2M", null));
-        await wait(400);
-        await sendMessage(lead, {kind:"text", step:"GT2M_ACK", text:`Thanks, ${lead.name}!\nWe'll check in closer to your timeline.\nNeed help before that? Call us anytime at ${dealer.virtual}.`, payload:{type:"text"}});
-      } else {
-        setLeadStatus(lead, "NOT_QUALIFIED_CLOSED"); lead.eagerness = null; lead.botState = "Closed · just researching";
-        l2rDealerEvent(lead, "WITHDRAWN");
-        disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected", followup:"Spoke to customer", interest:"Not interested",
-          reason:"Not interested in buying", subReason:"Just researching", comment:`Customer changed the answer to '${t[1]}' on WhatsApp`, next:null});
-        await wait(400);
-        await sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Please feel free to reach us at ${dealer.virtual} for any queries you might have.`, payload:{type:"text"}});
-      }
+    if (option==="YES" && target && target!==lead.waAnswer){
+      await applyTimelineChange(lead, target, dealer);
     } else {
       await wait(400);
       await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text:"No problem, we've kept your earlier answer.", payload:{type:"text"}});
@@ -998,12 +981,24 @@ function scheduleNext(lead, n){
    - earlier More than 2 Months -> Still Researching: confirm first, then close the lead
    - in both cases a tap on 15 Days / 1 Month / 1-2 Months qualifies the lead straight away
      (follow-up form tagged, dealer panel via L2R) and continues to the visit date */
+/* The customer tapped the timeline again. Any change of buying timeline is reconfirmed first;
+   the change is applied only after "Yes, change it". */
 async function timelineChanged(lead, option, dealer){
+  const prev = lead.waAnswer, P = TIMELINE.find(x=>x[0]===prev)[1], N = TIMELINE.find(x=>x[0]===option)[1];
+  if (prev===option){
+    await wait(300);
+    return sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text:`Got it, '${N}' is already noted. Thank you!`, payload:{type:"text"}});
+  }
+  lead.pendingChange = option;
+  await wait(300);
+  return sendMessage(lead, {kind:"buttons", step:"CONFIRM_CHANGE", text:`You earlier told us "${P}". Do you want to change it to "${N}"?`,
+    buttons:[{code:"YES", label:"Yes, change it"}, {code:"NO", label:"No, keep earlier answer"}], payload:{type:"quick_reply", options:["Yes, change it","No, keep earlier answer"]}});
+}
+
+/* Applies a confirmed change, following the rules for the answer already given. */
+async function applyTimelineChange(lead, option, dealer){
   const prev = lead.waAnswer, P = TIMELINE.find(x=>x[0]===prev)[1], t = TIMELINE.find(x=>x[0]===option), N = t[1];
   const say = async text => { await wait(300); await sendMessage(lead, {kind:"text", step:"CHANGE_ACK", text, payload:{type:"text"}}); };
-  if (prev===option){
-    return say(`Got it, '${N}' is already noted. Thank you!`);
-  }
   const isQualified = ["QUALIFIED","BOOKED","QUALIFIED_CLOSED"].includes(lead.leadStatus);
   if (QUALIFY.includes(prev) || (isQualified && !QUALIFY.includes(option))){
     if (QUALIFY.includes(option)){
@@ -1023,12 +1018,14 @@ async function timelineChanged(lead, option, dealer){
     if (option==="GT2M") scheduleNext(lead, nextCallAt(lead, "GT2M", lead.visitDate));
     return say("Thank you for the confirmation.");
   }
-  // Earlier More than 2 Months -> Still Researching: confirm first, then close the lead.
+  // Earlier More than 2 Months -> Still Researching: close the lead.
   if (prev==="GT2M" && option==="RESEARCH"){
-    lead.pendingChange = option;
-    await wait(300);
-    return sendMessage(lead, {kind:"buttons", step:"CONFIRM_CHANGE", text:`You earlier told us "${P}". Do you want to change it to "${N}"?`,
-      buttons:[{code:"YES", label:"Yes, change it"}, {code:"NO", label:"No, keep earlier answer"}], payload:{type:"quick_reply", options:["Yes, change it","No, keep earlier answer"]}});
+    lead.waAnswer = option; lead.timeline = N; lead.priority = null;
+    setLeadStatus(lead, "NOT_QUALIFIED_CLOSED"); lead.eagerness = null; lead.botState = "Closed · just researching";
+    disposeCall(lead, "WhatsApp Bot", {callStatus:"Connected", followup:"Spoke to customer", interest:"Not interested",
+      reason:"Not interested in buying", subReason:"Just researching", comment:`Customer changed the answer to '${N}' on WhatsApp`, next:null});
+    await wait(400);
+    return sendMessage(lead, {kind:"text", step:"RESEARCH_ACK", text:`Please feel free to reach us at ${dealer.virtual} for any queries you might have.`, payload:{type:"text"}});
   }
   // Earlier More than 2 Months, or Still Researching (closed).
   const reopened = !OPEN_STATUSES.includes(lead.leadStatus);

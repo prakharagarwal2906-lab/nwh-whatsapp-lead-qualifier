@@ -127,14 +127,14 @@ flowchart TD
 | Visit date | Date chosen | Nothing in L2R yet · ask time slot |
 | Visit time | Visit booked | Showroom Visit task created against the lead · confirmation |
 
-**When the customer taps again** (WhatsApp keeps buttons active), based on the answer already given:
+**When the customer taps again** (WhatsApp keeps buttons active): **any change of buying timeline is reconfirmed first** with "You earlier told us "X". Do you want to change it to "Y"?" and the buttons *Yes, change it* / *No, keep earlier answer*. No keeps the earlier answer; the same option again gets "already noted". On Yes, what happens depends on the answer already given:
 
 | Already selected | Then taps | What happens |
 |---|---|---|
 | 15 Days / 1 Month / 1–2 Months | another of these three | Thank-you confirming the update |
 | 15 Days / 1 Month / 1–2 Months (qualified) | More than 2 Months / Still Researching | Lead stays qualified (never disqualified); answer noted, thanks |
 | More than 2 Months | 15 Days / 1 Month / 1–2 Months | Qualified straight away (dealer panel via L2R), thanks, visit date |
-| More than 2 Months | Still Researching | Confirmation first; on Yes the lead is closed (Not interested in buying · Just researching) |
+| More than 2 Months | Still Researching | Lead closed (Not interested in buying · Just researching), help message |
 | Still Researching (closed) | 15 Days / 1 Month / 1–2 Months | Reopened and qualified straight away, thanks, visit date |
 | Still Researching (closed) | More than 2 Months | Reopened, next call by the buying span, thanks |
 

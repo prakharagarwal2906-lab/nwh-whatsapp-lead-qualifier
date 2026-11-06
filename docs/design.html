@@ -196,20 +196,19 @@ flowchart TD
   <p>The two-month threshold and the priority mapping live in dealer config, not code. Date and time lists come from the dealer's calendar: weekly offs and holidays are skipped, today is offered only if there are at least two working hours left, and WhatsApp lists hold at most 10 rows.</p>
 
   <h3>When the customer taps again</h3>
-  <p>WhatsApp keeps quick-reply buttons active, so a customer can tap a different answer later. Every tap is tracked. What happens depends on the answer they <b>already</b> gave:</p>
+  <p>WhatsApp keeps quick-reply buttons active, so a customer can tap a different answer later. Every tap is tracked. <b>Any change of buying timeline is always reconfirmed first</b>: "You earlier told us "X". Do you want to change it to "Y"?" with <i>Yes, change it</i> / <i>No, keep earlier answer</i>. Nothing changes in L2R until the customer taps Yes; No keeps the earlier answer. On Yes, what happens depends on the answer they <b>already</b> gave:</p>
   <div class="table-wrap"><table>
     <thead><tr><th>Already selected</th><th>Then taps</th><th>What happens</th></tr></thead>
     <tbody>
       <tr><td>15 Days / 1 Month / 1–2 Months</td><td>Another of these three</td><td>Thank-you message confirming the update; span, eagerness and next call updated</td></tr>
       <tr><td>15 Days / 1 Month / 1–2 Months (lead qualified)</td><td>More than 2 Months or Still Researching</td><td><b>Lead stays qualified</b>; a qualified lead is never disqualified. The new answer is noted on the lead and the customer gets "Thank you for the confirmation." For More than 2 Months the next call follows the new span</td></tr>
       <tr><td>More than 2 Months</td><td>15 Days / 1 Month / 1–2 Months</td><td>Qualified straight away (follow-up form tagged in L2R, so L2R sends it to the dealer panel), thank-you, visit date question; next call by the new buying span</td></tr>
-      <tr><td>More than 2 Months (never qualified)</td><td>Still Researching</td><td>Ask for confirmation first. On Yes: lead closed (Not interested in buying · Just researching), help message. On No: earlier answer kept</td></tr>
+      <tr><td>More than 2 Months (never qualified)</td><td>Still Researching</td><td>Lead closed (Not interested in buying · Just researching), help message</td></tr>
       <tr><td>Still Researching (lead closed)</td><td>15 Days / 1 Month / 1–2 Months</td><td>Lead reopened and qualified straight away, thank-you, visit date question</td></tr>
       <tr><td>Still Researching (lead closed)</td><td>More than 2 Months</td><td>Lead reopened (Not qualified · open), next call by the buying span, thank-you</td></tr>
       <tr><td>Any</td><td>The same option again</td><td>"Already noted" message, no change</td></tr>
     </tbody>
   </table></div>
-  <p>More than 2 Months → Still Researching keeps the existing call and adds a note on the lead.</p>
   <h3>Working hours and repeat enquiries</h3>
   <ul>
     <li><b>Whose hours:</b> BikeWale's calling team qualifies before the dealer sees the lead, so <b>BikeWale's working hours</b> (Mon–Sat, 9:30 AM – 6:30 PM, configurable) decide "after hours", the hours quoted in the template and when calls are scheduled. Dealer hours are used only for showroom visit dates and slots.</li>

@@ -423,18 +423,29 @@ class QualifierService:
             self.audit("ERROR", "l2r_call_failed", lead_id, error=str(e)[:300], body=body)
 
     def _timeline_changed(self, tpl: WaMessage, cfg: DealerConfig, option: str, key: str) -> str:
-        """Rules keyed by the answer the customer already gave:
-        earlier 15D/1M/1-2M -> another of these: thank-you confirming the update
-        earlier 15D/1M/1-2M -> GT2M / RESEARCH: lead stays qualified (never disqualified), answer noted
-        earlier GT2M / RESEARCH -> 15D/1M/1-2M: qualify straight away (form tagged in L2R), visit date next
-        earlier GT2M -> RESEARCH: ask for confirmation first, then close the lead
-        earlier RESEARCH (lead closed) -> GT2M: reopen the lead, next call by the new span, thanks
-        """
+        """The customer tapped the timeline again. The same answer is acknowledged; any change of
+        buying timeline is always reconfirmed first and applied only on "Yes, change it"."""
         prev = tpl.reply_code
         prev_label, new_label = TIMELINE_LABEL[prev], TIMELINE_LABEL[option]
         if option == prev:
             self._text(tpl, cfg, "CHANGE_ACK", same_answer_text(new_label))
             return "reply:SAME_ANSWER"
+        buttons = [ListRow("Yes, change it", build_postback(STEP_CONFIRM, f"YES:{option}", tpl.lead_id)),
+                   ListRow("No, keep earlier answer", build_postback(STEP_CONFIRM, "NO", tpl.lead_id))]
+        self._send_session(tpl, cfg, STEP_CONFIRM, "buttons", lambda: self.gupshup.send_buttons(
+            cfg.gupshup_app_id, cfg.source_number, tpl.mobile, confirm_change_text(prev_label, new_label), buttons))
+        return "reply:CONFIRMATION_ASKED"
+
+    def _apply_change(self, tpl: WaMessage, cfg: DealerConfig, option: str, key: str) -> str:
+        """A confirmed change, keyed by the answer the customer already gave:
+        earlier 15D/1M/1-2M -> another of these: span and next call updated, thank-you
+        earlier 15D/1M/1-2M -> GT2M / RESEARCH: lead stays qualified (never disqualified), answer noted
+        earlier GT2M / RESEARCH -> 15D/1M/1-2M: qualify straight away (form tagged in L2R), visit date next
+        earlier GT2M -> RESEARCH: close the lead (Not interested in buying / Just researching)
+        earlier RESEARCH (lead closed) -> GT2M: reopen the lead, next call by the new span, thanks
+        """
+        prev = tpl.reply_code
+        prev_label, new_label = TIMELINE_LABEL[prev], TIMELINE_LABEL[option]
         try:
             l2r_lead = self.l2r.get_lead(tpl.lead_id)
         except Exception:
@@ -465,12 +476,16 @@ class QualifierService:
                     self._safe_comment(tpl.lead_id, reason, key)
                 self._text(tpl, cfg, "CHANGE_ACK", updated_text(new_label))
                 return "reply:NOTED_STAYS_QUALIFIED"
-            # More than 2 Months -> Still Researching: confirm first, then close
-            buttons = [ListRow("Yes, change it", build_postback(STEP_CONFIRM, f"YES:{option}", tpl.lead_id)),
-                       ListRow("No, keep earlier answer", build_postback(STEP_CONFIRM, "NO", tpl.lead_id))]
-            self._send_session(tpl, cfg, STEP_CONFIRM, "buttons", lambda: self.gupshup.send_buttons(
-                cfg.gupshup_app_id, cfg.source_number, tpl.mobile, confirm_change_text(prev_label, new_label), buttons))
-            return "reply:CONFIRMATION_ASKED"
+            # More than 2 Months -> Still Researching (confirmed): close the lead
+            d = decide_timeline(option, cfg.qualify_max_days)
+            self.repo.set_answer(tpl.id, option, d.outcome)
+            self._l2r(self.l2r.dispose, tpl.lead_id, {
+                "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT", "followUpStatus": "SPOKE_TO_CUSTOMER",
+                "leadStatus": "NOT_INTERESTED", "reason": d.reason, "subReason": d.sub_reason, "closeLead": True,
+                "comment": f"Customer confirmed changing the buying timeline to '{new_label}' on WhatsApp",
+                "actor": "system:whatsapp-bot"}, key)
+            self._text(tpl, cfg, "RESEARCH_ACK", research_text(cfg.rep_phone))
+            return "reply:CHANGED_TO_RESEARCH"
         reopen = prev == "RESEARCH"
         if option in QUALIFYING:
             # Qualify straight away instead of waiting for a call: tag the follow-up form in L2R
@@ -505,22 +520,10 @@ class QualifierService:
             self._text(confirm, cfg, "CHANGE_ACK", kept_text())
             return "reply:KEPT"
         target = option.split(":", 1)[1]
-        d = decide_timeline(target, cfg.qualify_max_days)
-        self.repo.set_answer(tpl.id, target, d.outcome)
-        note = f"Customer confirmed changing the buying timeline to '{TIMELINE_LABEL[target]}' on WhatsApp"
-        if target == "GT2M":
-            self._l2r(self.l2r.dispose, tpl.lead_id, {
-                "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT", "leadStatus": "NOT_QUALIFIED_OPEN",
-                "targetStage": "FIRST_CALL", "purchaseTimeline": target, "followUpInDays": d.follow_up_days,
-                "comment": note, "actor": "system:whatsapp-bot"}, key)
-            self._text(tpl, cfg, "GT2M_ACK", gt2m_text(self._lead_name(tpl.lead_id), cfg.rep_phone))
-        else:
-            self._l2r(self.l2r.dispose, tpl.lead_id, {
-                "callStatus": "CONNECTED", "disposition": "WHATSAPP_BOT", "followUpStatus": "SPOKE_TO_CUSTOMER",
-                "leadStatus": "NOT_INTERESTED", "reason": d.reason, "subReason": d.sub_reason, "closeLead": True,
-                "comment": note, "actor": "system:whatsapp-bot"}, key)
-            self._text(tpl, cfg, "RESEARCH_ACK", research_text(cfg.rep_phone))
-        return f"reply:CHANGED_TO_{target}"
+        if target == tpl.reply_code:          # nothing left to change (e.g. an older confirmation)
+            self._text(confirm, cfg, "CHANGE_ACK", kept_text())
+            return "reply:KEPT"
+        return self._apply_change(tpl, cfg, target, key)
 
     def _lead_name(self, lead_id: str) -> str:
         try:
