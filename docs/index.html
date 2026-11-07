@@ -401,8 +401,8 @@ table.data .num{text-align:right;font-variant-numeric:tabular-nums}
       <section class="enquiry">
         <h3>Get the best offer from a dealer</h3>
         <form class="form" id="leadForm" autocomplete="off">
-          <label>Your name<input id="fName" value="Prakhar" required></label>
-          <label>Mobile number<input id="fMobile" value="919876543210" required pattern="\d{11,13}" inputmode="numeric"></label>
+          <label>Your name<input id="fName" required placeholder="Enter your name" autocomplete="off"></label>
+          <label>Mobile number<input id="fMobile" required pattern="[6-9][0-9]{9}" maxlength="10" inputmode="numeric" placeholder="10-digit mobile number" title="Enter a 10-digit mobile number" autocomplete="off"></label>
           <label>Make<select id="fMake"></select></label>
           <label>Model<select id="fModel"></select></label>
           <label>City<select id="fCity"><option>Chennai</option><option>Pune</option></select></label>
@@ -1807,15 +1807,19 @@ window.addEventListener("hashchange", ()=>{
 });
 for (const id of ["#fMake","#fModel","#fCity","#fDealer"]) $(id).addEventListener("change", render);
 $("#timeChips").addEventListener("click", e=>{ const b=e.target.closest("[data-time]"); if (!b) return; S.timePreset=b.dataset.time; render(); });
+$("#fMobile").addEventListener("input", e=>{ e.target.value = e.target.value.replace(/\D/g,"").slice(0,10); });
 $("#leadForm").addEventListener("submit", e=>{
   e.preventDefault();
-  const o = {name:$("#fName").value.trim()||"Customer", mobile:$("#fMobile").value.trim(), make:$("#fMake").value, model:$("#fModel").value,
+  // Customer types a 10-digit number; WhatsApp needs it with the country code, so 91 is added here.
+  const o = {name:$("#fName").value.trim()||"Customer", mobile:"91"+$("#fMobile").value.trim(), make:$("#fMake").value, model:$("#fModel").value,
     city:$("#fCity").value, dealerId:$("#fDealer").value, consent:$("#fConsent").checked, createdAt:enquiryTime()};
   const r = submitEnquiry(o);
   const th=$("#thanks"); th.hidden=false;
-  th.innerHTML = `Thanks, ${esc(o.name)}! Your enquiry for the ${esc(o.make)} ${esc(o.model)} has been sent to ${esc(DEALERS[r.lead.dealerId].name)}.<br><span style="font-weight:400">${esc(r.note)} Opening the lead management system…</span>`;
-  $("#submitBtn").disabled=true;
-  setTimeout(()=>{ $("#submitBtn").disabled=false; th.hidden=true; location.hash="#lms"; r.after(); }, 1400);
+  th.innerHTML = `Thanks, ${esc(o.name)}! Your enquiry for the ${esc(o.make)} ${esc(o.model)} has been sent to ${esc(DEALERS[r.lead.dealerId].name)}.<br><span style="font-weight:400">${esc(r.note)}</span>`;
+  r.after();                        // lead created; WhatsApp flow runs in the background
+  // Fresh form, as if the page was reloaded (a real reload would cut off the WhatsApp send that is still running)
+  e.target.reset(); render(); window.scrollTo(0,0); $("#fName").focus();
+  clearTimeout(th._t); th._t = setTimeout(()=>{ th.hidden=true; }, 5000);
 });
 $("#l2rBody").addEventListener("click", e=>{
   const t = e.target.closest("[data-f],[data-date],[data-act]"); if (!t || t.disabled) return;
